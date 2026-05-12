@@ -97,7 +97,11 @@ notes = ""                                  # 補足
 |---|---|---|---|---|
 | `[meta].name` | str | 必須 | — | ワークフロー名 |
 | `[meta].entry` | str | 必須 | — | 開始ノード id |
-| `[meta].mandatory_gates` | list[`{gate=str, args=table}`] | 任意 | `[]` | 全ノード（または終端ノード）が含むべき gate spec のリスト。実行中に append された新規ノードはこれらを満たさなければならない（`workflow_append_only` が検証）。`DESIGN.md` §5.1 |
+| `[meta].mandatory_gates` | list[`{gate=str, args=table}`] | 任意 | `[]` | 全ノード（または終端ノード）が含むべき gate spec のリスト。実行中に append された新規ノードはこれらを満たさなければならない（`workflow_append_only` が検証）。有力候補に `{ gate="cmd_exit_0", args={ cmd="cargo check" } }`（「ビルドが通る」）。`DESIGN.md` §5.1・§16・`docs/operations.md` §6 |
+| `[meta].default_model` | str | 任意 | — | ノードに `model` が無いとき適用する worker のモデル（`DESIGN.md` §16.1） |
+| `[meta].default_budget` | table | 任意 | — | ノードに `budget` が無いとき適用する予算（`{max_tool_calls, max_tokens, max_wall_seconds}`、`DESIGN.md` §16.1） |
+| `[meta].run_cost_budget` | 数値 | 任意 | — | run 全体のコスト上限。超過で人間にエスカレ（`DESIGN.md` §16.1） |
+| `[meta].secrets_glob` | list[str] | 任意 | `[]` | worker の context に入れないファイルの glob（`DESIGN.md` §16.2） |
 | `[[node]].id` | str | 必須 | — | ノード id |
 | `[[node]].type` | `"task"`\|`"fork"`\|`"join"` | 任意 | `"task"` | ノード種別 |
 | `[[node]].skill` | str | task は必須 / fork・join は任意 | — | `skills/` 配下のファイル名 |
@@ -107,10 +111,14 @@ notes = ""                                  # 補足
 | `[[node]].next` | list[str] | 任意 | `[]` | 後続ノード id（task の分岐候補。空＝最終ノード） |
 | `[[node]].branches` | list[str] | fork のみ | — | 並列に走らせるブランチのノード id |
 | `[[node]].wait` | list[str] | join のみ | — | 完了を待つブランチ id |
-| `[[node]].on_reject` | `{after=int, goto=str}` | 任意 | — | `after` 回 reject されたら `goto`（ノード id か `"__human__"`）へ |
+| `[[node]].on_reject` | `{after=int, goto=str}` | 任意 | — | `after` 回 reject されたら `goto`（ノード id か `"__human__"`）へ。`node_aborted`（タイムアウト/予算/API/stuck）もこの方針に従う（`DESIGN.md` §16.1） |
 | `[[node]].tools` | list[str] | 任意 | （常時 harness コマンドのみ） | このノードの worker に渡すツールセット |
 | `[[node]].context` | `{include=list[str]}` | 任意 | `{include=["none"]}` | コード context 事前計算の指示。要素は `"outline:$blast_radius"` / `"body:$target_symbols"` / `"none"` 等 |
 | `[[node]].artifact_tags` | list[`{tag=str, gates=list}`] | 任意 | `[]` | tag ごとに課す追加 gate |
+| `[[node]].model` | str | 任意 | `[meta].default_model` | このノードの worker のモデル（`DESIGN.md` §16.1） |
+| `[[node]].budget` | table | 任意 | `[meta].default_budget` | `{max_tool_calls, max_tokens, max_wall_seconds}`。超過で `node_aborted{reason:budget}`（`DESIGN.md` §16.1） |
+| `[[node]].cmd_allowlist` | list[str] | 任意 | — | `run-command` ツールが受け付けるコマンドパターン。`cmd_exit_0` の gate コマンドは暗黙的に許可（`DESIGN.md` §16.2） |
+| `[[node]].network` | bool | 任意 | `false` | `true` のときだけ worker にネットワークを許す（`DESIGN.md` §16.2） |
 
 注: `$blast_radius` は当該ノードの `serves` の F-NNN の `files` 集合、`$target_symbols` はそのうち編集対象として判明しているシンボル、を harness が解決するプレースホルダ（`docs/worker-context.md` B2 参照）。`tools` の語彙は `harness ... / read / edit / write / run-command / outline / show-symbol / find-symbol / refs / callers / implementers / deps / rdeps / closure / impacted-by / tested-by`（`docs/worker-context.md` B1）。
 
@@ -124,9 +132,12 @@ notes = ""                                  # 補足
 [meta]
 name = "default-refactor-flow"
 entry = "research"                          # 開始ノード id
+default_model = "claude-opus-4-7"           # ノードに model が無いとき適用（DESIGN.md §16.1）
+run_cost_budget = 50.0                      # run 全体のコスト上限。超過で人間にエスカレ
 # 実行中に append される新規ノードはこれらの gate を必ず含む（workflow_append_only が検証）
 mandatory_gates = [
   { gate = "traceability_closed", args = {} },
+  { gate = "cmd_exit_0", args = { cmd = "cargo check" } },   # 「ビルドが通る」を全ノードに課す（DESIGN.md §16・operations.md §6）
 ]
 
 [[node]]
@@ -179,10 +190,12 @@ context = { include = ["outline:$blast_radius"] }
 id = "implement"
 skill = "03-implement.md"
 serves = ["F-001", "F-002"]
+budget = { max_tool_calls = 200, max_tokens = 400000, max_wall_seconds = 1800 }   # 超過で node_aborted{reason:budget}（DESIGN.md §16.1）
+cmd_allowlist = ["cargo *", "git diff *"]   # run-command が受け付けるパターン。cmd_exit_0 の gate コマンドは暗黙的に許可（DESIGN.md §16.2）
 exit_gates = [
   { gate = "artifact_registered", args = { name_or_prefix = "impl:" } },
   { gate = "no_regex", args = { path = "src/**/*.rs", pattern = "TODO|TBD|WIP|FIXME|未定|未確定|要検討|検討中|対応予定|サンプル|ダミー|仮置き" } },
-  { gate = "cmd_exit_0", args = { cmd = "cargo test --lib" } },
+  { gate = "cmd_exit_0", args = { cmd = "cargo test --lib", timeout_seconds = 600 } },
 ]
 next = ["test"]
 on_reject = { after = 3, goto = "plan" }
@@ -345,7 +358,7 @@ context = { include = ["none"] }
 | `max_lines` | `path`, `n` | path の行数 ≤ n | `(ok, note)` |
 | `lines_not_increased` | `path`, `baseline_key` | path の行数が baseline（evidence に記録された値）以下 | `(ok, note)` |
 | `no_regex` | `path`, `pattern` | path のテキストに pattern がマッチしない（複数 path をグロブで指定可） | `(ok, note)` |
-| `cmd_exit_0` | `cmd` | シェルコマンド cmd を harness 自身が実行して exit code が 0 | `(ok, note)` |
+| `cmd_exit_0` | `cmd`, `timeout_seconds?` | シェルコマンド cmd を harness 自身が実行して exit code が 0。runtime がタイムアウトを適用（既定値、args の `timeout_seconds` で上書き可）。gate コマンドは `workflow.toml` に事前宣言済みなので暗黙的に cmd_allowlist 済み（`DESIGN.md` §16.2） | `(ok, note)` |
 | `json_has` | `evidence_key`, `json_path`, `eq?` | `gate_evidence[evidence_key]` が存在し `json_path` の値が存在（`eq` 指定時はその値と等しい） | `(ok, note)` |
 | `artifact_registered` | `name_or_prefix` | その名前（または `impl:` のような prefix）の artifact が ≥1 件登録され、全て実在ファイル | `(ok, note)` |
 | `evidence_recorded` | `key` | `gate_evidence[key]` が存在する | `(ok, note)` |
@@ -391,6 +404,12 @@ context = { include = ["none"] }
 | `tested-by <sym>` | `sym` | カバーするテスト（tested-by エッジ） | 変えない | 委譲（CKG バックエンド） |
 | `reindex [--full]` | `[--full]` | 外部索引器を叩いてコードナレッジグラフを再生成（インクリメンタル＝変更ファイル＋逆依存閉包のみ。`--full` で全体を再構築。atomic swap で並行読みと干渉しない、`docs/ckg.md`） | 変えない（キャッシュ artifact 更新） | 委譲（CKG バックエンド） |
 | `ckg-stale` | （なし） | コードナレッジグラフが git HEAD に対し陳腐化しているか（陳腐ファイル一覧） | 変えない | 委譲（CKG バックエンド） |
+| `validate` | `[--workflow path]`, `[--spec path]` | `workflow.toml` / `spec.toml` の静的検証（next/branches/wait の参照先・`[meta].entry`・制御外サイクル・gate 名と args・`serves` の F-ID・`skill` ファイル実在・到達可能&停止・`mandatory_gates` 妥当）。`harness start` 時に自動実行（`DESIGN.md` §16.4） | 変えない | — |
+| `inspect <run-id>` | `run-id`, `[--node X]` | ノードの状態・gate・artifact・transcript への参照を見る（`DESIGN.md` §16.3） | 変えない | — |
+| `replay <run-id>` | `run-id` | イベントログを頭から fold して状態遷移を再現（`DESIGN.md` §16.3） | 変えない | — |
+| `stats <run-id>` | `run-id` | ノードごとの context トークン数・コスト・tool-call 数（圧縮効果の計測、`DESIGN.md` §16.3） | 変えない | — |
+| `stuck "<理由>"` | `理由`, `[--run R]` | worker 向け。これ以上進めないと自己申告 → `node_aborted{reason:stuck}` ＋ エスカレ（`DESIGN.md` §16.1） | 変える | — |
+| `abandon <run-id>` | `run-id` | run を終了。`--worktree` モードなら worktree 削除、そうでなければ `git reset`（要確認: `abandon` イベントを書くか run を terminal 扱いにするだけか ── 確定は実装時、`DESIGN.md` §16.5） | 変える | — |
 
 ## 5. イベント種別・リファレンス
 
@@ -399,7 +418,7 @@ context = { include = ["none"] }
 | type | payload フィールド | いつ書かれるか |
 |---|---|---|
 | `start` | `intent` | `start` コマンド時。run の最初のイベント |
-| `advance` | `from`, `to` | `request-transition` / `advance` で出口 gate が全 pass したとき。phase_index +1 |
+| `advance` | `from`, `to`, `metrics?` | `request-transition` / `advance` で出口 gate が全 pass したとき。phase_index +1。`metrics` は optional で `{cost, tokens, tool_calls, wall_seconds}`（要確認: サイドカー `state/<run-id>.metrics.jsonl` に分ける案もある ── 確定は実装時、`DESIGN.md` §16.1） |
 | `advance_rejected` | `failed_gates: [{gate, reason}]` | `request-transition` / `advance` で 1 つでも gate が fail したとき（記録のみ、状態の phase は進まない） |
 | `back` | `reason` | `back` コマンド時。phase_index を saturating -1 |
 | `artifact` | `name`, `path`, `tag?` | `record-artifact` 時。path 実在確認後。同名は上書き |
@@ -410,5 +429,6 @@ context = { include = ["none"] }
 | `human_answer` | `question_id`, `answer` | 人間が `harness answer` で回答したとき。`kind=escalation` の回答は従来の `human_decision` を兼ねる（`human_decision` は `human_answer`(kind=escalation) に統合した、`DESIGN.md` §4） |
 | `branch_forked` | `branch_ids` | fork ノードが並列ブランチを開始したとき。各ブランチは自分のイベントを `state/<run-id>.<branch>.jsonl` に書く |
 | `branch_joined` | `branch_ids`, `merge_result` | join ノードが全ブランチをマージし検証したとき |
+| `node_aborted` | `node`, `reason` (`"timeout"`\|`"budget"`\|`"api_error"`\|`"stuck"`\|`"crash"`) | gate タイムアウト・ノード予算超過・API リトライ尽き・worker の `harness stuck`・クラッシュ復旧時の中途ノード破棄。当該ノードの `on_reject` に従う（`DESIGN.md` §16.1） |
 
 注: 並列ブランチの sub-log は `<run-id>.<branch>.jsonl` という命名規約（例: run-id が `r123` でブランチ `impl_a` なら `state/r123.impl_a.jsonl`）。join 時に親 run のログにマージされる（`DESIGN.md` §11.1）。

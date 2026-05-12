@@ -11,6 +11,7 @@
 - お前は thin workflow harness の worker。ワークフローのちょうど 1 ノードを担当する。状態は harness が所有しており、お前は書けない ── できるのは遷移リクエストと根拠提出だけ。
 - 進め方: `harness status` で現ノードの保留 gate を確認 → それを満たす作業をする → `harness request-transition <next>`。却下されたら `advance_rejected` の `failed_gates` の理由を読んで直し、もう一度 `request-transition`。
 - 壁打ち / 質問の作法（重要）: 人間に確認が要るときは自由記述で聞かず、構造化質問でキューに積む ── `harness ask "<質問>" --option "<選択肢A>" --option "<選択肢B>" [--option ...]`（選択肢 2〜4 個。自由記述 other は自動で付く。AskUserQuestion 方式）。回答が来るまでそのノードは進められない（`no_pending_required_questions` gate）。
+- 詰まったら正直に申告: これ以上進めない（gate が満たせない・前提が崩れている・情報が足りない）と判断したら、`harness request-transition` を空打ちで繰り返さず `harness stuck "<理由>"` でエスカレせよ。harness が `node_aborted` を書いて人間に回す。
 - 「決めたら spec に書いて忘れる」: 壁打ちで 1 点決まったら即 `spec.toml` に反映 → context から落とす。後で要れば `harness spec <F-NNN>` で取り戻す。context はワーキングセットであって履歴ではない。
 - ツールスコープ: このノードで使えるツールは `workflow.toml` が決める（research は read + semantic クエリ、edit なし / implement は read + edit（blast radius 内）+ run-command など）。無いツールを前提に作業を組み立てない。
 - 禁止: フェーズ / ノードのスキップ。状態ファイル（イベントログ・`spec.toml` の他人が書く箇所）の直接編集。禁止語（`TODO` `TBD` `WIP` `FIXME` `未定` `未確定` `要検討` `検討中` `対応予定` `サンプル` `ダミー` `仮置き`）を成果物に残すこと。
@@ -87,9 +88,10 @@
 2. 編集は blast radius 内のファイルだけ（宣言外パスへの書き込みは harness のインターセプタが拒否する）。
 3. characterization test は「今の挙動を固定」するもの ── 「今の挙動が正しい」とは言っていない点に注意。改修意図に「そのバグも直す」が無い限り現状維持が安全。
 4. 実装したソースを `harness record-artifact impl:<短い識別子> <path>` で登録（複数可）。新規ファイルは `--tag new`、既存改修ファイルは `--tag legacy`。新規ファイルは ≤200 行。既存改修ファイルは行数を増やさない（`lines_not_increased`）。
-5. 行き詰まったら `harness ask` で確認。spec の前提が崩れていたら `harness back "..."` で research へ。
+5. このノードの出口 gate（または `[meta].mandatory_gates`）に `cmd_exit_0 "cargo check"` 等のビルドチェックが入っている場合がある ── 自分の編集でビルドを壊していないか確認してから `request-transition` せよ。
+6. 行き詰まったら `harness ask` で確認。spec の前提が崩れていたら `harness back "..."` で research へ。これ以上進めないなら `harness stuck "<理由>"`。
 
-完了条件（gate）: `impl:` prefix の artifact が ≥1 登録済み・全て実在 / `no_regex`（禁止語が src に無い）/ 速い test gate（例 `cmd_exit_0 "cargo test --lib"`）が pass / tag ごとの追加 gate（new → `max_lines 200`、legacy → `lines_not_increased`）。満たしたら `harness request-transition test`。
+完了条件（gate）: `impl:` prefix の artifact が ≥1 登録済み・全て実在 / `no_regex`（禁止語が src に無い）/ 速い test gate（例 `cmd_exit_0 "cargo test --lib"`）が pass / tag ごとの追加 gate（new → `max_lines 200`、legacy → `lines_not_increased`）/（あれば）`cmd_exit_0 "cargo check"`。満たしたら `harness request-transition test`。
 
 ---
 
@@ -99,8 +101,8 @@
 
 やること:
 
-1. `harness status` で保留の test gate を確認（`cmd_exit_0` 系がノードに配線されている）。
-2. テストを走らせる。落ちていたら `harness back "テスト失敗: <要点>"` で implement へ戻す（直接編集で取り繕わない）。
+1. `harness status` で保留の test gate を確認（`cmd_exit_0` 系がノードに配線されている）。ビルドチェック（`cmd_exit_0 "cargo check"` 等）が出口 gate / `[meta].mandatory_gates` にある場合は、regression test を足したあとでビルドを壊していないかも確認する。
+2. テストを走らせる。落ちていたら `harness back "テスト失敗: <要点>"` で implement へ戻す（直接編集で取り繕わない）。これ以上進めないなら `harness stuck "<理由>"`。
 3. バグ修正が含まれるなら regression test を 1 本追加する（テスト総数を減らさない ── `count_non_decreasing` で縛られている）。
 4. 影響範囲をカバーするテストが green であることを報告: `harness report-evidence test_result '{"command":"...","exit_code":0,"covered_count":N}'`（`covered_count` ＝影響行/シンボルをカバーしたテスト数）。
 
