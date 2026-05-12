@@ -113,14 +113,14 @@ notes = ""                                  # 補足
 | `[[node]].wait` | list[str] | join のみ | — | 完了を待つブランチ id |
 | `[[node]].on_reject` | `{after=int, goto=str}` | 任意 | — | `after` 回 reject されたら `goto`（ノード id か `"__human__"`）へ。`node_aborted`（タイムアウト/予算/API/stuck）もこの方針に従う（`DESIGN.md` §16.1） |
 | `[[node]].tools` | list[str] | 任意 | （常時 harness コマンドのみ） | このノードの worker に渡すツールセット |
-| `[[node]].context` | `{include=list[str]}` | 任意 | `{include=["none"]}` | コード context 事前計算の指示。要素は `"outline:$blast_radius"` / `"body:$target_symbols"` / `"none"` 等 |
+| `[[node]].context` | `{include=list[str]}` | 任意 | `{include=["none"]}` | コード context 事前計算の指示。要素は `"outline:$blast_radius"` / `"body:$target_symbols"` / `"none"` の 3 つに確定（語彙の拡張は実装時） |
 | `[[node]].artifact_tags` | list[`{tag=str, gates=list}`] | 任意 | `[]` | tag ごとに課す追加 gate |
 | `[[node]].model` | str | 任意 | `[meta].default_model` | このノードの worker のモデル（`DESIGN.md` §16.1） |
 | `[[node]].budget` | table | 任意 | `[meta].default_budget` | `{max_tool_calls, max_tokens, max_wall_seconds}`。超過で `node_aborted{reason:budget}`（`DESIGN.md` §16.1） |
 | `[[node]].cmd_allowlist` | list[str] | 任意 | — | `run-command` ツールが受け付けるコマンドパターン。`cmd_exit_0` の gate コマンドは暗黙的に許可（`DESIGN.md` §16.2） |
 | `[[node]].network` | bool | 任意 | `false` | `true` のときだけ worker にネットワークを許す（`DESIGN.md` §16.2） |
 
-注: `$blast_radius` は当該ノードの `serves` の F-NNN の `files` 集合、`$target_symbols` はそのうち編集対象として判明しているシンボル、を harness が解決するプレースホルダ（`docs/worker-context.md` B2 参照）。`tools` の語彙は `harness ... / read / edit / write / run-command / outline / show-symbol / find-symbol / refs / callers / implementers / deps / rdeps / closure / impacted-by / tested-by`（`docs/worker-context.md` B1）。
+注: `context.include` のプレースホルダは 2 つに確定 ── `$blast_radius`（当該ノードの `serves` の F-NNN の `files` の和集合）と `$target_symbols`（そのうち編集対象として判明しているシンボル ── まだ意味が完全には定まっていない、確定は実装時）。harness がこれらを解決する（`docs/worker-context.md` B2 参照）。`tools` の語彙は `harness ... / read / edit / write / run-command / outline / show-symbol / find-symbol / refs / callers / implementers / deps / rdeps / closure / impacted-by / tested-by`（`docs/worker-context.md` B1）。
 
 **append と mandatory_gates**: `workflow.toml` は実行中に append できるが、append できるのは `can_append = true` のノードだけで、許可されるのは「新規 `[[node]]` の追加」と「まだ到達していないノードの `next`/`branches`/`wait` への配線追加」のみ（既存ノード・既存 `exit_gates` の変更/削除/弱体化、`on_reject` の緩和、既存ノードへのツール追加、`context` の拡大、`[meta].entry` の変更は禁止）。新規 append されたノードは `[meta].mandatory_gates` に挙がった gate を（自分の `exit_gates` に）含まなければならない。これらを `workflow_append_only` gate が run 開始時の `workflow.toml`（or そのハッシュ）との差分に対して検証する（`DESIGN.md` §5.1）。
 
@@ -347,73 +347,63 @@ tools = ["read", "run-command", "edit"]
 context = { include = ["none"] }
 ```
 
-## 3. gate プリミティブ・リファレンス
+## 3. gate プリミティブ・リファレンス（正典）
 
-（`DESIGN.md` §7 の再掲。各 gate は `(state) -> (ok: bool, note: String)` の純粋関数。`eval_gate(name, args, state)`。未知の名前は `ok=false`。）
+**この表が gate プリミティブの完全な引数・定義・戻り値の唯一の正典である**（`DESIGN.md` §7 は散文＋このセクションへのポインタを持つ）。各 gate は `(state) -> (ok: bool, note: String)` の純粋関数。`eval_gate(name, args, state)`。未知の名前は `ok=false`。gate は L1〜L4 の決定論的プリミティブのみ（L5＝LLM 判断 gate は禁止）。
 
 | 名前 | 引数（args のキー） | 定義 | 戻り値 |
 |---|---|---|---|
-| `file_exists` | `path` | path が実在ファイル | `(ok, note)` |
-| `file_nonempty` | `path` | path が実在ファイルかつ中身非空 | `(ok, note)` |
-| `max_lines` | `path`, `n` | path の行数 ≤ n | `(ok, note)` |
-| `lines_not_increased` | `path`, `baseline_key` | path の行数が baseline（evidence に記録された値）以下 | `(ok, note)` |
-| `no_regex` | `path`, `pattern` | path のテキストに pattern がマッチしない（複数 path をグロブで指定可） | `(ok, note)` |
+| `file_exists` | `path`（glob 文字列 1 個） | path が実在ファイル | `(ok, note)` |
+| `file_nonempty` | `path`（glob 文字列 1 個） | path が実在ファイルかつ中身非空 | `(ok, note)` |
+| `max_lines` | `path`（glob 文字列 1 個）, `n` | path の行数 ≤ n | `(ok, note)` |
+| `lines_not_increased` | `path`（glob 文字列 1 個）, `baseline_key` | path の行数が baseline（evidence に記録された値）以下 | `(ok, note)` |
+| `no_regex` | `path`（glob 文字列 1 個。複数 path をチェックしたいなら複数の `no_regex` gate を並べる、または glob で表現する。要確認: 複数 path 指定の構文を入れるかは実装時）, `pattern` | path にマッチするどのファイルのテキストにも pattern がマッチしない | `(ok, note)` |
 | `cmd_exit_0` | `cmd`, `timeout_seconds?` | シェルコマンド cmd を harness 自身が実行して exit code が 0。runtime がタイムアウトを適用（既定値、args の `timeout_seconds` で上書き可）。gate コマンドは `workflow.toml` に事前宣言済みなので暗黙的に cmd_allowlist 済み（`DESIGN.md` §16.2） | `(ok, note)` |
 | `json_has` | `evidence_key`, `json_path`, `eq?` | `gate_evidence[evidence_key]` が存在し `json_path` の値が存在（`eq` 指定時はその値と等しい） | `(ok, note)` |
 | `artifact_registered` | `name_or_prefix` | その名前（または `impl:` のような prefix）の artifact が ≥1 件登録され、全て実在ファイル | `(ok, note)` |
 | `evidence_recorded` | `key` | `gate_evidence[key]` が存在する | `(ok, note)` |
-| `traceability_closed` | （なし） | 全 F-NNN に実在 artifact ≥1 と exit 0 する test ≥1 が紐づく／登録ソース artifact がどれかの F-NNN に紐づく（orphan 検出） | `(ok, note)` |
-| `workflow_append_only` | （なし） | run 開始時の `workflow.toml`（or そのハッシュ）との差分が許可範囲（新規 `[[node]]` の追加・未到達ノードへの `next`/`branches`/`wait` 配線追加のみ）に収まり、append したノードに `can_append = true` が付いており、新規ノードが `[meta].mandatory_gates` を満たすこと。既存ノードの変更/削除・既存 `exit_gates` の削除/弱体化・`on_reject` の緩和・既存ノードへのツール追加・`context` の拡大・`[meta].entry` の変更があれば fail（`DESIGN.md` §5.1） | `(ok, note)` |
+| `traceability_closed` | （なし） | 全 F-NNN に実在 artifact ≥1 と exit 0 する test ≥1 が紐づく／登録ソース artifact がどれかの F-NNN に紐づく（orphan 検出）。詳細は `DESIGN.md` §6 | `(ok, note)` |
+| `workflow_append_only` | （なし） | run 開始時の `workflow.toml`（or そのハッシュ）との差分が「追加のみ」（新規 `[[node]]`・未到達ノードへの `next`/`branches`/`wait` 配線）に収まることを検証。許可/禁止の完全なリストと append 細則は `DESIGN.md` §5.1 | `(ok, note)` |
 | `count_non_decreasing` | `evidence_key`, `baseline_key` | `gate_evidence[evidence_key]` の数値が baseline 以上 | `(ok, note)` |
-| `open_questions_zero` | （なし） | `spec.toml` のどの `text` フィールドにも `??` が無い ＋ `[[open_question]]` 配列が空 | `(ok, note)` |
+| `open_questions_zero` | （なし） | `spec.toml` のどの `text` フィールドにも `??` が無い ＋ `[[open_question]]` 配列が空。詳細は `DESIGN.md` §6・§1.1 | `(ok, note)` |
 | `blast_radius_declared` | （なし） | spec の各 F-NNN に「影響ファイル ≥1」が紐づいている | `(ok, note)` |
 | `no_pending_required_questions` | （なし） | 質問キュー（`state/<run-id>.questions.jsonl`）に `required: true` で未回答のエントリが無い（`DESIGN.md` §13） | `(ok, note)` |
 | `blast_radius_disjoint` | `node_a`, `node_b` | 2 つのノードの宣言された blast radius（影響ファイル集合）が共通要素を持たない。fork で並列化する前提条件（`DESIGN.md` §11.1） | `(ok, note)` |
 
 注: `traceability_closed` / `workflow_append_only` / `open_questions_zero` / `blast_radius_declared` は harness 内プリミティブにする価値あり。characterization は専用プリミティブにせず、`characterize` ノード（implement の前）の出口を `cmd_exit_0`（カバレッジチェック）にして強制する（§2.2 の例、`DESIGN.md` §7）。
 
-## 4. コマンド・リファレンス
+## 4. コマンド・リファレンス（正典）
 
-（`DESIGN.md` §12 の再掲。）
+**この表が harness コマンドの完全な引数・効果の唯一の正典である**（`DESIGN.md` §12 は 3 群への分類＋このセクションへのポインタを持つ）。コード知能クエリは harness の一級コマンドではなく `query <backend-subcommand>` 経由でバックエンドへ素通しする（下表の `query` 行）。CKG コマンド（`reindex` / `ckg-stale`）の完全な説明は `docs/ckg.md` §6 を正典とし、この表はそこへのポインタを持つ。
 
-| コマンド | 引数 | 効果 | 状態を変えるか | semantic バックエンド委譲か |
-|---|---|---|---|---|
-| `start "<intent>"` | intent, `[--worktree]` | 新 run 開始、`start` イベント、status 出力。`--worktree` を付けると run 専用の git worktree を作り、以後その run の全 `cmd_exit_0`・編集はその worktree 内で行われ、終了時に diff を取る（複数 run の並行実行に必須、`DESIGN.md` §11.2） | 変える | — |
-| `status` | `[--run R]` | run_id, intent, 現ノード名と番号, skill 絶対パス, 出口 gate 一覧と pass/fail＋理由, artifacts, gate_evidence キー, done か | 変えない | — |
-| `request-transition <to>`（別名 `advance`） | `to`, `[--run R]` | 現ノードの出口 gate を全評価、全 pass で `advance` イベント＋新 status、fail で `advance_rejected` イベント＋fail 一覧＋exit 1 | 変える（reject も記録） | — |
-| `back "<reason>"` | `reason`, `[--run R]` | 前ノードへ、`back` イベント | 変える | — |
-| `record-artifact <name> <path>` | `name`, `path`, `[--tag T]`, `[--run R]` | path 実在を確認、`artifact` イベント | 変える | — |
-| `report-evidence <gate> <json\|@file>` | `gate`, `json`, `[--run R]` | json をパース、`gate_evidence` イベント | 変える | — |
-| `ask "<質問>"` | `質問`, `--option ...`（2〜4 個）, `[--required]`, `[--run R]` | worker 向け。構造化質問を質問キューに積む（`question_queued` イベント。`required` 指定時は `no_pending_required_questions` gate がノードをブロック。`DESIGN.md` §13） | 変える | — |
-| `questions` | `[--run R]` | 人間向け。保留中の質問（未回答エントリ）を一覧 | 変えない | — |
-| `answer <question-id> <選択肢index\|"自由記述">` | `question-id`, `回答`, `[--run R]` | 人間向け。回答 → `human_answer` イベント。`kind=clarification` なら `spec.toml` の該当箇所を更新し `??` をクリア（`DESIGN.md` §13） | 変える | — |
-| `reset` | `[--run R] --yes` | `reset` イベント | 変える | — |
-| `skill` | `[--run R]` | 現ノードの skill 内容/パス | 変えない | — |
-| `spec <F-NNN>` | `F-NNN` | その要件と AC と紐づくテストだけ | 変えない | — |
-| `gates` | `[--run R]` | 保留 gate 各 1 行 | 変えない | — |
-| `outline <file>` | `file` | シグネチャだけのスケルトン | 変えない | 委譲 |
-| `show-symbol <sym>` | `sym` | そのシンボルの本体 | 変えない | 委譲 |
-| `find-symbol <name>` | `name` | シンボル位置 | 変えない | 委譲 |
-| `refs <sym>` | `sym` | 参照位置 | 変えない | 委譲 |
-| `callers <sym>` | `sym` | 呼び出し元位置 | 変えない | 委譲 |
-| `implementers <trait>` | `trait` | 実装位置 | 変えない | 委譲 |
-| `deps <module>` | `module` | 依存モジュール（このモジュールが import/参照しているもの） | 変えない | 委譲（CKG バックエンド） |
-| `rdeps <module>` | `module` | 逆依存モジュール（このモジュールに依存しているもの） | 変えない | 委譲（CKG バックエンド） |
-| `closure <sym> --depth N` | `sym`, `N` | 推移閉包（blast radius 候補） | 変えない | 委譲（CKG バックエンド） |
-| `impacted-by <sym>` | `sym` | 変えたら壊れうる箇所（references エッジ） | 変えない | 委譲（CKG バックエンド） |
-| `tested-by <sym>` | `sym` | カバーするテスト（tested-by エッジ） | 変えない | 委譲（CKG バックエンド） |
-| `reindex [--full]` | `[--full]` | 外部索引器を叩いてコードナレッジグラフを再生成（インクリメンタル＝変更ファイル＋逆依存閉包のみ。`--full` で全体を再構築。atomic swap で並行読みと干渉しない、`docs/ckg.md`） | 変えない（キャッシュ artifact 更新） | 委譲（CKG バックエンド） |
-| `ckg-stale` | （なし） | コードナレッジグラフが git HEAD に対し陳腐化しているか（陳腐ファイル一覧） | 変えない | 委譲（CKG バックエンド） |
-| `validate` | `[--workflow path]`, `[--spec path]` | `workflow.toml` / `spec.toml` の静的検証（next/branches/wait の参照先・`[meta].entry`・制御外サイクル・gate 名と args・`serves` の F-ID・`skill` ファイル実在・到達可能&停止・`mandatory_gates` 妥当）。`harness start` 時に自動実行（`DESIGN.md` §16.4） | 変えない | — |
-| `inspect <run-id>` | `run-id`, `[--node X]` | ノードの状態・gate・artifact・transcript への参照を見る（`DESIGN.md` §16.3） | 変えない | — |
-| `replay <run-id>` | `run-id` | イベントログを頭から fold して状態遷移を再現（`DESIGN.md` §16.3） | 変えない | — |
-| `stats <run-id>` | `run-id` | ノードごとの context トークン数・コスト・tool-call 数（圧縮効果の計測、`DESIGN.md` §16.3） | 変えない | — |
-| `stuck "<理由>"` | `理由`, `[--run R]` | worker 向け。これ以上進めないと自己申告 → `node_aborted{reason:stuck}` ＋ エスカレ（`DESIGN.md` §16.1） | 変える | — |
-| `abandon <run-id>` | `run-id` | run を終了。`--worktree` モードなら worktree 削除、そうでなければ `git reset`（要確認: `abandon` イベントを書くか run を terminal 扱いにするだけか ── 確定は実装時、`DESIGN.md` §16.5） | 変える | — |
+| コマンド | 引数 | 効果 | 状態を変えるか |
+|---|---|---|---|
+| `start "<intent>"` | intent, `[--worktree <path>]` | 新 run 開始、`start` イベント、status 出力。`--worktree <path>` を付けると以後その run の全 `cmd_exit_0`・編集はその作業ディレクトリ内で行われ、終了時に diff を取る（複数 run の並行実行に必須）。worktree 自体の作成/破棄は harness が所有しない ── 外部ツール（`git worktree` 等）の責任（`DESIGN.md` §11.2） | 変える |
+| `status` | `[--run R]` | run_id, intent, 現ノード名と番号, skill 絶対パス, 出口 gate 一覧と pass/fail＋理由, artifacts, gate_evidence キー, done か | 変えない |
+| `advance <to>`（別名 `request-transition`） | `to`, `[--run R]` | 現ノードの出口 gate を全評価、全 pass で `advance` イベント＋新 status、fail で `advance_rejected` イベント＋fail 一覧＋exit 1 | 変える（reject も記録） |
+| `back "<reason>"` | `reason`, `[--run R]` | 前ノードへ、`back` イベント | 変える |
+| `record-artifact <name> <path>` | `name`, `path`, `[--tag T]`, `[--run R]` | path 実在を確認、`artifact` イベント | 変える |
+| `report-evidence <gate> <json\|@file>` | `gate`, `json`, `[--run R]` | json をパース、`gate_evidence` イベント | 変える |
+| `ask "<質問>"` | `質問`, `--option ...`（2〜4 個）, `[--required]`, `[--run R]` | worker 向け。構造化質問を質問キューに積む（`question_queued` イベント。`required` 指定時は `no_pending_required_questions` gate がノードをブロック。`DESIGN.md` §13） | 変える |
+| `questions` | `[--run R]` | 人間向け。保留中の質問（未回答エントリ）を一覧 | 変えない |
+| `answer <question-id> <選択肢index\|"自由記述">` | `question-id`, `回答`, `[--run R]` | 人間向け。回答 → `human_answer` イベント。`kind=clarification` なら `spec.toml` の該当箇所を更新し `??` をクリア（`DESIGN.md` §13） | 変える |
+| `reset` | `[--run R] --yes` | `reset` イベント | 変える |
+| `skill` | `[--run R]` | 現ノードの skill 内容/パス | 変えない |
+| `spec <F-NNN>` | `F-NNN` | その要件と AC と紐づくテストだけ | 変えない |
+| `gates` | `[--run R]` | 保留 gate 各 1 行 | 変えない |
+| `query <backend-subcommand> [args]` | `subcommand`, `[args]` | 設定されたコード知能バックエンドへの素通し。一覧はバックエンド依存（典型: `find-symbol` / `refs` / `callers` / `implementers` / `show-symbol` / `outline` / `deps` / `rdeps` / `closure` / `impacted-by` / `tested-by`）。`DESIGN.md` §9・§12 | 変えない（バックエンド委譲） |
+| `reindex [--full]` | `[--full]` | 外部索引器を叩いて CKG キャッシュ artifact を再生成（インクリメンタル＝変更ファイル＋逆依存閉包のみ。`--full` で全体を再構築。atomic swap で並行読みと干渉しない）。完全な仕様は `docs/ckg.md` §6 | 変えない（キャッシュ artifact 更新） |
+| `ckg-stale` | （なし） | CKG が git HEAD に対し陳腐化しているか（陳腐ファイル一覧）。完全な仕様は `docs/ckg.md` §6 | 変えない |
+| `validate` | `[--workflow path]`, `[--spec path]` | `workflow.toml` / `spec.toml` の静的検証（next/branches/wait の参照先・`[meta].entry`・制御外サイクル・gate 名と args・`serves` の F-ID・`skill` ファイル実在・到達可能&停止・`mandatory_gates` 妥当）。`harness start` 時に自動実行（`DESIGN.md` §16.4） | 変えない |
+| `inspect <run-id>` | `run-id`, `[--node X]` | ノードの状態・gate・artifact・transcript への参照を見る（`DESIGN.md` §16.3） | 変えない |
+| `replay <run-id>` | `run-id` | イベントログを頭から fold して状態遷移を再現（`DESIGN.md` §16.3） | 変えない |
+| `stats <run-id>` | `run-id` | ノードごとの context トークン数・コスト・tool-call 数（圧縮効果の計測、`DESIGN.md` §16.3） | 変えない |
+| `stuck "<理由>"` | `理由`, `[--run R]` | worker 向け。これ以上進めないと自己申告 → `node_aborted{reason:stuck}` ＋ エスカレ（`DESIGN.md` §16.1） | 変える |
+| `abandon <run-id>` | `run-id` | run を terminal 扱いにする。`--worktree` モードなら worktree の片付けは外部、そうでなければ `git reset`（要確認: `abandon` イベントを書くか run を terminal 扱いにするだけか ── 確定は実装時、`DESIGN.md` §16.5） | 変える |
 
-## 5. イベント種別・リファレンス
+## 5. イベント種別・リファレンス（正典）
 
-（`DESIGN.md` §4 の再掲。jsonl、各行 1 JSON、共通フィールド `ts`（ISO8601 UTC）。`derive_state(events) -> State` は純粋 fold。）
+**この表がイベント payload の唯一の正典である**（`DESIGN.md` §4 は状態モデルの説明上イベント名＋1 行の説明だけを持ち、payload はここを参照する）。jsonl、各行 1 JSON、共通フィールド `ts`（ISO8601 UTC）。`derive_state(events) -> State` は純粋 fold。
 
 | type | payload フィールド | いつ書かれるか |
 |---|---|---|

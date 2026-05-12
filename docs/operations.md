@@ -1,6 +1,8 @@
 # operations.md — 運用上の考慮事項
 
 > `DESIGN.md` §16（運用上の考慮事項）の詳細。resilience / セキュリティ / 可観測性 / config 検証 / deliverable ライフサイクルを扱う。多くは runtime（Phase 1）の振る舞いだが、一部は `workflow.toml` の設定や core lib の機能。
+>
+> **注記**: ここに書かれた機構の多く（budget / cost メトリクス / サンドボックス / config 検証の細部 / async テスト / モデル選択 等）は Phase 1 のランタイムの振る舞いで、実コードを書く段階で細部が確定する。「確定」と読める箇所も設計意図であって最終仕様ではない。
 
 ---
 
@@ -136,26 +138,29 @@
 ## 5. deliverable のライフサイクルと spec amendment
 
 ### 成果物
-- run は diff（worktree 内、or ブランチ）を生む。
-  - **成功時**（review ノード通過）: その diff / ブランチが deliverable。人間がレビューしてマージ（最終ノードのアクションとして `cmd_exit_0 "gh pr create ..."` で PR を開くオプションも）。
+- run は diff（作業ディレクトリ内、or ブランチ）を生む。
+  - **成功時**（review ノード通過）: その diff / ブランチが deliverable。人間がレビューしてマージ。成功した run の成果物（diff / ブランチ）から PR を作りたければ `workflow.toml` の最終ノードに `cmd_exit_0 "gh pr create ..."` を 1 行書けば済む ── harness の機能ではない（ワークフローデータの一部）。
   - **失敗 / 中断時**:
-    - `--worktree` なら worktree を削除（live repo に痕跡なし）。
-    - live repo モードなら harness が触ったファイルをイベントログから把握して `git reset --hard` / `git stash`。
-  - `harness abandon <run-id>` コマンド。
+    - worktree を使っていたなら、そのディレクトリを外部で捨てるだけ（live repo に痕跡なし）。worktree の作成 / 破棄 / per-run 隔離は harness が所有しない（後述）。
+    - worktree を使っていない（live repo を直接触った）なら、harness が触ったファイルをイベントログから把握できるので revert 対象は分かる ── `git reset --hard` / `git stash`。
+  - `harness abandon <run-id>` コマンド（run state を「破棄」とマークする ── ファイルシステム上の worktree の後始末は上記のとおり別）。
+
+### worktree の所有
+- worktree の作成・破棄・per-run 隔離は harness が所有しない。`--worktree <path>` は「この run の `cmd_exit_0` と編集の作業ディレクトリをここにする」だけを意味し、worktree 自体の作成 / 破棄はユーザー or 外部ツール（`git worktree` / `C:\ツール\git-worktree-runner` 等）の責任。harness はそのディレクトリ内で動き、触ったファイルをイベントログに記録する。コーディネーターによる fan-out（複数並列ブランチ）も同様 ── ブランチ / worktree の段取りは workflow.toml の `fork` / `join` ＋ 外部ツールで、harness はノードを走らせるだけ。
 
 ### spec amendment（途中で要件が変わる）
 - spec は承認後 frozen。
 - implement 中に「spec が間違ってた」と気づいたら →
-  1. `harness back <spec-node>` → spec status が draft に戻る
-  2. 壁打ち再開（`harness ask` / `??` で新たな未解決点を立てる）→ 再承認
-  3. **既に done な implement 成果物のうち、変わった要件にもう紐づかないものは `traceability_closed` が検出**（orphan、または「この F-NNN にテスト無し」）→ それらのノードも `back` される
+  1. spec ノードまで戻る。`harness back` は「1 つ前のノードへ戻る（理由のみ）」であって任意ノードへは飛べない ── なので (a) `on_reject` の `goto` で spec ノードに戻る経路を `workflow.toml` に用意しておく（例: implement ノードの `on_reject = { after = N, goto = "spec" }`）か、(b) `harness back "..."` を必要回数繰り返して spec ノードまで戻る。
+  2. spec ノードに到達したら spec status を draft に戻し、壁打ち再開（`harness ask` / `??` で新たな未解決点を立てる）→ 再承認
+  3. **既に done な implement 成果物のうち、変わった要件にもう紐づかないものは `traceability_closed` が検出**（orphan、または「この F-NNN にテスト無し」）→ それらのノードも戻される
 - amendment は **高くつく**（done な作業を無効化しうる）── これは意図的な摩擦。spec 承認 gate は amendment を稀にするためにある。
 
 ---
 
 ## 6. 補足（中程度の論点 ── 詳細は実装時）
 
-- **flaky / 不十分なテスト**: known-flaky リスト（再試行する / 人間が「この失敗は accept」で `human_decision`）。「repo のテストスイートが悪い」は harness が直せない前提 ── 赤なら進めないとしか言えない。
+- **flaky / 不十分なテスト**: known-flaky リスト（再試行する / 人間が「この失敗は accept」で `harness answer` ── `kind=escalation` の質問への回答、§2/§3 参照）。「repo のテストスイートが悪い」は harness が直せない前提 ── 赤なら進めないとしか言えない。
 - **長時間テストの非同期化**: 2 時間のフルスイート → CI に push、「test running」状態を記録、人間 / poller が後で確認、gate ＝「commit X の CI が green」。push → poll → async の機構は実装時に詰める。
 - **mutation testing を任意 gate に**: `cmd_exit_0 "cargo mutants --fail-on-survived"` で「`assert true` テスト」を殺せる ── 意味のあるテストかは決定論的に検出不能だが下限は引ける。
 - **「ビルドが通る」を準ユニバーサルな mandatory exit gate に**: 各ノードの出口に最低限 `cmd_exit_0 "cargo check"` を入れると「ノード 10 で初めてビルド壊れてた発覚」を防げる。`[meta].mandatory_gates` の有力候補。
