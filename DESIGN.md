@@ -175,6 +175,19 @@ gate は **L1〜L4 の決定論的プリミティブのみ**（L5＝LLM 判断 g
 - **限界**: LSP/semantic は言語依存で不完全（マクロ・コード生成・動的ディスパッチ・リフレクション・ビルド時設定・多言語 repo）。静的グラフはよく拾うが動的エッジは漏れる ── blast radius の漏れと同じ穴、だから「フルスイート遅い gate」が安全網。事前グラフは陳腐化→再索引コスト（巨大 repo で時間かかるが、それは*マシン*が払うコストで*context*は払わない）。要約・パッケージカードはドリフト→再生成トリガが要る。
 - 対象コードベースが domain ごとに縦割りされていて全ファイルが小さいほど blast radius・CKG・traceability・並列化が効く ── 理想構造は `docs/target-codebase-structure.md`（助言的、harness はこの構造を要求しない）。
 
+### 9.1 トレースマップ＝検索インデックス（"code as memory"）
+
+- **トレースマップ（`spec.toml` の `requirement.files` ／ `requirement.tests` ── コードと設計書の双方向の紐づき）は、乖離検出（`traceability_closed` gate, §6）のためだけでなく、検索インデックスとしても使う**。F-NNN をやるとき、harness は worker の context バンドルに「その F-NNN の requirement ＋ AC ＋ 不変条件」＋「`requirement.files` のファイル（＝宣言された blast radius、依存はアウトライン・触るシンボルは本体、§9 のバジェット）」＋「`requirement.tests` のテスト」だけを入れる ── grep も探索も無い、over-fetch ゼロ。「何をロードするか」がデータ（トレースマップ）から決まる。
+- **フロー**: research/scope フェーズで **CKG（`closure` / `impacted-by`）を使って影響ファイルを*発見*** → それを `spec.toml` の `requirement.files` に書く（§7・`docs/ckg.md` §7）→ 以降はトレースマップがインデックスになる（implement ノードの worker は traced files を手渡される、CKG クエリ不要）。**CKG＝「初回どう見つけるか」、トレースマップ＝「見つけたものを覚える」記録**。トレースマップ＝検索のための "code as memory"（一度確定した blast radius を spec が記憶し、次回以降の context 構築がそれを引く）。
+- **双方向性**: `requirement → files` で「要件のためにどのファイルをロードするか」が引ける。逆に `file → requirement(s)` で「このファイルを見てるとき、それが奉仕する意図（＝何を壊しちゃダメか）」が引ける ── review / characterize ノードで効く（あるファイルを変えるとき、それに紐づく F-NNN の AC・不変条件を context に呼べる）。
+- **紐づきはコード側にも持てる（案）**: 新規 / 変更ファイルにヘッダマーカー（`// implements: F-007` 等 ── harness がファイル作成時に付けられる）、レガシーは `spec.toml` の glob（`domains/billing/**` → F-billing 系）── これは「`--tag new` / `--tag legacy` で blast radius のスコープを変える」のと同じ流儀（`docs/operations.md` 参照）。`traceability_closed` が両方向（spec→file、file→spec）を検証する。（コード側マーカーを必須にするかは要検討 ── 10M 行で 50k ファイル全部にヘッダを付けるのは負担、glob のほうが現実的。）
+- **まとめ ── 「load only what's needed」は 3 層**:
+  - **意図（トレースマップ）** ── どの F-NNN がどのファイル / テストに対応するか。`spec.toml` の `requirement.files` / `requirement.tests`。「何をロードするか」を決める。
+  - **構造（CKG・アウトライン）** ── 初回どう見つけるか。`closure` / `impacted-by` / `outline`。発見の道具（`docs/ckg.md`）。
+  - **履歴（イベントログ・spec）** ── 抱えずクエリする。`harness status` / `harness spec` / `harness replay` で取り戻せる（§4・§9 ⑦）。
+
+  この 3 つを「context に常駐させず、必要な瞬間に必要な分だけ引く」のが §9 全体の主張。コード知能 IF は素通し（§9 末尾「コード知能インターフェース」項、`docs/ckg.md` 参照）のまま ── harness が太らない。
+
 ## 10. エージェント topology と context 構築
 
 - **CLI とランタイムは段階で積む（§15）**: Phase 0 は「Claude Code が叩く CLI」── このときの圧縮の上限は「Claude Code の ambient（CLAUDE.md・skill manifest・MCP ツール一覧・hooks・rules）」で頭打ち（数万トークンの前置き）。圧縮目標を真面目に取る Phase 1 では、**harness が*ランタイムそのもの*になって worker を生 API（生 Anthropic API 直叩き）で spawn し、worker の context を harness が組み立てる**（CLI コアの厳密な superset）。Rust なら公式 Agent SDK は無いが、生 API 直叩きで「context を自分で決める」利益はそのまま得られる（SDK の便利機能＝prompt caching ヘルパ・tool-use ループヘルパは自前実装）。本節以降の層モデルは Phase 1 以降の姿。
