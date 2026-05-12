@@ -9,8 +9,8 @@ harness は常に sequencer + gater + 状態機械。plan / security review / co
 | 能力 | Phase 0（agent = Claude Code、`harness` コマンドを叩く） | Phase 1+（agent = harness runtime が生 API で spawn） |
 |---|---|---|
 | 徹底的な計画 | plan モード（read-only research を強制 → ExitPlanMode で計画提示）— plan ノードがこれに対応 | plan ノードの skill が同じ規律を複製（semantic クエリで read-only 探索 → 詳細な plan artifact） |
-| セキュリティレビュー | `/security-review` skill（多段解析）— security ノードが invoke | security ノードの skill = `/security-review` の手順を移植（`skills/security-review.md`）＋ `cmd_exit_0` スキャナ |
-| コードレビュー | `/review` skill — review ノードが invoke | review ノードの skill = `/review` の手順を移植（`skills/code-review.md`）＋ spec チェックリスト自己レビュー |
+| セキュリティレビュー | `/security-review` skill（多段解析）— security ノード（`skills/04b-security.md`）が invoke | security ノードの skill（`04b-security.md`）が `/security-review` の手順を移植した helper（`skills/security-review.md`）を取り込む ＋ `cmd_exit_0` スキャナ |
+| コードレビュー | `/review` skill — review ノード（`skills/05-review.md`）が invoke | review ノードの skill（`05-review.md`）が `/review` の手順を移植した helper（`skills/code-review.md`）を取り込む ＋ spec チェックリスト自己レビュー |
 | 人間への質問 | `harness ask` が文字通り AskUserQuestion を使う（構造化質問 ＋ 選択肢） | `harness ask` が質問キューに書く → 人間が `harness answer`（または UI） |
 | sub-worker | L3 sub-worker = Agent/Task ツール | L3 sub-worker = 生 API |
 | 編集境界の強制 | Claude Code hook（PreToolUse で blast radius 外編集を block — ボーナス enforcement 層、`harness init` がオプションでスキャフォールド） | runtime の tool-call インターセプタ |

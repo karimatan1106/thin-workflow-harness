@@ -9,7 +9,7 @@
 | # | 失敗 | 何が捕まえるか・いつ | Phase | 残存ギャップ |
 |---|---|---|---|---|
 | 1 | blast radius 外を編集 | Phase1: tool-call インターセプタが即拒否 / Phase0: リアルタイム block 無し、登録 artifact なら `traceability_closed` の orphan チェック、未登録編集はテスト失敗 or review まで | 1=即 / 0=遅 | **Phase 0 の弱点**（インターセプタ無し、Phase 1 で閉じる） |
-| 2 | 新規ファイル >200行 | `impl_artifacts_size_ok`（`--tag new`）が advance で fail | all | — |
+| 2 | 新規ファイル >200行 | `max_lines`（`--tag new` の artifact_tag gate）が advance で fail | all | — |
 | 3 | レガシーファイルを現在サイズ超に肥大 | `lines_not_increased` が advance で fail → 抽出を強制 | all | — |
 | 4 | 禁止語を成果物に残す | `no_regex`（禁止語パターン）が advance で fail | all | — |
 | 5 | 消すべきでないファイルを削除（テストを消してスイートを pass にする等） | テストなら `count_non_decreasing` / traced コードなら `traceability_closed` / 依存先なら workspace `cargo check` | all | — |
@@ -20,7 +20,7 @@
 | # | 失敗 | 何が捕まえるか・いつ | Phase | 残存ギャップ |
 |---|---|---|---|---|
 | 7 | テストが通ったと*嘘*をつく | gate は申告を信じない: **harness 自身がテストコマンドを再実行**（`cmd_exit_0` が真の gate、`report-evidence test_result` はメトリクス/notes 用の補助） | all | （要明確化を DESIGN/operations に） |
-| 8 | 通るが意味の無いテスト | `traceability_closed` は「テストがある」だけ、`cargo llvm-cov` は実行されることだけ。**mutation testing**（`cmd_exit_0 "cargo mutants --check"`）が「テストが落ちない＝検証してない」を殺す — 唯一の本当の防御、遅いので slow ノード gate | mutation 有効時のみ | **honest ギャップ: テストの意味は決定論的に検証不能**、coverage ＋ mutation で下限のみ |
+| 8 | 通るが意味の無いテスト | `traceability_closed` は「テストがある」だけ、`cargo llvm-cov` は実行されることだけ。**mutation testing**（`cmd_exit_0 "cargo mutants --fail-on-survived"`）が「テストが落ちない＝検証してない」を殺す — 唯一の本当の防御、遅いので slow ノード gate | mutation 有効時のみ | **honest ギャップ: テストの意味は決定論的に検証不能**、coverage ＋ mutation で下限のみ |
 | 9 | テストスイートが flaky | `.harness/known-flaky.txt`（リトライ or「人間確認要」）、リストに無ければ `harness stuck` → 人間が修正/追加/accept | all | ギャップでなく**摩擦点** |
 | 10 | テストスイートが不十分/プロジェクトにテスト無し | `characterize` ノード ＋ カバレッジ gate が変更前にテストを書かせる、テストゼロなら gate fail → 確立するまで進めない | all | **harness は「テスト無いプロジェクト」を直せない**、テスト債務を払うまで最初の変更が遅い |
 

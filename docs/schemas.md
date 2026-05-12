@@ -97,7 +97,7 @@ notes = ""                                  # 補足
 |---|---|---|---|---|
 | `[meta].name` | str | 必須 | — | ワークフロー名 |
 | `[meta].entry` | str | 必須 | — | 開始ノード id |
-| `[meta].mandatory_gates` | list[`{gate=str, args=table}`] | 任意 | `[]` | 全ノード（または終端ノード）が含むべき gate spec のリスト。実行中に append された新規ノードはこれらを満たさなければならない（`workflow_append_only` が検証）。有力候補に `{ gate="cmd_exit_0", args={ cmd="cargo check" } }`（**workspace 全体** ── per-crate でなく workspace 全体にして domain をまたぐ署名 break を導入ノードで安く捕まえる）＋ `{ gate="cmd_exit_0", args={ cmd="gitleaks detect --no-git --redact" } }`（ソースに書いたシークレットを捕まえる）。`DESIGN.md` §5.1・§16.1・`docs/operations.md` §1/§2/§6 |
+| `[meta].mandatory_gates` | list[`{gate=str, args=table}`] | 任意 | `[]` | 全ノード（または終端ノード）が含むべき gate spec のリスト。実行中に append された新規ノードはこれらを満たさなければならない（`workflow_append_only` が検証）。有力候補に `{ gate="cmd_exit_0", args={ cmd="cargo check --workspace" } }`（**workspace 全体** ── per-crate でなく workspace 全体にして domain をまたぐ署名 break を導入ノードで安く捕まえる）＋ `{ gate="cmd_exit_0", args={ cmd="gitleaks detect --no-git --redact" } }`（ソースに書いたシークレットを捕まえる）。`DESIGN.md` §5.1・§16.1・`docs/operations.md` §1/§2/§6 |
 | `[meta].default_model` | str | 任意 | — | ノードに `model` が無いとき適用する worker のモデル（`DESIGN.md` §16.1） |
 | `[meta].default_budget` | table | 任意 | — | ノードに `budget` が無いとき適用する予算（`{max_tool_calls, max_tokens, max_wall_seconds}`、`DESIGN.md` §16.1） |
 | `[meta].run_cost_budget` | 数値 | 任意 | — | run 全体のコスト上限。超過で人間にエスカレ（`DESIGN.md` §16.1） |

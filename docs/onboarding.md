@@ -8,11 +8,11 @@
 
 - `workflow.toml` — デフォルトワークフロー。プロジェクトのコマンド（build / test / lint / coverage / フルスイート）を `cmd_exit_0` gate に持つ。
 - `[meta]` 設定:
-  - `mandatory_gates` — 例: `cmd_exit_0 "cargo check"`（まだビルドが通ること）。
+  - `mandatory_gates` — 例: `cmd_exit_0 "cargo check --workspace"`（まだビルドが通ること ── per-crate でなく workspace 全体、`DESIGN.md` §16.1）＋ `cmd_exit_0 "gitleaks detect --no-git --redact"`（ソースに書いたシークレット）。
   - `secrets_glob` — どのファイルにシークレットがあるか。
   - `default_model`。
   - `host` — `"claude-code"` / `"runtime"` 等（→ `docs/host-capabilities.md`）。
-- `skills/` — ノード skill。標準7個＋ `security` / `code-review`。プロジェクトで上書き可。
+- `skills/` — ノード skill。標準8個（research / plan / characterize / implement / test / security / review / join、`docs/skill-templates.md`）＋ Phase 1 用に移植する手順 helper（`security-review.md` / `code-review.md`、`docs/host-capabilities.md`）。プロジェクトで上書き可。
 - コード知能バックエンド設定 — Serena/LSP か SCIP（→ `docs/ckg.md`）。
 - `state/` — run のイベントログ jsonl・質問キュー・transcripts（git ignore）。
 
@@ -52,7 +52,7 @@
 .harness/
   workflow.toml       # デフォルトワークフロー（プロジェクトのコマンドを cmd_exit_0 gate に）
   ckg.toml            # コード知能バックエンドの宣言（言語ごと、サブツリーごと）
-  skills/             # ノード skill（標準7個＋security/code-review、プロジェクト上書き可）
+  skills/             # ノード skill（標準8個 research/plan/characterize/implement/test/security/review/join ＋ 移植手順 helper security-review/code-review、プロジェクト上書き可）
   state/              # run のイベントログ jsonl・質問キュー・transcripts（git ignore）
     .gitkeep
   project-invariants.md   # プロジェクト全体の不変条件（人間が一度書く、§5）
