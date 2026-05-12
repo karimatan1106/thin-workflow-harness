@@ -14,6 +14,8 @@
 - `docs/skillify.md` — 複数 run またぎの学習・複利（playbook）
 - `docs/operations.md` — resilience / セキュリティ / 可観測性 / config 検証 / deliverable ライフサイクル
 - `docs/skill-templates.md` — 各ノードの skill 文面の草稿
+- `docs/implementation.md` — 実装上の確定事項（言語・クレート・hook 方針・ディレクトリ構成）
+- `docs/target-codebase-structure.md` — harness が操作しやすい対象コードベースの理想構造（助言的）
 
 ## 状態
 

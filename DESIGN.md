@@ -173,6 +173,7 @@ gate は **L1〜L4 の決定論的プリミティブのみ**（L5＝LLM 判断 g
   それ以外（残り 10M 行、会話履歴、他の 49 個の F-NNN、フルコールグラフ）は全部 context 外、`harness <query>` で取れる。**コードが context に入るのは (a) オリエンテーション用のアウトライン (b) 実際に触る数シンボルの本体、のどちらかだけ。検索は位置を返す、テキストの塊を返さない。**
 - **コード知能インターフェース**: harness はフル索引器を内蔵しない（フル版の Python indexer は太い）。コード知能クエリ（`find-symbol` / `refs` / `callers` / `implementers` / `show-symbol` / `outline` / `deps` / `rdeps` / `closure` / `impacted-by` / `tested-by`）は harness の一級コマンドではなく、**設定されたコード知能バックエンドへの*素通し***（LSP サーバへの小さいブリッジ or Serena/MCP 経由、または事前構築 SCIP/LSIF 索引、または tree-sitter）── harness 表面では `harness query <backend-subcommand> [args]` の 1 エントリで表現する（or バックエンドが MCP/サブプロセスとして直接 expose し harness は転送するだけ）。一覧はバックエンド依存。ナレッジグラフは**キャッシュされた artifact（ファイル）であってコードではない**ので、その artifact の管理（`harness reindex` で外部索引器を叩いて再生成、`harness ckg-stale` で git HEAD に対する陳腐化チェック）は harness 側のコマンド。
 - **限界**: LSP/semantic は言語依存で不完全（マクロ・コード生成・動的ディスパッチ・リフレクション・ビルド時設定・多言語 repo）。静的グラフはよく拾うが動的エッジは漏れる ── blast radius の漏れと同じ穴、だから「フルスイート遅い gate」が安全網。事前グラフは陳腐化→再索引コスト（巨大 repo で時間かかるが、それは*マシン*が払うコストで*context*は払わない）。要約・パッケージカードはドリフト→再生成トリガが要る。
+- 対象コードベースが domain ごとに縦割りされていて全ファイルが小さいほど blast radius・CKG・traceability・並列化が効く ── 理想構造は `docs/target-codebase-structure.md`（助言的、harness はこの構造を要求しない）。
 
 ## 10. エージェント topology と context 構築
 
@@ -296,6 +297,8 @@ harness が所有するコマンドは 3 群:
 - **現状**: `C:\ツール\thin-workflow-harness\src\*.rs` は v0 prototype（5 フェーズをコードにハードコード、gate を名前で match）。**この設計の方向に作り直す**（`phases.rs` を捨てて `workflow.toml` + プリミティブ gate に、`gates.rs` をプリミティブのみに）。
 
 - **「CLI 版を中間に作るか」は解決した**: CLI 版 vs ランタイムは二者択一ではない。**CLI コアを先に作り、ランタイムはその厳密な superset を後で足す。同じ土台。CLI コアは捨てプロトタイプではなく以降の全フェーズの土台。** 以下の段階制で進める。
+
+> 実装言語・クレート・hook の方針・ソースのディレクトリ構成などの実装レベルの決め事は `docs/implementation.md`。
 
 ### Phase 0 — CLI コア
 
