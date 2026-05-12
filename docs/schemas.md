@@ -180,7 +180,7 @@ context = { include = ["outline:$blast_radius"] }
 # --- 任意ノード: 影響ファイルのカバレッジが閾値未満なら characterization test を先に書かせる ---
 [[node]]
 id = "characterize"
-skill = "02b-characterize.md"
+skill = "03-characterize.md"
 serves = ["F-001", "F-002"]
 exit_gates = [
   # カバレッジツールを blast radius に対し走らせ、閾値未満なら fail（カバレッジツール名・閾値はプロジェクト依存）
@@ -193,7 +193,7 @@ context = { include = ["outline:$blast_radius"] }
 
 [[node]]
 id = "implement"
-skill = "03-implement.md"
+skill = "04-implement.md"
 serves = ["F-001", "F-002"]
 budget = { max_tool_calls = 200, max_tokens = 400000, max_wall_seconds = 1800 }   # 超過で node_aborted{reason:budget}（DESIGN.md §16.1）
 cmd_allowlist = ["cargo *", "git diff *"]   # run-command が受け付けるパターン。cmd_exit_0 の gate コマンドは暗黙的に許可（DESIGN.md §16.2）
@@ -213,7 +213,7 @@ artifact_tags = [
 
 [[node]]
 id = "test"
-skill = "04-test.md"
+skill = "05-test.md"
 serves = ["F-001", "F-002"]
 exit_gates = [
   { gate = "cmd_exit_0", args = { cmd = "cargo test --test '*'" } },
@@ -228,11 +228,10 @@ tools = ["read", "run-command", "edit"]
 context = { include = ["none"] }
 
 # --- security: 最終セキュリティ確認（test の後・review の前）。ホストに /security-review があれば skill がそれを invoke する ---
-# skill ファイル名は既存命名（01-research / 02-plan / 02b-characterize / 03-implement / 04-test / 05-review / 06-join）と衝突しないよう "04b-security.md"
-# とした（test=04 と review=05 の間 ── 02b-characterize.md と同じパターン）。"06-" は 06-join.md が使用中。最終的な番号は実装時に確定（要確認）
+# skill ファイルは連番（01-research / 02-plan / 03-characterize / 04-implement / 05-test / 06-security / 07-review / 08-join）
 [[node]]
 id = "security"
-skill = "04b-security.md"
+skill = "06-security.md"
 serves = ["F-001", "F-002"]
 exit_gates = [
   { gate = "cmd_exit_0", args = { cmd = "cargo audit" } },                          # 依存脆弱性（DESIGN.md §16.2）
@@ -248,7 +247,7 @@ context = { include = ["outline:$blast_radius"] }
 
 [[node]]
 id = "review"
-skill = "05-review.md"
+skill = "07-review.md"
 serves = ["F-001", "F-002"]
 exit_gates = [
   { gate = "json_has", args = { evidence_key = "review", json_path = "verdict", eq = "approved" } },
@@ -326,7 +325,7 @@ context = { include = ["none"] }
 # --- ブランチ A: src/auth/ だけを触る（impl_b と互いに素）---
 [[node]]
 id = "impl_a"
-skill = "03-implement.md"
+skill = "04-implement.md"
 serves = ["F-007.1"]
 exit_gates = [
   { gate = "artifact_registered", args = { name_or_prefix = "impl:auth" } },
@@ -340,7 +339,7 @@ context = { include = ["outline:$blast_radius", "body:$target_symbols"] }
 # --- ブランチ B: src/session/ だけを触る（impl_a と互いに素）---
 [[node]]
 id = "impl_b"
-skill = "03-implement.md"
+skill = "04-implement.md"
 serves = ["F-007.2"]
 exit_gates = [
   { gate = "artifact_registered", args = { name_or_prefix = "impl:session" } },
@@ -355,7 +354,7 @@ context = { include = ["outline:$blast_radius", "body:$target_symbols"] }
 [[node]]
 id = "merge"
 type = "join"                               # "join" で全ブランチ完了待ち＋sub-log マージ
-skill = "06-join.md"                        # join は短い skill を持つ（再検証 worker が動く）
+skill = "08-join.md"                        # join は短い skill を持つ（再検証 worker が動く）
 serves = ["F-007", "F-007.1", "F-007.2"]
 wait = ["impl_a", "impl_b"]                 # この全ブランチが done になるまで待つ
 exit_gates = [
@@ -420,12 +419,12 @@ context = { include = ["none"] }
 | `ckg-stale` | （なし） | CKG が git HEAD に対し陳腐化しているか（陳腐ファイル一覧）。完全な仕様は `docs/ckg.md` §6 | 変えない |
 | `init` | `[--workflow path]`, `[--spec path]`, `[--host claude-code\|runtime]` | onboarding スキャフォールド ── 既存 repo に `workflow.toml` / `spec.toml` のひな型と `skills/` を置き、内部で `harness validate` を実行し、スモークチェック（gate コマンドが解決するか・skill ファイルが揃っているか等）を行う。詳細は `docs/onboarding.md` | 変える（ファイル生成） |
 | `doctor` | `[--workflow path]`, `[--spec path]` | スモークチェックを再実行し、config / skill / ツール設定のドリフト（参照先欠落・gate コマンド未解決・skill 不在等）を flag する。詳細は `docs/onboarding.md` | 変えない |
-| `validate` | `[--workflow path]`, `[--spec path]` | `workflow.toml` / `spec.toml` の静的検証（next/branches/wait の参照先・`[meta].entry`・制御外サイクル・gate 名と args・`serves` の F-ID・`skill` ファイル実在・到達可能&停止・`mandatory_gates` 妥当）。`harness start` 時に自動実行（`DESIGN.md` §16.4） | 変えない |
+| `validate` | `[--workflow path]`, `[--spec path]` | `workflow.toml` / `spec.toml` の静的検証（next/branches/wait の参照先・`[meta].entry`・サイクル方針［`next` で前方サイクルを作るのは error。前ノードへ戻れるのは `back` / `on_reject` の `goto` 経由のみ］・gate 名と args・`serves` の F-ID・`skill` ファイル実在・到達可能&停止・`mandatory_gates` 妥当）。`harness start` 時に自動実行（`DESIGN.md` §16.4） | 変えない |
 | `inspect <run-id>` | `run-id`, `[--node X]` | ノードの状態・gate・artifact・transcript への参照を見る（`DESIGN.md` §16.3） | 変えない |
 | `replay <run-id>` | `run-id` | イベントログを頭から fold して状態遷移を再現（`DESIGN.md` §16.3） | 変えない |
 | `stats <run-id>` | `run-id` | ノードごとの context トークン数・コスト・tool-call 数（圧縮効果の計測、`DESIGN.md` §16.3） | 変えない |
 | `stuck "<理由>"` | `理由`, `[--run R]` | worker 向け。これ以上進めないと自己申告 → `node_aborted{reason:stuck}` ＋ エスカレ（`DESIGN.md` §16.1） | 変える |
-| `abandon <run-id>` | `run-id` | run を terminal 扱いにする。`--worktree` モードなら worktree の片付けは外部、そうでなければ `git reset`（要確認: `abandon` イベントを書くか run を terminal 扱いにするだけか ── 確定は実装時、`DESIGN.md` §16.5） | 変える |
+| `abandon <run-id>` | `run-id`, `[--reason R]` | run を放棄する ── `abandon` イベント（理由を payload に）を書く（イベントログが SSOT）。FS 上の worktree の後始末（`--worktree` モードなら `git worktree remove`、そうでなければ `git reset`）はイベントとは別の外部作業（`DESIGN.md` §16.5） | 変える |
 
 ## 5. イベント種別・リファレンス（正典）
 
@@ -434,7 +433,7 @@ context = { include = ["none"] }
 | type | payload フィールド | いつ書かれるか |
 |---|---|---|
 | `start` | `intent` | `start` コマンド時。run の最初のイベント |
-| `advance` | `from`, `to`, `metrics?` | `request-transition` / `advance` で出口 gate が全 pass したとき。phase_index +1。`metrics` は optional で `{cost, tokens, tool_calls, wall_seconds}`（要確認: サイドカー `state/<run-id>.metrics.jsonl` に分ける案もある ── 確定は実装時、`DESIGN.md` §16.1） |
+| `advance` | `from`, `to` | `request-transition` / `advance` で出口 gate が全 pass したとき。phase_index +1。ノード完了時のメトリクスはこのイベントには載せず、サイドカー `state/<run-id>.metrics.jsonl` に書く（下記注、`DESIGN.md` §16.1） |
 | `advance_rejected` | `failed_gates: [{gate, reason}]` | `request-transition` / `advance` で 1 つでも gate が fail したとき（記録のみ、状態の phase は進まない） |
 | `back` | `reason` | `back` コマンド時。phase_index を saturating -1 |
 | `artifact` | `name`, `path`, `tag?` | `record-artifact` 時。path 実在確認後。同名は上書き |
@@ -446,5 +445,8 @@ context = { include = ["none"] }
 | `branch_forked` | `branch_ids` | fork ノードが並列ブランチを開始したとき。各ブランチは自分のイベントを `state/<run-id>.<branch>.jsonl` に書く |
 | `branch_joined` | `branch_ids`, `merge_result` | join ノードが全ブランチをマージし検証したとき |
 | `node_aborted` | `node`, `reason` (`"timeout"`\|`"budget"`\|`"api_error"`\|`"stuck"`\|`"crash"`) | gate タイムアウト・ノード予算超過・API リトライ尽き・worker の `harness stuck`・クラッシュ復旧時の中途ノード破棄。当該ノードの `on_reject` に従う（`DESIGN.md` §16.1） |
+| `abandon` | `reason` | `abandon <run-id>` 時。run を放棄状態にする（terminal）。worktree の後始末はイベントとは別（`DESIGN.md` §16.5） |
 
 注: 並列ブランチの sub-log は `<run-id>.<branch>.jsonl` という命名規約（例: run-id が `r123` でブランチ `impl_a` なら `state/r123.impl_a.jsonl`）。join 時に親 run のログにマージされる（`DESIGN.md` §11.1）。
+
+注（メトリクス・サイドカー）: ノード完了時のメトリクス（`cost`, `tokens`, `tool_calls`, `wall_seconds`）はイベントログには載せず、append-only サイドカー `state/<run-id>.metrics.jsonl` に書く（各行 1 ノード分の `{node, cost, tokens, tool_calls, wall_seconds, ts}`）。`harness stats <run-id>` はこのサイドカーを読む（`DESIGN.md` §16.1・§16.3）。イベントログを軽く保つための分離。

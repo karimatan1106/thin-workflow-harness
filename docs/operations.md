@@ -44,10 +44,8 @@
 
 ### コスト/予算
 - worker spawn ＝ トークン ＝ 金。10M ステップ改修 ＝ 大量。
-- コストはノード完了時にメトリクスとして記録する:
-  - `advance` イベントの payload に optional `metrics = { cost, tokens, tool_calls, wall_seconds }`、
-  - もしくはサイドカー `state/<run-id>.metrics.jsonl`。
-- `harness status` と `harness stats` でコスト累計を表示。
+- コストはノード完了時にメトリクスとして記録する ── append-only サイドカー `state/<run-id>.metrics.jsonl`（各行 1 ノード分の `{node, cost, tokens, tool_calls, wall_seconds, ts}`）。`advance` イベント自体には載せない（イベントログを軽く保つ）。
+- `harness status` と `harness stats` でコスト累計を表示（`stats` はこのサイドカーを読む）。
 - `[meta].run_cost_budget`（任意）── run のコストがこれを超えたら人間にエスカレ。
 
 ### ノードごとのモデル選択
@@ -134,7 +132,7 @@
 以下をチェックして全エラーを列挙する ──
 - 全 `next` / `branches` / `wait` が実在ノード id を指す
 - `[meta].entry` のノードが実在
-- 制御外のサイクルが無い（サイクルは `back` / `on_reject` 経由のみ許可、`next` での前方サイクルは禁止 ── or「サイクル許可だが警告」、要確認）
+- `next` で前方サイクルを作るのは error（前ノードへ戻れるのは `back` / `on_reject` の `goto` 経由のみ）
 - 全 gate 名が既知のプリミティブで、args が妥当（必須キーがある等）
 - 全 `serves` の F-NNN が `spec.toml` に実在
 - 参照される全 skill ファイルが実在
@@ -160,7 +158,7 @@
   - **失敗 / 中断時**:
     - worktree を使っていたなら、そのディレクトリを外部で捨てるだけ（live repo に痕跡なし）。worktree の作成 / 破棄 / per-run 隔離は harness が所有しない（後述）。
     - worktree を使っていない（live repo を直接触った）なら、harness が触ったファイルをイベントログから把握できるので revert 対象は分かる ── `git reset --hard` / `git stash`。
-  - `harness abandon <run-id>` コマンド（run state を「破棄」とマークする ── ファイルシステム上の worktree の後始末は上記のとおり別）。
+  - `harness abandon <run-id>` コマンド ── `abandon` イベント（run を放棄状態にする、理由を payload に）を書く。イベントログが SSOT なので run 状態は必ずイベント経由でマークされる。ファイルシステム上の worktree の後始末（削除）はそれとは別の外部作業（上記のとおり）。
 
 ### worktree の所有
 - worktree の作成・破棄・per-run 隔離は harness が所有しない。`--worktree <path>` は「この run の `cmd_exit_0` と編集の作業ディレクトリをここにする」だけを意味し、worktree 自体の作成 / 破棄はユーザー or 外部ツール（`git worktree` / `C:\ツール\git-worktree-runner` 等）の責任。harness はそのディレクトリ内で動き、触ったファイルをイベントログに記録する。コーディネーターによる fan-out（複数並列ブランチ）も同様 ── ブランチ / worktree の段取りは workflow.toml の `fork` / `join` ＋ 外部ツールで、harness はノードを走らせるだけ。
