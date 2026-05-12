@@ -17,6 +17,9 @@
   - live repo モードでは harness が触ったファイルをイベントログから把握して revert する（§5 参照）。
 - `reset` とは別物。`reset` は意図的なやり直し、これはクラッシュからの自動復旧。
 
+### `cmd_exit_0` ── 実行するのは harness（申告ではない）
+- `cmd_exit_0` gate は **harness 自身が `request-transition` 時にその場でコマンドを走らせ、その exit code を使う**。worker の `harness report-evidence test_result '{...}'` はあくまで申告で、metrics / notes 用の補助であり信頼の源泉ではない ── worker が「テストが通った」と嘘をついても harness が再実行するので無意味（同じことが `gitleaks` / `cargo audit` 等の security gate にも当てはまる）。これが「テスト層の自動担保」「セキュリティ確認」が嘘をつけない理由（`DESIGN.md` §7・§8）。
+
 ### gate のタイムアウト
 - `cmd_exit_0` の gate はコマンドがハングしうる（終わらないテスト）→ gate ごとにタイムアウトを設ける。
 - デフォルト値があり、`workflow.toml` の gate args で上書き可。例:
@@ -50,6 +53,16 @@
 ### ノードごとのモデル選択
 - trivial なノードは安いモデル（`claude-haiku-4-5-20251001`）、難しいノードは Opus（`claude-opus-4-7`）。
 - `workflow.toml` のノードに `model = "..."`（任意、`[meta].default_model` から既定）。
+
+### 推奨 mandatory gate（`[meta].mandatory_gates`）
+- **workspace 全体の `cargo check`**（`cargo check --workspace` ── per-crate でなく）。per-crate だと、壊した crate を呼ぶ別 crate のビルド失敗を後段ノードまで見逃す。domain をまたぐ署名 break を、それを導入したノードで安く捕まえるには workspace 全体でチェックする（多言語モノレポなら各サブツリーの等価物 ── `cargo check --workspace && pnpm -r tsc --noEmit` 等）。
+- **`gitleaks` / `trufflehog` 系**（`gitleaks detect --no-git --redact`）── エージェントが*ソースに*書いたシークレットを捕まえる。context に入れたものが API に渡る分は捕まえられない（best-effort、`DESIGN.md` §14）。
+- これらを `[meta].mandatory_gates` に置くと、append された新規ノードも `workflow_append_only` 経由でこれらの gate を持つことが強制される（`DESIGN.md` §5.1）。
+
+### test / join ノードの gate は blast radius の言語/パッケージから導出する
+- 一度ハードコードしない。Rust+TS をまたぐ改修なら test gate は `cargo nextest && pnpm test`。
+- plan が分解して各 sub-requirement の blast radius（`requirement.files`）を宣言するとき、harness/plan は触れたパッケージごとに対応する test gate を設定する（Rust crate を触ったら `cargo test -p <crate>`、TS package を触ったら `pnpm --filter <pkg> test`）。
+- 代替: 常にフルスイートを回す（シンプルだが遅い）。どちらにするかは `[meta]` か `harness init` の onboarding で決める（要確認 ── 自動導出を入れるか手書きかは実装時に確定）。
 
 ---
 
@@ -133,6 +146,10 @@
 - `harness start` 時に自動実行（**壊れた config は `start` で落とす、ノード途中で落とさない**）。
 - standalone でも実行可。
 
+### onboarding 系コマンド（`harness init` / `harness doctor`）
+- **`harness init`**: 既存 repo に harness を乗せるスキャフォールド ── `workflow.toml`（デフォルトワークフロー research/scope→plan→characterize→implement→test→security→review→done）/ `spec.toml` のひな型・`skills/` を置き、内部で `harness validate` を実行し、さらにスモークチェック（gate コマンドが解決するか ── `cargo check` / `gitleaks` / `cargo audit` 等が PATH にあるか、skill ファイルが揃っているか、`[meta].host` が妥当か）を行う。詳細手順は `docs/onboarding.md`。
+- **`harness doctor`**: スモークチェックを再実行し、config / skill / ツール設定のドリフト（参照先欠落・gate コマンド未解決・skill 不在・mandatory_gates が一部ノードに無い等）を flag する。CI で定期実行してもよい。
+
 ---
 
 ## 5. deliverable のライフサイクルと spec amendment
@@ -163,7 +180,7 @@
 - **flaky / 不十分なテスト**: known-flaky リスト（再試行する / 人間が「この失敗は accept」で `harness answer` ── `kind=escalation` の質問への回答、§2/§3 参照）。「repo のテストスイートが悪い」は harness が直せない前提 ── 赤なら進めないとしか言えない。
 - **長時間テストの非同期化**: 2 時間のフルスイート → CI に push、「test running」状態を記録、人間 / poller が後で確認、gate ＝「commit X の CI が green」。push → poll → async の機構は実装時に詰める。
 - **mutation testing を任意 gate に**: `cmd_exit_0 "cargo mutants --fail-on-survived"` で「`assert true` テスト」を殺せる ── 意味のあるテストかは決定論的に検出不能だが下限は引ける。
-- **「ビルドが通る」を準ユニバーサルな mandatory exit gate に**: 各ノードの出口に最低限 `cmd_exit_0 "cargo check"` を入れると「ノード 10 で初めてビルド壊れてた発覚」を防げる。`[meta].mandatory_gates` の有力候補。
+- **「ビルドが通る」を準ユニバーサルな mandatory exit gate に**: 各ノードの出口に最低限 `cmd_exit_0 "cargo check --workspace"`（**per-crate でなく workspace 全体** ── domain をまたぐ署名 break を導入ノードで安く捕まえる）を入れると「ノード 10 で初めてビルド壊れてた発覚」を防げる。`gitleaks` 系（`cmd_exit_0 "gitleaks detect --no-git --redact"`）も同じ枠 ── ソースに書いたシークレットを捕まえる。どちらも `[meta].mandatory_gates` の有力候補（§1「推奨 mandatory gate」）。
 - **lessons log の肥大化対策**: lessons が無限に増えると読むのに context を食う → 定期的に要約 / キュレート（メタ skillify）、or 上位 N 件の関連 lessons だけ読む。
 - **harness 自身のバージョニング**: gate プリミティブ・`workflow.toml` スキーマは進化する → スキーマバージョンを `start` イベントに記録、移行 or 明確なエラーで拒否。
 - **マルチ言語 / モノレポ**: CKG は複数索引器、テストコマンドはサブツリーごとに違う、blast radius が言語をまたぐ。`cmd_exit_0` が汎用なので大半は OK だが、CKG マージとサブツリーごとのツール設定（このノードのテストは `cargo test`、あのノードは `pnpm test`）は要設計。

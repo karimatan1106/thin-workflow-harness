@@ -97,11 +97,12 @@ notes = ""                                  # 補足
 |---|---|---|---|---|
 | `[meta].name` | str | 必須 | — | ワークフロー名 |
 | `[meta].entry` | str | 必須 | — | 開始ノード id |
-| `[meta].mandatory_gates` | list[`{gate=str, args=table}`] | 任意 | `[]` | 全ノード（または終端ノード）が含むべき gate spec のリスト。実行中に append された新規ノードはこれらを満たさなければならない（`workflow_append_only` が検証）。有力候補に `{ gate="cmd_exit_0", args={ cmd="cargo check" } }`（「ビルドが通る」）。`DESIGN.md` §5.1・§16・`docs/operations.md` §6 |
+| `[meta].mandatory_gates` | list[`{gate=str, args=table}`] | 任意 | `[]` | 全ノード（または終端ノード）が含むべき gate spec のリスト。実行中に append された新規ノードはこれらを満たさなければならない（`workflow_append_only` が検証）。有力候補に `{ gate="cmd_exit_0", args={ cmd="cargo check" } }`（**workspace 全体** ── per-crate でなく workspace 全体にして domain をまたぐ署名 break を導入ノードで安く捕まえる）＋ `{ gate="cmd_exit_0", args={ cmd="gitleaks detect --no-git --redact" } }`（ソースに書いたシークレットを捕まえる）。`DESIGN.md` §5.1・§16.1・`docs/operations.md` §1/§2/§6 |
 | `[meta].default_model` | str | 任意 | — | ノードに `model` が無いとき適用する worker のモデル（`DESIGN.md` §16.1） |
 | `[meta].default_budget` | table | 任意 | — | ノードに `budget` が無いとき適用する予算（`{max_tool_calls, max_tokens, max_wall_seconds}`、`DESIGN.md` §16.1） |
 | `[meta].run_cost_budget` | 数値 | 任意 | — | run 全体のコスト上限。超過で人間にエスカレ（`DESIGN.md` §16.1） |
 | `[meta].secrets_glob` | list[str] | 任意 | `[]` | worker の context に入れないファイルの glob（`DESIGN.md` §16.2） |
+| `[meta].host` | `"claude-code"`\|`"runtime"` | 任意 | `"runtime"` | ホストが何を組込みで提供するか。`"claude-code"` のとき各 skill はホストの plan モード／`/security-review`／`/review`／AskUserQuestion を優先し、無ければ skill 内の手順に従う。`"runtime"` は harness ランタイム自身がホスト（plan ノード skill・`skills/security-review.md`・`skills/code-review.md`・質問キュー・生 API sub-worker・tool-call インターセプタ）。`DESIGN.md` §10・`docs/host-capabilities.md` |
 | `[[node]].id` | str | 必須 | — | ノード id |
 | `[[node]].type` | `"task"`\|`"fork"`\|`"join"` | 任意 | `"task"` | ノード種別 |
 | `[[node]].skill` | str | task は必須 / fork・join は任意 | — | `skills/` 配下のファイル名 |
@@ -124,20 +125,22 @@ notes = ""                                  # 補足
 
 **append と mandatory_gates**: `workflow.toml` は実行中に append できるが、append できるのは `can_append = true` のノードだけで、許可されるのは「新規 `[[node]]` の追加」と「まだ到達していないノードの `next`/`branches`/`wait` への配線追加」のみ（既存ノード・既存 `exit_gates` の変更/削除/弱体化、`on_reject` の緩和、既存ノードへのツール追加、`context` の拡大、`[meta].entry` の変更は禁止）。新規 append されたノードは `[meta].mandatory_gates` に挙がった gate を（自分の `exit_gates` に）含まなければならない。これらを `workflow_append_only` gate が run 開始時の `workflow.toml`（or そのハッシュ）との差分に対して検証する（`DESIGN.md` §5.1）。
 
-### 2.2 線形 5（〜6）ノードの例（research → plan → [characterize] → implement → test → review）
+### 2.2 デフォルトワークフローの例（research/scope → plan → characterize → implement → test → security → review → done）
 
-`characterize` は任意ノード（plan と implement の間に置く）。影響ファイルのカバレッジが閾値未満なら fail する `cmd_exit_0` を出口 gate に持つ ── これで「変える前に characterization test を書け」を強制する（専用プリミティブは作らない、`DESIGN.md` §7）。不要なら省略してよい。
+これがデフォルトワークフロー（`DESIGN.md` §3・§5）。`characterize` は任意ノード（plan と implement の間に置く）── 影響ファイルのカバレッジが閾値未満なら fail する `cmd_exit_0` を出口 gate に持ち「変える前に characterization test を書け」を強制する（専用プリミティブは作らない、`DESIGN.md` §7）。不要なら省略してよい。`plan` ノードは plan-approval gate（人間チェックポイント 2 つ目、`DESIGN.md` §13）、`security` ノードは test の後・review の前に最終セキュリティ確認を担う（`docs/skill-templates.md` の `## skill: security`）。`implement` は分解されると `fork`/`join` で並列化される（§2.4）。
 
 ```toml
 [meta]
 name = "default-refactor-flow"
 entry = "research"                          # 開始ノード id
+host = "claude-code"                        # ホスト＝Claude Code（plan モード・/security-review・/review・AskUserQuestion を skill が優先利用）。runtime のときは "runtime"（DESIGN.md §10）
 default_model = "claude-opus-4-7"           # ノードに model が無いとき適用（DESIGN.md §16.1）
 run_cost_budget = 50.0                      # run 全体のコスト上限。超過で人間にエスカレ
 # 実行中に append される新規ノードはこれらの gate を必ず含む（workflow_append_only が検証）
 mandatory_gates = [
   { gate = "traceability_closed", args = {} },
-  { gate = "cmd_exit_0", args = { cmd = "cargo check" } },   # 「ビルドが通る」を全ノードに課す（DESIGN.md §16・operations.md §6）
+  { gate = "cmd_exit_0", args = { cmd = "cargo check --workspace" } },          # ビルドが通る ── per-crate でなく workspace 全体（domain をまたぐ署名 break を導入ノードで安く捕まえる、DESIGN.md §16.1・operations.md §1）
+  { gate = "cmd_exit_0", args = { cmd = "gitleaks detect --no-git --redact" } },  # ソースに書いたシークレットを捕まえる（DESIGN.md §16.2）
 ]
 
 [[node]]
@@ -166,6 +169,8 @@ exit_gates = [
   { gate = "max_lines", args = { path = "plan.md", n = 200 } },
   { gate = "traceability_closed", args = {} },
   { gate = "workflow_append_only", args = {} },
+  # plan-approval gate ── 人間チェックポイント 2 つ目（spec 承認に続く、DESIGN.md §13）
+  { gate = "json_has", args = { evidence_key = "plan_approval", json_path = "verdict", eq = "approved" } },
 ]
 next = ["characterize"]
 on_reject = { after = 3, goto = "research" }     # 3回 reject で research へ戻る
@@ -217,10 +222,29 @@ exit_gates = [
   { gate = "count_non_decreasing", args = { evidence_key = "tests_count", baseline_key = "tests_count_baseline" } },
   { gate = "evidence_recorded", args = { key = "test_result" } },
 ]
-next = ["review"]
+next = ["security"]
 on_reject = { after = 3, goto = "implement" }
 tools = ["read", "run-command", "edit"]
 context = { include = ["none"] }
+
+# --- security: 最終セキュリティ確認（test の後・review の前）。ホストに /security-review があれば skill がそれを invoke する ---
+# skill ファイル名は既存命名（01-research / 02-plan / 02b-characterize / 03-implement / 04-test / 05-review / 06-join）と衝突しないよう "04b-security.md"
+# とした（test=04 と review=05 の間 ── 02b-characterize.md と同じパターン）。"06-" は 06-join.md が使用中。最終的な番号は実装時に確定（要確認）
+[[node]]
+id = "security"
+skill = "04b-security.md"
+serves = ["F-001", "F-002"]
+exit_gates = [
+  { gate = "cmd_exit_0", args = { cmd = "cargo audit" } },                          # 依存脆弱性（DESIGN.md §16.2）
+  { gate = "cmd_exit_0", args = { cmd = "gitleaks detect --no-git --redact" } },    # ソースに書いたシークレット
+  { gate = "evidence_recorded", args = { key = "security_review" } },               # security findings の報告
+  # 高リスク変更時（認証・決済・権限まわり）は次も足す ── verdict が clean か addressed であること
+  # { gate = "json_has", args = { evidence_key = "security_review", json_path = "verdict", eq = "clean_or_addressed" } },
+]
+next = ["review"]
+on_reject = { after = 3, goto = "implement" }
+tools = ["read", "run-command", "outline", "show-symbol", "find-symbol", "refs"]
+context = { include = ["outline:$blast_radius"] }
 
 [[node]]
 id = "review"
@@ -358,7 +382,7 @@ context = { include = ["none"] }
 | `max_lines` | `path`（glob 文字列 1 個）, `n` | path の行数 ≤ n | `(ok, note)` |
 | `lines_not_increased` | `path`（glob 文字列 1 個）, `baseline_key` | path の行数が baseline（evidence に記録された値）以下 | `(ok, note)` |
 | `no_regex` | `path`（glob 文字列 1 個。複数 path をチェックしたいなら複数の `no_regex` gate を並べる、または glob で表現する。要確認: 複数 path 指定の構文を入れるかは実装時）, `pattern` | path にマッチするどのファイルのテキストにも pattern がマッチしない | `(ok, note)` |
-| `cmd_exit_0` | `cmd`, `timeout_seconds?` | シェルコマンド cmd を harness 自身が実行して exit code が 0。runtime がタイムアウトを適用（既定値、args の `timeout_seconds` で上書き可）。gate コマンドは `workflow.toml` に事前宣言済みなので暗黙的に cmd_allowlist 済み（`DESIGN.md` §16.2） | `(ok, note)` |
+| `cmd_exit_0` | `cmd`, `timeout_seconds?` | シェルコマンド cmd を **harness 自身が `request-transition` 時にその場で実行**して exit code が 0。**worker の `report-evidence test_result` 等は申告であって metrics/notes 用の補助 ── 信頼の源泉ではない**（worker が「通った」と嘘をついても harness が再実行するので無意味）。runtime がタイムアウトを適用（既定値、args の `timeout_seconds` で上書き可）。gate コマンドは `workflow.toml` に事前宣言済みなので暗黙的に cmd_allowlist 済み（`DESIGN.md` §7・§16.2・`docs/operations.md` §1） | `(ok, note)` |
 | `json_has` | `evidence_key`, `json_path`, `eq?` | `gate_evidence[evidence_key]` が存在し `json_path` の値が存在（`eq` 指定時はその値と等しい） | `(ok, note)` |
 | `artifact_registered` | `name_or_prefix` | その名前（または `impl:` のような prefix）の artifact が ≥1 件登録され、全て実在ファイル | `(ok, note)` |
 | `evidence_recorded` | `key` | `gate_evidence[key]` が存在する | `(ok, note)` |
@@ -394,6 +418,8 @@ context = { include = ["none"] }
 | `query <backend-subcommand> [args]` | `subcommand`, `[args]` | 設定されたコード知能バックエンドへの素通し。一覧はバックエンド依存（典型: `find-symbol` / `refs` / `callers` / `implementers` / `show-symbol` / `outline` / `deps` / `rdeps` / `closure` / `impacted-by` / `tested-by`）。`DESIGN.md` §9・§12 | 変えない（バックエンド委譲） |
 | `reindex [--full]` | `[--full]` | 外部索引器を叩いて CKG キャッシュ artifact を再生成（インクリメンタル＝変更ファイル＋逆依存閉包のみ。`--full` で全体を再構築。atomic swap で並行読みと干渉しない）。完全な仕様は `docs/ckg.md` §6 | 変えない（キャッシュ artifact 更新） |
 | `ckg-stale` | （なし） | CKG が git HEAD に対し陳腐化しているか（陳腐ファイル一覧）。完全な仕様は `docs/ckg.md` §6 | 変えない |
+| `init` | `[--workflow path]`, `[--spec path]`, `[--host claude-code\|runtime]` | onboarding スキャフォールド ── 既存 repo に `workflow.toml` / `spec.toml` のひな型と `skills/` を置き、内部で `harness validate` を実行し、スモークチェック（gate コマンドが解決するか・skill ファイルが揃っているか等）を行う。詳細は `docs/onboarding.md` | 変える（ファイル生成） |
+| `doctor` | `[--workflow path]`, `[--spec path]` | スモークチェックを再実行し、config / skill / ツール設定のドリフト（参照先欠落・gate コマンド未解決・skill 不在等）を flag する。詳細は `docs/onboarding.md` | 変えない |
 | `validate` | `[--workflow path]`, `[--spec path]` | `workflow.toml` / `spec.toml` の静的検証（next/branches/wait の参照先・`[meta].entry`・制御外サイクル・gate 名と args・`serves` の F-ID・`skill` ファイル実在・到達可能&停止・`mandatory_gates` 妥当）。`harness start` 時に自動実行（`DESIGN.md` §16.4） | 変えない |
 | `inspect <run-id>` | `run-id`, `[--node X]` | ノードの状態・gate・artifact・transcript への参照を見る（`DESIGN.md` §16.3） | 変えない |
 | `replay <run-id>` | `run-id` | イベントログを頭から fold して状態遷移を再現（`DESIGN.md` §16.3） | 変えない |

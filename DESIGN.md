@@ -26,6 +26,8 @@
 
 ## 3. アーキテクチャ概観
 
+デフォルトワークフロー（`docs/schemas.md` §2.2 の線形例の素体）は **research/scope → plan → characterize → implement(×N, fork/join) → test → security → review → done**。`plan` ノードは plan-approval gate（人間チェックポイント 2 つ目 ── spec 承認に続く）、`security` ノードは test の後・review の前に最終セキュリティ確認を担う。harness 自身はこの並びを知らない（`workflow.toml` のデータ）。
+
 harness が**所有するもの**（薄いまま、ほぼ未来永劫変わらない）:
 
 1. イベントログ（append-only jsonl）+ `derive_state`（純粋 fold）
@@ -85,8 +87,8 @@ fat code（外部）── プロジェクトのテスト・linter・coverage・
 
 - `workflow.toml` がノードを定義: `id`, `skill`（`skills/` 配下のファイル名）, `exit_gates`（プリミティブ名＋引数のリスト）, `next`（次ノード id、複数候補可）, `on_reject`（N 回 reject されたら遷移する先 ── リトライ/エスカレ方針を*ここに書く*）, `tools`（このノードの worker に渡すツールのリスト ── ノードごとツールスコープ）, `artifact_tags`（このノードで登録する artifact の tag と、tag ごとに課す追加 gate）。
 - ノードはさらに任意で `model`（このノードの worker のモデル ── 重いノードは大きいモデル、§16.1）, `budget`（`{max_tool_calls, max_tokens, max_wall_seconds}` ── 超過で `node_aborted{reason:budget}`, §16.1）, `cmd_allowlist`（`run-command` ツールが受け付けるコマンドパターンのリスト ── `cmd_exit_0` の gate コマンドは暗黙的に許可, §16.2）, `network`（既定 `false`、`true` のときだけ worker にネットワークを許す, §16.2）を持てる。
-- `[meta]` は `default_model` / `default_budget`（ノードに無いとき適用）/ `run_cost_budget`（run 全体のコスト上限、超過で人間にエスカレ, §16.1）/ `secrets_glob`（worker の context に入れないファイル, §16.2）を持てる。`[meta].mandatory_gates` の有力候補に `{ gate = "cmd_exit_0", args = { cmd = "cargo check" } }`（「ビルドが通る」を全ノード／終端ノードに課す, §17・`docs/operations.md` §6）。
-- ノードは**1 個でも、線形 5 個（research→plan→implement→test→review）でも、DAG でも自由**。「research/plan/…」は 1 つの `workflow.toml` の中身であって harness の概念ではない。
+- `[meta]` は `default_model` / `default_budget`（ノードに無いとき適用）/ `run_cost_budget`（run 全体のコスト上限、超過で人間にエスカレ, §16.1）/ `secrets_glob`（worker の context に入れないファイル, §16.2）/ `host`（`"claude-code" | "runtime"` ── ホストが何を組込みで提供するか、§10・`docs/host-capabilities.md`）を持てる。`[meta].mandatory_gates` の有力候補は `{ gate = "cmd_exit_0", args = { cmd = "cargo check" } }`（**workspace 全体** ── per-crate でなく workspace 全体にすることで domain をまたぐ署名 break をそれを導入したノードで安く捕まえる、§16.1・§17・`docs/operations.md` §1/§2/§6）＋ `{ gate = "cmd_exit_0", args = { cmd = "gitleaks detect --no-git --redact" } }`（エージェントがソースにシークレットを書いていないか、§16.2）。
+- ノードは**1 個でも、線形（research→plan→characterize→implement→test→security→review）でも、DAG でも自由**。「research/plan/…」は 1 つの `workflow.toml` の中身であって harness の概念ではない。デフォルトワークフローは **research/scope → plan → characterize → implement(×N, fork/join) → test → security → review → done**（`plan` ノードに plan-approval gate、`security` ノードは test の後・review の前、`docs/schemas.md` §2.2）。
 - **ワークフローは実行中に*追加*できる**: plan ノードの skill が「F-007 を `spec.toml` で F-007.1 / .2 に分解し、対応するノードを `workflow.toml` に追加せよ」と指示 → harness は `node_appended` イベントを記録しつつ追加ノードを実行し続ける（ワークフローがコードでなくデータとして実行中に成長する）。
 - **`workflow_append_only` gate**: `workflow.toml` の run 開始時点との diff が「追加のみ」であることを検証。エージェントが既存ノードの gate を削除/弱体化できない。`workflow.toml` は config（run state＝イベントログではない）なので「LLM は状態を書かない」原則は崩れないが、書ける範囲を append のみに gate で縛る。
 
@@ -131,6 +133,14 @@ gate は **L1〜L4 の決定論的プリミティブのみ**（L5＝LLM 判断 g
 
 **名前付き合成 gate（"implement の出口" のような塊）は `workflow.toml` / `spec.toml` 側に書く。harness 内はプリミティブのみ。**
 
+**`cmd_exit_0` ── harness 自身がコマンドを実行するのが gate である。** `request-transition` 時に harness が*その場で*コマンドを走らせ、*その*exit code を使う。worker の `report-evidence test_result '{...}'` は申告であって metrics / notes 用の補助であり、信頼の源泉ではない ── worker が「テストが通った」と嘘をついても harness が再実行するので無意味（同じことが `gitleaks` / `cargo audit` 等の security gate にも当てはまる）。だから「テスト層の自動担保」が嘘をつけないのは、harness 自身がコマンドを走らせるから（§8 末尾、`docs/operations.md` §1）。
+
+**`[meta].mandatory_gates` の有力候補（§5・§16.1・`docs/operations.md` §1/§2/§6）**:
+- **workspace 全体の `cargo check`**（per-crate でなく ── domain をまたぐ署名 break を、それを導入したノードで安く捕まえる。per-crate だと壊した crate を呼ぶ別 crate のビルド失敗を後段まで見逃す）
+- **`gitleaks` / `trufflehog` 系**（エージェントが*ソースに*書いたシークレットを捕まえる ── context に入れたものが API に渡る分は捕まえられない、§14）
+
+**test / join ノードの gate は blast radius の言語/パッケージから導出すべき**（一度ハードコードしない）。Rust+TS をまたぐ改修なら `cargo nextest && pnpm test`。plan が分解して各 sub-requirement の blast radius を宣言するとき、harness/plan が触れたパッケージごとに test gate も設定する。あるいは常にフルスイートを回す（シンプルだが遅い）。どちらにするかは `[meta]` or onboarding で決める（要確認 ── 自動導出を入れるか手書きかは実装時）。詳細は `docs/operations.md` §1。
+
 **characterization について**: 「変える前に characterization test を書け」は専用プリミティブ（旧 `characterize_before_change`）にはしない。代わりに、implement の前に `characterize` ノードを置き、その出口 gate を `cmd_exit_0`（カバレッジツールを影響ファイルに対し走らせ、閾値未満なら fail）にすることで強制する。例: `{ gate = "cmd_exit_0", args = { cmd = "<カバレッジツール> --affected <blast_radius> --fail-under 80" } }`（`docs/schemas.md` §2 の `characterize` ノード例参照）。
 
 ## 8. テスト層の自動担保
@@ -139,7 +149,7 @@ gate は **L1〜L4 の決定論的プリミティブのみ**（L5＝LLM 判断 g
 - **速い gate / 遅い gate の二段**: implement ノード出口 = 速い gate（影響ファイルをカバーするテストだけ、数分）。別の最終ノード = 遅い gate（フルスイート、数時間でも可、CI に投げて非同期でも harness は exit code を待つだけ）。
 - **リグレッション**: 「全スイート green」＋「`count_non_decreasing` でテスト数が縮んでない」＋ skill ルール「バグ修正は必ず regression test を 1 本追加」。"以前通ってたテストが今も通る" ＝ "全スイート green" なので、本質はスイートが縮まないことの保証。
 - **カバレッジ未達時**: gate が落ちる → skill が「未カバーの影響行に characterization test / 単体テストを書け」と指示 → *生成*は LLM の仕事（fat skill）、*強制*は gate（thin harness）。
-- 「自動で担保」の意味 = 該当ノードを通過するには該当テストコマンドが exit 0 でなければ物理的に進めない、しかも harness 自身がコマンドを走らせるので嘘がつけない。これが §6 の traceability と組み合わさると「要件を足したら、その要件に紐づくテストが green でないと先へ進めない」になる。
+- 「自動で担保」の意味 = 該当ノードを通過するには該当テストコマンドが exit 0 でなければ物理的に進めない、しかも harness 自身がコマンドを走らせる（worker の `report-evidence test_result` は申告であって信頼の源泉でない、§7 の `cmd_exit_0` 注記）ので嘘がつけない。これが §6 の traceability と組み合わさると「要件を足したら、その要件に紐づくテストが green でないと先へ進めない」になる。
 
 ## 9. context 圧縮戦略
 
@@ -189,6 +199,12 @@ gate は **L1〜L4 の決定論的プリミティブのみ**（L5＝LLM 判断 g
   この 3 つを「context に常駐させず、必要な瞬間に必要な分だけ引く」のが §9 全体の主張。コード知能 IF は素通し（§9 末尾「コード知能インターフェース」項、`docs/ckg.md` 参照）のまま ── harness が太らない。
 
 ## 10. エージェント topology と context 構築
+
+**host capabilities と Phase 0↔1（要約 ── 詳細は `docs/host-capabilities.md`）**:
+
+harness は常に sequencer ＋ gater ＋ 状態機械であり、その役割は変わらない。一方「plan（read-only research を強制した計画立案）」「security review」「code review」「人間への構造化質問」「sub-worker spawn」「編集境界の強制」という*能力*は**ホストが提供する**。Phase 0 のホストは Claude Code であり、これらは組込みで存在する（plan モード／`/security-review`／`/review`／AskUserQuestion／Agent ツール／hook）。Phase 1 のホストは harness のランタイム自身であり、等価物を harness が提供する（plan ノードの skill／`skills/security-review.md`・`skills/code-review.md`／質問キュー＋`harness ask`/`harness answer`／生 API sub-worker／tool-call インターセプタ）。
+
+要点 ── **harness はホストの組込みを再実装せず参照する**。Phase 0 では各 skill が「ホストに `/security-review` があるならそれを invoke せよ、無ければ以下の手順」と書き、手順本体は `skills/` に移植する（thin harness, fat skills ── §2）。`[meta].host`（`"claude-code" | "runtime"`、§5・`docs/schemas.md` §2.1）でどちらのモードかを宣言する。これは「harness は hook システムを持たない」（§16・§10 のトレードオフ）と矛盾しない ── harness 自身は持たないが、ホストが Claude Code のときはそのホストの hook を活用する（Phase 0 のボーナス）。Phase 1 で hook 隔離を失う分は tool-call インターセプタが埋める（§16.2）。
 
 - **CLI とランタイムは段階で積む（§15）**: Phase 0 は「Claude Code が叩く CLI」── このときの圧縮の上限は「Claude Code の ambient（CLAUDE.md・skill manifest・MCP ツール一覧・hooks・rules）」で頭打ち（数万トークンの前置き）。圧縮目標を真面目に取る Phase 1 では、**harness が*ランタイムそのもの*になって worker を生 API（生 Anthropic API 直叩き）で spawn し、worker の context を harness が組み立てる**（CLI コアの厳密な superset）。Rust なら公式 Agent SDK は無いが、生 API 直叩きで「context を自分で決める」利益はそのまま得られる（SDK の便利機能＝prompt caching ヘルパ・tool-use ループヘルパは自前実装）。本節以降の層モデルは Phase 1 以降の姿。
 - **層モデル**:
@@ -246,7 +262,9 @@ harness が所有するコマンドは 3 群:
 
 - **状態機械系**: `start` / `status` / `advance`（別名 `request-transition`）/ `back` / `record-artifact` / `report-evidence` / `ask` / `questions` / `answer` / `reset` / `abandon` / `stuck`
 - **問い合わせ系（コンパクト）**: `skill` / `spec` / `gates`
-- **運用系**: `validate` / `inspect` / `replay` / `stats` ＋ `reindex` / `ckg-stale`（CKG キャッシュ artifact の管理）
+- **運用系**: `init` / `doctor` / `validate` / `inspect` / `replay` / `stats` ＋ `reindex` / `ckg-stale`（CKG キャッシュ artifact の管理）
+
+`harness init` は onboarding スキャフォールド（既存 repo に `workflow.toml` / `spec.toml` のひな型・`skills/` を置き、内部で `harness validate` を実行し、スモークチェックする ── 詳細は `docs/onboarding.md`）。`harness doctor` はスモークチェックを再実行し、config / skill / ツール設定のドリフトを flag する。
 
 コード知能クエリ（§9）は harness の一級コマンドではなく、設定されたコード知能バックエンドへの**素通し** ── harness 表面では `harness query <backend-subcommand> [args]` の 1 エントリで表現する（典型の subcommand: `find-symbol` / `refs` / `callers` / `implementers` / `show-symbol` / `outline` / `deps` / `rdeps` / `closure` / `impacted-by` / `tested-by` ── 一覧はバックエンド依存）。`reindex` / `ckg-stale` は CKG キャッシュ artifact を扱うので harness 側のコマンド。
 
@@ -289,6 +307,21 @@ harness が所有するコマンドは 3 群:
 
 ## 14. 正直な限界（まとめて再掲）
 
+> 失敗モードの系統的カタログは `docs/failure-modes.md` を参照。本節は要点。
+
+**harness が*保証する*もの**:
+- (a) 壊れた中間状態は下流に伝播しない（出口 gate を満たさないノードは進めない、§4・§6）
+- (b) done に到達したならその状態は宣言された全 gate を満たす（`cmd_exit_0` は harness 自身が実行、嘘がつけない、§7・§8）
+- (c) 人間のレビュー負荷は O(spec)（diff でなく spec を見る、§2・§13）
+
+**harness が*保証しない*もの**:
+- (d) **spec が真の意図を捉えているか** ── 人間の入力に依存する。spec 承認（§13）がその一点を担うが、人間を正しくはできない。
+- (e) **テストが完全か** ── coverage gate で下限、AC↔test 必須で意図の各項目にテストがあるところまで、mutation testing（任意 gate）で「意味のあるテスト」の下限 ── どれも証明ではない。動的依存・テストの無い経路は ship できる（フルスイート遅い gate が安全網だがそれも漏れる）。
+- (f) **ノード内のエージェントのアプローチが最適だったか** ── plan-approval gate（§13）で人間は plan も見るが、中身の良さは L5 で gate できない（L5 gate 禁止、§7）。悪いアプローチは `harness back` で self-correct する。
+- シークレット漏洩は**残存リスク** ── context に入れたものは API に渡る、redaction は best-effort、`gitleaks` 系 gate は「ソースに書いた」分だけ捕まえる（§16.2）。
+
+以下は上記の各項目の細目（再掲）:
+
 - spec が*真の*意図を捉えているかは保証しない（人間の入力。spec 承認がその一点を担う）
 - テストの*完全性*は証明できない（coverage gate で下限は引ける、AC↔test 必須で「意図の各項目に対応するテストがある」までは保証）
 - blast radius を*完全に*特定できる保証はない（隠れた依存・動的呼び出し・設定経由）→「フルスイート遅い gate」が安全網
@@ -308,6 +341,12 @@ harness が所有するコマンドは 3 群:
 ## 15. 現状と次のステップ（段階制で確定）
 
 - **現状**: `C:\ツール\thin-workflow-harness\src\*.rs` は v0 prototype（5 フェーズをコードにハードコード、gate を名前で match）。**この設計の方向に作り直す**（`phases.rs` を捨てて `workflow.toml` + プリミティブ gate に、`gates.rs` をプリミティブのみに）。
+
+- **onboarding**: 既存 repo に harness を乗せる手順は `harness init`（スキャフォールド＋`harness validate`＋スモークチェック）と `harness doctor`（スモークチェック再実行・ドリフト flag）── §12・`docs/schemas.md` §4・`docs/onboarding.md`。
+
+- **ブートストラップ問題**: harness を作る作業自体に harness を使いたいが、まだ harness が無い ── Phase 0 のコアは手で（ホスト＝Claude Code の組込み plan モード・`/review` 等で）作り、それができたら以降は dogfooding（harness 自身の改修を harness の workflow.toml で回す）。
+
+- **worked example / failure catalog**: 10M 行級改修を end-to-end でトレースした例は `docs/example-walkthrough.md`、失敗モードの系統的カタログは `docs/failure-modes.md`。
 
 - **「CLI 版を中間に作るか」は解決した**: CLI 版 vs ランタイムは二者択一ではない。**CLI コアを先に作り、ランタイムはその厳密な superset を後で足す。同じ土台。CLI コアは捨てプロトタイプではなく以降の全フェーズの土台。** 以下の段階制で進める。
 

@@ -14,6 +14,10 @@
 - `docs/skillify.md` — 複数 run またぎの学習・複利（playbook）
 - `docs/operations.md` — resilience / セキュリティ / 可観測性 / config 検証 / deliverable ライフサイクル
 - `docs/skill-templates.md` — 各ノードの skill 文面の草稿
+- `docs/onboarding.md` — harness を既存 repo に乗せる手順
+- `docs/host-capabilities.md` — 能力と harness の分離（Phase 0↔1）
+- `docs/example-walkthrough.md` — 10M 行変更の end-to-end トレース（worked example）
+- `docs/failure-modes.md` — 失敗モードカタログ
 - `docs/implementation.md` — 実装上の確定事項（言語・クレート・hook 方針・ディレクトリ構成）
 - `docs/target-codebase-structure.md` — harness が操作しやすい対象コードベースの理想構造（助言的）
 
