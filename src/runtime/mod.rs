@@ -15,6 +15,8 @@ pub mod apply;
 pub mod auth;
 pub mod auth_credentials;
 pub mod context;
+pub mod fork_join;
+pub mod fork_join_branch;
 pub mod http_client;
 pub mod interceptor;
 pub mod script;
@@ -52,7 +54,7 @@ pub fn cmd_run(script_path: &str, run: Option<&str>, worktree: Option<&str>) -> 
     let run_id = paths::resolve_run_id(run)?;
     let wf = load_wf()?;
     let steps = script::load_script(std::path::Path::new(script_path))?;
-    let worker = ScriptedWorker::new(steps);
+    let worker = ScriptedWorker::new(steps.clone());
     let cwd = worktree
         .map(std::path::PathBuf::from)
         .unwrap_or_else(paths::harness_home);
@@ -86,6 +88,13 @@ pub fn cmd_run(script_path: &str, run: Option<&str>, worktree: Option<&str>) -> 
             node_tool_calls = 0;
             node_start = Instant::now();
             last_node_id = Some(node.id.clone());
+        }
+
+        // fork ノード: branches を並列駆動して branch_joined を書き、advance させる。
+        if node.node_type() == "fork" {
+            fork_join::run_parallel_scripted(&run_id, &wf, &node, steps.clone())?;
+            last_node_id = None;
+            continue;
         }
 
         let rc = RunCtx::load(&run_id);

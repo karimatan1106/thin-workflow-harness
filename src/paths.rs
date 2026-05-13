@@ -57,6 +57,14 @@ pub fn metrics_path(run_id: &str) -> Result<PathBuf, String> {
     Ok(state_dir()?.join(format!("{run_id}.metrics.jsonl")))
 }
 
+/// branch ごとのサブイベントログパス（`state/<run-id>.<branch_id>.jsonl`）。
+///
+/// fork で spawn された branch は専用 sub-log にイベントを追記する。stem に `.` が
+/// 含まれるので `latest_run_id` のメイン run 探索からは除外される（サイドカー扱い）。
+pub fn branch_log_path(run_id: &str, branch_id: &str) -> Result<PathBuf, String> {
+    Ok(state_dir()?.join(format!("{run_id}.{branch_id}.jsonl")))
+}
+
 /// run_id を解決する。explicit → HARNESS_RUN → state/ 内で最新の *.jsonl の stem。
 pub fn resolve_run_id(explicit: Option<&str>) -> Result<String, String> {
     if let Some(r) = explicit {

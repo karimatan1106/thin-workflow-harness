@@ -137,6 +137,46 @@ pub fn derive_state(run_id: &str, events: &[Event]) -> State {
                 st.abandoned = true;
                 st.history.push(HistoryItem { kind: "abandon".into(), detail: reason.clone() });
             }
+            EventKind::BranchForked { branch_ids } => {
+                st.history.push(HistoryItem {
+                    kind: "branch_forked".into(),
+                    detail: branch_ids.join(","),
+                });
+            }
+            EventKind::BranchJoined { branch_ids, status, failures } => {
+                // 成功時のみ branch sub-log を読んで artifact/gate_evidence をメインに fold-in。
+                if status == "success" {
+                    for bid in branch_ids {
+                        if let Ok(sub) = crate::event::read_branch_events(run_id, bid) {
+                            for sev in &sub {
+                                match &sev.kind {
+                                    EventKind::Artifact { name, path, tag } => {
+                                        st.artifacts.insert(name.clone(), path.clone());
+                                        let td = tag.as_deref().map(|t| format!(" #{t}")).unwrap_or_default();
+                                        st.history.push(HistoryItem {
+                                            kind: "artifact".into(),
+                                            detail: format!("[{bid}] {name} ({path}{td})"),
+                                        });
+                                    }
+                                    EventKind::GateEvidence { gate, data } => {
+                                        st.gate_evidence.insert(gate.clone(), data.clone());
+                                        st.history.push(HistoryItem {
+                                            kind: "gate_evidence".into(),
+                                            detail: format!("[{bid}] {gate}"),
+                                        });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+                let detail = match failures {
+                    Some(fs) if !fs.is_empty() => format!("{} status={} failures={}", branch_ids.join(","), status, fs.join(";")),
+                    _ => format!("{} status={}", branch_ids.join(","), status),
+                };
+                st.history.push(HistoryItem { kind: "branch_joined".into(), detail });
+            }
         }
     }
     st
