@@ -1,0 +1,9 @@
+[package]
+name = "fixture-repo-rust"
+version = "0.0.1"
+edition = "2021"
+description = "harness init/doctor 用 fixture (Rust)"
+
+[lib]
+name = "fixture_repo_rust"
+path = "src/lib.rs"

@@ -4,17 +4,20 @@
 //! Phase 0 walking skeleton ── workflow.toml/spec.toml 駆動の決定論的状態機械。
 
 pub mod cli;
+pub mod detect;
 pub mod event;
 pub mod gate;
 pub mod handlers;
 pub mod handlers2;
 pub mod handlers3;
 pub mod handlers_advance;
+pub mod handlers_init;
 pub mod handlers_stats;
 pub mod metrics;
 pub mod paths;
 pub mod questions;
 pub mod runtime;
+pub mod scaffold;
 pub mod spec;
 pub mod state;
 pub mod status_view;

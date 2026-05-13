@@ -4,7 +4,9 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{handlers, handlers2, handlers3, handlers_advance, handlers_stats, runtime};
+use crate::{
+    handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_stats, runtime,
+};
 
 #[derive(Parser)]
 #[command(name = "harness", about = "thin workflow harness (Phase 0 walking skeleton)")]
@@ -125,6 +127,18 @@ pub enum Command {
     },
     /// ノードごとの metrics（tool_calls / wall_seconds / cost / tokens）を表示する。
     Stats { run_id: String },
+    /// 既存 repo に `.harness/` をスキャフォールド（プロジェクト検出＋スモークチェック）。
+    Init {
+        dir: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
+    /// `.harness/` の健全性チェック（validate + gate cmd + skill ファイル）。
+    Doctor {
+        dir: Option<String>,
+        #[arg(long)]
+        full: bool,
+    },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
@@ -164,5 +178,7 @@ pub fn run() -> Result<(), String> {
             runtime::cmd_run(&script, run.as_deref(), worktree.as_deref())
         }
         Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
+        Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
+        Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
     }
 }
