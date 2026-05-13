@@ -27,6 +27,7 @@ fn metrics_with_cost_and_tokens_roundtrips() {
         wall_seconds: 3.5,
         cost: Some(0.0421),
         tokens: Some(8123),
+        tokens_breakdown: None,
         ts: "2026-05-13T00:00:00Z".into(),
     };
     let json = serde_json::to_string(&m).unwrap();

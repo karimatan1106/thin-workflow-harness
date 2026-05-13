@@ -115,15 +115,19 @@ pub enum Command {
         #[arg(long)]
         run: Option<String>,
     },
-    /// runtime ループをスクリプト worker で駆動する（本物の API worker は Step 4 以降）。
+    /// runtime ループを駆動する。`--script` あればスクリプト worker、無ければ生 API の ApiWorker。
     Run {
+        /// スクリプト TOML パス。指定があれば ScriptedWorker、無ければ ApiWorker（ANTHROPIC_API_KEY 必須）。
         #[arg(long)]
-        script: String,
+        script: Option<String>,
         #[arg(long)]
         run: Option<String>,
         /// 作業ディレクトリ（worktree モード ── 編集/コマンドはこの cwd 基準。skeleton では隔離は scaffold）。
         #[arg(long)]
         worktree: Option<String>,
+        /// ApiWorker のモデル override。`workflow.toml` の `[meta].default_model` を上書きする（任意）。
+        #[arg(long)]
+        model: Option<String>,
     },
     /// ノードごとの metrics（tool_calls / wall_seconds / cost / tokens）を表示する。
     Stats { run_id: String },
@@ -174,9 +178,10 @@ pub fn run() -> Result<(), String> {
         }
         Command::Skill { run } => handlers2::cmd_skill(run.as_deref()),
         Command::Gates { run } => handlers2::cmd_gates(run.as_deref()),
-        Command::Run { script, run, worktree } => {
-            runtime::cmd_run(&script, run.as_deref(), worktree.as_deref())
-        }
+        Command::Run { script, run, worktree, model } => match script {
+            Some(s) => runtime::cmd_run(&s, run.as_deref(), worktree.as_deref()),
+            None => runtime::cmd_run_api(run.as_deref(), worktree.as_deref(), model.as_deref()),
+        },
         Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),

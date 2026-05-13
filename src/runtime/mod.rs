@@ -7,11 +7,19 @@
 //! 生 Anthropic API クライアント + tool-use ループは Step 4 以降。ここではスクリプト worker
 //! （決定論的スタンドイン）でループを end-to-end テスト可能にし、オーケストレーションを de-risk する。
 
+pub mod anthropic;
+pub mod api_run;
+pub mod api_worker;
 pub mod apply;
+pub mod auth;
 pub mod context;
+pub mod http_client;
 pub mod interceptor;
 pub mod script;
+pub mod tools;
 pub mod worker;
+
+pub use api_run::{cmd_run_api, cmd_run_api_with};
 
 use std::time::Instant;
 
