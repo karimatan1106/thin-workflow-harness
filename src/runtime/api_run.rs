@@ -7,6 +7,12 @@
 //! apply ループの形だけ。
 
 use crate::runtime::api_runner::{run_loop, RunnerDeps};
+
+/// `harness run` の既定 spawn 上限。連続 BudgetExceeded early-fail（max 2）で
+/// 先に止まる想定で、暴走時のみ最終防壁としてこの値で停止する。
+/// 旧 256 から縮めて「実装ミスや無限 advance_rejected ループ」を 1 桁早く検知。
+pub const DEFAULT_MAX_SPAWNS: usize = 10;
+
 use crate::runtime::auth::{resolve_auth, AuthMode};
 use crate::runtime::http_client::{HttpClient, UreqClient};
 use crate::workflow::Workflow;
@@ -61,7 +67,7 @@ pub fn cmd_run_api_with_auth(
         model_default,
         http,
         auth,
-        max_spawns: 256,
+        max_spawns: DEFAULT_MAX_SPAWNS,
     };
     run_loop(deps)
 }
@@ -74,4 +80,21 @@ fn default_model(wf: &Workflow, override_: Option<&str>) -> String {
         .default_model
         .clone()
         .unwrap_or_else(|| "claude-opus-4-7".to_string())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 既定 spawn 上限が暴走防止のために小さい値（旧 256 から大幅縮小）であることを保証する。
+    /// 16 以上に膨らんだら早期検知の意味が薄れる、4 未満だと正常な再 spawn で到達してしまう。
+    /// 回帰テストとして範囲を固定（const 比較なので clippy `assertions_on_constants` を許容）。
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn default_max_spawns_is_small_enough_for_runaway_detection() {
+        const N: usize = DEFAULT_MAX_SPAWNS;
+        assert!(N <= 16, "DEFAULT_MAX_SPAWNS が緩すぎる: {N}");
+        assert!(N >= 4, "DEFAULT_MAX_SPAWNS が小さすぎる: {N}");
+    }
 }

@@ -18,6 +18,7 @@ pub mod context;
 pub mod http_client;
 pub mod interceptor;
 pub mod script;
+pub mod system_prompt;
 pub mod tool_schemas;
 pub mod tools;
 pub mod worker;
@@ -36,8 +37,9 @@ use crate::runtime::interceptor::Interceptor;
 use crate::runtime::worker::{ScriptedWorker, Worker, WorkerAction, WorkerContext};
 use crate::workflow::current_node;
 
-/// 暴走防止 ── ノード spawn の最大回数。
-const MAX_SPAWNS: usize = 256;
+/// 暴走防止 ── ノード spawn の最大回数。スクリプト worker は LLM ではないので非収束は
+/// 即バグ（スクリプト不整合）── 短く 10 で打ち切って原因を浮かす。
+const MAX_SPAWNS: usize = 10;
 
 /// 「ツール呼び出し」とカウントするアクションか（create_file / edit_file / run_command / record-artifact /
 /// report-evidence / request-transition / back / ask）── stuck は除く。

@@ -71,13 +71,17 @@ pub enum ToolChoice {
     Tool { name: String },
 }
 
-/// 渡すツール定義 1 個。
+/// 渡すツール定義 1 個。`cache_control` を最後のツールに付けると
+/// system + tools 全体が cache prefix になり、1024 input token 閾値を確実に超える。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDef {
     pub name: String,
     pub description: String,
     /// JSON Schema（`type`, `properties`, `required`）。
     pub input_schema: serde_json::Value,
+    /// `Some(ephemeral)` で tools 配列の cache 区切りマーカーになる。
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub cache_control: Option<CacheControl>,
 }
 
 /// `POST /v1/messages` リクエスト本体。

@@ -2,6 +2,9 @@
 //!
 //! skeleton では「コード本体・CKG 由来のアウトライン」は含まない ── blast-radius の
 //! ファイルパス一覧だけ（CKG 未実装）。
+//!
+//! 静的 SYSTEM_PROMPT 本体は `system_prompt.rs` に分離（1024+ token を担保するための
+//! 長文ゆえファイル分割）。ここでは import して `WorkerContext.system_prompt` に詰める。
 
 use crate::event::{Event, EventKind};
 use crate::handlers2::{eval_node_gates, RunCtx};
@@ -9,14 +12,8 @@ use crate::paths;
 use crate::spec::Spec;
 use crate::state::State;
 use crate::workflow::{Node, Workflow};
+use crate::runtime::system_prompt::SYSTEM_PROMPT;
 use crate::runtime::worker::WorkerContext;
-
-/// 静的 system prompt の sketch（`docs/worker-context.md` B1-(a) の要旨）。
-const SYSTEM_PROMPT: &str = "\
-お前は thin workflow harness の worker。ワークフローのちょうど 1 ノードを担当する。\
-状態は harness が所有しており、お前は書けない ── できるのは遷移リクエストと根拠提出だけ。\
-ノードの作業が完了したと思ったら request-transition を呼ぶ。フェーズ/ノードをスキップするな。\
-要件を発明するな。禁止語を成果物に残すな。状態が要るときは status で取れ ── context に状態を持ち越すな。";
 
 /// 常時渡される harness コマンド（`docs/worker-context.md` B1「渡すツール」）。
 const ALWAYS_TOOLS: &[&str] = &[

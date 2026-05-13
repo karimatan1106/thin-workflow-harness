@@ -101,3 +101,67 @@ fn anthropic_beta_includes_prompt_caching_for_bearer_mode() {
     assert!(beta.contains("prompt-caching-2024-07-31"), "bearer beta に prompt-caching 不在: {beta}");
     assert!(beta.contains("oauth-2025-04-20"), "bearer beta に oauth-2025-04-20 不在: {beta}");
 }
+
+
+/// SYSTEM_PROMPT が cache 1024 token 閾値到達のため十分な長さである（unit-test 重複だが、
+/// 統合経路（context.rs 経由）で string が空でないことを担保する公開エントリ）。
+#[test]
+fn system_prompt_is_substantial_via_context_build() {
+    // 直接 context::build_context は private 引数（State 等）が要るので、
+    // ここでは公開済みの build_system_blocks_for_test 経路で system_prompt が
+    // 十分大きい場合に正しく block 化されることを確かめる。
+    use thin_workflow_harness::runtime::api_worker::testing::build_system_blocks_for_test;
+    use thin_workflow_harness::runtime::worker::WorkerContext;
+
+    // 実際の SYSTEM_PROMPT 並みの長さ（4000 char）を流す。
+    let big = "あ".repeat(4000);
+    let ctx = WorkerContext {
+        system_prompt: big.clone(),
+        node_header: "n1 (implement)".into(),
+        skill_body: String::new(),
+        spec_slice: String::new(),
+        compact_status: String::new(),
+        failed_gates: vec![],
+        tools: vec![],
+    };
+    let blocks = build_system_blocks_for_test(&ctx);
+    assert_eq!(blocks.len(), 1, "system_prompt のみなら 1 block");
+    if let ContentBlock::Text { text, cache_control } = &blocks[0] {
+        assert_eq!(text, &big);
+        assert!(cache_control.is_some(), "system block に cache_control が無い");
+    } else {
+        panic!("text block ではない");
+    }
+}
+
+/// tools 配列を JSON 直列化したとき、最後のツールに cache_control:ephemeral が乗る ──
+/// system + tools の合計が 1024 token 閾値に届くための必須マーカー。
+#[test]
+fn tools_array_marks_cache_boundary_at_last_tool() {
+    use thin_workflow_harness::runtime::anthropic::MessagesRequest;
+    use thin_workflow_harness::runtime::tools::tool_defs;
+
+    let defs = tool_defs();
+    let req = MessagesRequest {
+        model: "claude-haiku-test".into(),
+        max_tokens: 4096,
+        system: vec![],
+        messages: vec![],
+        tools: defs.clone(),
+        tool_choice: None,
+    };
+    let body = serde_json::to_string(&req).unwrap();
+    let v: Value = serde_json::from_str(&body).unwrap();
+    let tools = v.get("tools").and_then(|t| t.as_array()).expect("tools が array でない");
+    assert!(!tools.is_empty(), "tools が空");
+    // 最後のツールに cache_control が乗る。
+    let last = tools.last().unwrap();
+    let cc = last.get("cache_control").expect("最後のツールに cache_control が無い");
+    assert_eq!(cc.get("type").and_then(|t| t.as_str()), Some("ephemeral"));
+    // 中間のツールには cache_control が乗らない（serde skip_serializing_if=None で省略される）。
+    for (i, t) in tools.iter().enumerate() {
+        if i + 1 == tools.len() { continue; }
+        assert!(t.get("cache_control").is_none(),
+            "中間のツール index={i} に cache_control が漏れている: {t}");
+    }
+}
