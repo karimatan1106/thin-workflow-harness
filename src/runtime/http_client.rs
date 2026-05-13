@@ -85,11 +85,13 @@ pub struct MockClient {
     calls: Mutex<Vec<MockCall>>,
 }
 
-/// 1 回の POST 呼び出しの記録（テスト assertion 用）。
+/// 1 回の POST 呼び出しの記録（テスト assertion 用）── headers も含めて記録する
+/// （prompt-caching beta header / cache_control の検証のため）。
 #[derive(Debug, Clone)]
 pub struct MockCall {
     pub url: String,
     pub body: String,
+    pub headers: Vec<(String, String)>,
 }
 
 impl MockClient {
@@ -116,11 +118,15 @@ impl HttpClient for MockClient {
     fn post(
         &self,
         url: &str,
-        _headers: &[(String, String)],
+        headers: &[(String, String)],
         body: &str,
     ) -> Result<HttpResponse, String> {
         if let Ok(mut c) = self.calls.lock() {
-            c.push(MockCall { url: url.to_string(), body: body.to_string() });
+            c.push(MockCall {
+                url: url.to_string(),
+                body: body.to_string(),
+                headers: headers.to_vec(),
+            });
         }
         let mut q = self.scripted.lock().map_err(|e| format!("mock lock poisoned: {e}"))?;
         if q.is_empty() {

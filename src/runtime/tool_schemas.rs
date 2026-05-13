@@ -15,7 +15,11 @@ pub fn tool_defs() -> Vec<ToolDef> {
            "成果物を harness に登録する。`harness record-artifact <name> <path> [--tag T]` に相当。",
            schema_record_artifact()),
         td("report_evidence",
-           "gate 用 evidence を JSON で記録する。`harness report-evidence <gate> <json>` に相当。",
+           "gate 用 evidence を JSON で記録する。`harness report-evidence <evidence_key> <json>` に相当。\
+            `gate` 引数には evidence の *key 名* を入れる（例 `human_approval`, `plan_approval`, \
+            `test_result`, `review`, `security_review` 等）── workflow.toml の \
+            `evidence_recorded`/`json_has` gate が参照する key。gate プリミティブの種別名 \
+            （`evidence_recorded` 等）を入れるのは誤り。",
            schema_report_evidence()),
         td("request_transition",
            "現ノードの出口 gate を全評価し、全 pass なら次ノードへ。失敗なら advance_rejected。",
@@ -59,7 +63,13 @@ fn schema_report_evidence() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "gate": {"type": "string"},
+            "gate": {
+                "type": "string",
+                "description": "evidence の key 名（例 'human_approval', 'plan_approval', \
+                    'test_result', 'review', 'security_review'）── workflow.toml の \
+                    evidence_recorded/json_has gate が参照する key。\
+                    gate プリミティブの種別名 ('evidence_recorded' 等) を入れないこと。"
+            },
             "json": {"type": "object", "description": "evidence の中身（任意キー）"}
         },
         "required": ["gate", "json"]

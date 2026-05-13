@@ -21,6 +21,19 @@ mod drive;
 mod retry;
 mod system;
 
+/// 統合テスト向けの公開エントリ（cache prefix の構造検証用）。
+/// 通常コードからは触らないこと ── 構築の純粋性検査のための薄いラッパ。
+pub mod testing {
+    use crate::runtime::anthropic::ContentBlock;
+    use crate::runtime::worker::WorkerContext;
+
+    /// `build_system_blocks` の pub ラッパ。`cfg(test)` ではなく統合テストから呼ぶため
+    /// 通常公開だが、戻り値は serialize 可能な型のみで副作用は無い。
+    pub fn build_system_blocks_for_test(ctx: &WorkerContext) -> Vec<ContentBlock> {
+        super::system::build_system_blocks(ctx)
+    }
+}
+
 use crate::runtime::anthropic::Usage;
 use crate::runtime::auth::AuthMode;
 use crate::runtime::http_client::HttpClient;

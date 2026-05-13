@@ -65,6 +65,21 @@ fn init_rust_fixture_creates_harness_dir() {
     let validate_arg = format!("--workflow={}", wf_path.display());
     let o = run(tmp.path(), &["validate", &validate_arg]);
     assert!(o.status.success(), "validate failed: {}", out_str(&o));
+
+    // default_budget は dogfood で確定した実効下限を反映していること。
+    let wf_text = std::fs::read_to_string(&wf_path).unwrap();
+    assert!(
+        wf_text.contains("default_budget"),
+        "default_budget が workflow.toml に書かれていない: {wf_text}",
+    );
+    assert!(
+        wf_text.contains("max_tokens = 8000"),
+        "default_budget.max_tokens=8000 が無い: {wf_text}",
+    );
+    assert!(
+        wf_text.contains("max_tool_calls = 12"),
+        "default_budget.max_tool_calls=12 が無い: {wf_text}",
+    );
 }
 
 #[test]

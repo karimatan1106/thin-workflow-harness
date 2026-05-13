@@ -36,6 +36,11 @@ name = "default-flow"
 entry = "research"
 # host = "claude-code" でホスト Claude Code、"runtime" は harness ランタイム自身がホスト
 host = "claude-code"
+# 既定 budget の現実的下限 ──
+#   Haiku でも ApiWorker の system+skill+tools+status で 2000+ input tokens 食うため
+#   max_tokens=2000 は即 budget 超過する。実 dogfood (2026-05-13) を踏まえ 8000 を下限に。
+#   重い skill / spec を載せるノードは各 [[node]] の `budget` で個別に上書きする。
+default_budget = {{ max_tool_calls = 12, max_tokens = 8000, max_wall_seconds = 120 }}
 mandatory_gates = [
 {mandatory}]
 

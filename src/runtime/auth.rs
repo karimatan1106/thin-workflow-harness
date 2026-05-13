@@ -6,18 +6,22 @@
 //!   `access_token` フィールド ── `Bearer(token)` ── `Authorization: Bearer <token>` ヘッダ。
 //! - どちらも無ければ明示的なエラー。
 //!
-//! 要確認: `Bearer` 時の `anthropic-beta` ヘッダ（MAX subscription billing を有効にする値、
-//! 実環境でテスト時に確定）。refresh_token / expires_at は今回未実装 ── access_token を直接使う。
+//! `anthropic-beta` の運用: prompt caching を効かせるため両経路（ApiKey/Bearer）で
+//! `prompt-caching-2024-07-31` を送る。Bearer 経路ではさらに MAX subscription 互換の
+//! `oauth-2025-04-20` を追加（カンマ区切りで複数値）。refresh_token / expires_at は
+//! 今回未実装 ── access_token を直接使う。
 
 use std::path::PathBuf;
 
 use crate::runtime::auth_credentials::extract_token;
 
-/// MAX プラン OAuth 経路で念のため付与する beta header の値。
-/// **要確認**: 公開ドキュメントに正式値が無いため、実環境で適切な値を確定すること。
-/// 現状は「Bearer 経路を使うシグナル」として暫定値を入れているだけで、Anthropic 側で
-/// 認識されない場合は無視されるはず（不要なら削除）。
-pub const OAUTH_BETA_HEADER: &str = "oauth-2025-04-20";
+/// prompt caching の `anthropic-beta` トークン（両経路で必須 ── これが無いと system block の
+/// `cache_control: ephemeral` が hint として認識されず cache_creation/cache_read が 0 のまま）。
+pub const PROMPT_CACHING_BETA: &str = "prompt-caching-2024-07-31";
+
+/// MAX プラン OAuth 経路で追加する beta トークン（Bearer モード固有）。
+/// `prompt-caching-2024-07-31` とカンマ区切りで連結して 1 つの header 値にする。
+pub const OAUTH_BETA_TOKEN: &str = "oauth-2025-04-20";
 
 /// 認証戦略。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +34,8 @@ pub enum AuthMode {
 
 impl AuthMode {
     /// HTTP リクエストの認証/バージョン関連ヘッダ列を返す。`content-type` は呼び出し側で付ける。
+    /// `anthropic-beta` には常に `prompt-caching-2024-07-31` が入る（無いと cache hint 無視）。
+    /// Bearer モードでは `oauth-2025-04-20` も追加。
     pub fn auth_headers(&self, api_version: &str) -> Vec<(String, String)> {
         let mut h: Vec<(String, String)> = vec![
             ("anthropic-version".to_string(), api_version.to_string()),
@@ -37,11 +43,14 @@ impl AuthMode {
         match self {
             AuthMode::ApiKey(key) => {
                 h.push(("x-api-key".to_string(), key.clone()));
+                h.push(("anthropic-beta".to_string(), PROMPT_CACHING_BETA.to_string()));
             }
             AuthMode::Bearer(tok) => {
                 h.push(("authorization".to_string(), format!("Bearer {tok}")));
-                // 要確認: 実環境で正しい beta header を確定。
-                h.push(("anthropic-beta".to_string(), OAUTH_BETA_HEADER.to_string()));
+                h.push((
+                    "anthropic-beta".to_string(),
+                    format!("{PROMPT_CACHING_BETA},{OAUTH_BETA_TOKEN}"),
+                ));
             }
         }
         h

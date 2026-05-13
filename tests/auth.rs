@@ -73,14 +73,23 @@ fn auth_headers_api_key_form() {
     assert!(h.iter().any(|(k, v)| k == "x-api-key" && v == "sk-x"));
     assert!(h.iter().any(|(k, v)| k == "anthropic-version" && v == "2023-06-01"));
     assert!(!h.iter().any(|(k, _)| k == "authorization"));
+    // prompt caching を効かせるための beta header が ApiKey 経路にも必要。
+    assert!(
+        h.iter().any(|(k, v)| k == "anthropic-beta" && v.contains("prompt-caching-2024-07-31")),
+        "api-key 経路に prompt-caching-2024-07-31 が無い: {h:?}",
+    );
 }
 
 #[test]
 fn auth_headers_bearer_form_has_beta() {
     let h = AuthMode::Bearer("oat".into()).auth_headers("2023-06-01");
     assert!(h.iter().any(|(k, v)| k == "authorization" && v == "Bearer oat"));
-    assert!(h.iter().any(|(k, _)| k == "anthropic-beta"));
     assert!(!h.iter().any(|(k, _)| k == "x-api-key"));
+    // Bearer は prompt-caching と oauth の 2 トークン両方を含むカンマ区切り header。
+    let beta = h.iter().find(|(k, _)| k == "anthropic-beta").map(|(_, v)| v.clone());
+    let beta = beta.expect("bearer に anthropic-beta header が無い");
+    assert!(beta.contains("prompt-caching-2024-07-31"), "prompt-caching token 不在: {beta}");
+    assert!(beta.contains("oauth-2025-04-20"), "oauth token 不在: {beta}");
 }
 
 #[test]

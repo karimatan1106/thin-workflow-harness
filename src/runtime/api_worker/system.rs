@@ -10,7 +10,9 @@ use crate::runtime::anthropic::{CacheControl, ContentBlock, Message};
 use crate::runtime::worker::WorkerContext;
 
 /// system を「静的本文」「skill + spec スライス」の 2 ブロックに割り、両方に cache_control を付ける。
-pub(super) fn build_system_blocks(ctx: &WorkerContext) -> Vec<ContentBlock> {
+/// `cache_control: ephemeral` は最後の text block にも必ず付ける（Anthropic 仕様: 最後の
+/// マーカー位置までが cache prefix）── これが無いと cache が hint されない。
+pub(crate) fn build_system_blocks(ctx: &WorkerContext) -> Vec<ContentBlock> {
     let mut out = Vec::new();
     if !ctx.system_prompt.is_empty() {
         out.push(ContentBlock::Text {

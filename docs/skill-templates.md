@@ -15,6 +15,7 @@
 - 「決めたら spec に書いて忘れる」: 壁打ちで 1 点決まったら即 `spec.toml` に反映 → context から落とす。後で要れば `harness spec <F-NNN>` で取り戻す。context はワーキングセットであって履歴ではない。
 - ツールスコープ: このノードで使えるツールは `workflow.toml` が決める（research は read + semantic クエリ、edit なし / implement は read + edit（blast radius 内）+ run-command など）。無いツールを前提に作業を組み立てない。
 - 禁止: フェーズ / ノードのスキップ。状態ファイル（イベントログ・`spec.toml` の他人が書く箇所）の直接編集。禁止語（`TODO` `TBD` `WIP` `FIXME` `未定` `未確定` `要検討` `検討中` `対応予定` `サンプル` `ダミー` `仮置き`）を成果物に残すこと。
+- **`report_evidence` の `gate` 引数は evidence の *key 名* を渡す**（gate プリミティブの *種別名* ではない）── 例: `workflow.toml` に `{gate="evidence_recorded", args={key="human_approval"}}` という出口 gate があるとき、worker は `report_evidence(gate="human_approval", json={"verdict":"approved"})` を呼ぶ。`gate="evidence_recorded"` は **誤り** ── `evidence_recorded` は gate プリミティブの種別名であって evidence key ではない。`json_has`/`evidence_recorded`/`count_non_decreasing` の `evidence_key`/`baseline_key` 引数の値こそが `report_evidence` の `gate` に入れる名前。
 
 ---
 
