@@ -25,7 +25,7 @@ fn gate_file_exists_and_nonempty() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("a.txt"), b"hello").unwrap();
     std::fs::write(dir.path().join("empty.txt"), b"").unwrap();
-    let ctx = GateCtx { home: dir.path() };
+    let ctx = GateCtx::minimal(dir.path());
     let st = empty_state();
 
     assert!(eval_gate("file_exists", &tbl(&[("path", "a.txt".into())]), &st, &ctx).ok);
@@ -37,7 +37,7 @@ fn gate_file_exists_and_nonempty() {
 #[test]
 fn gate_cmd_exit_0() {
     let dir = tempfile::tempdir().unwrap();
-    let ctx = GateCtx { home: dir.path() };
+    let ctx = GateCtx::minimal(dir.path());
     let st = empty_state();
     let ok_cmd = if cfg!(windows) { "exit 0" } else { "true" };
     assert!(eval_gate("cmd_exit_0", &tbl(&[("cmd", ok_cmd.into())]), &st, &ctx).ok);
@@ -47,7 +47,7 @@ fn gate_cmd_exit_0() {
 #[test]
 fn gate_evidence_and_json_has() {
     let dir = tempfile::tempdir().unwrap();
-    let ctx = GateCtx { home: dir.path() };
+    let ctx = GateCtx::minimal(dir.path());
     let events = vec![ev(EventKind::GateEvidence {
         gate: "review".into(),
         data: serde_json::json!({"verdict": "approved", "nested": {"x": 1}}),
@@ -80,7 +80,7 @@ fn gate_artifact_registered_prefix_and_existence() {
     let dir = tempfile::tempdir().unwrap();
     let f = dir.path().join("impl_a.rs");
     std::fs::write(&f, b"x").unwrap();
-    let ctx = GateCtx { home: dir.path() };
+    let ctx = GateCtx::minimal(dir.path());
     let events = vec![
         ev(EventKind::Start { intent: "i".into() }),
         ev(EventKind::Artifact {
@@ -98,7 +98,7 @@ fn gate_artifact_registered_prefix_and_existence() {
 #[test]
 fn gate_unknown_name() {
     let dir = tempfile::tempdir().unwrap();
-    let ctx = GateCtx { home: dir.path() };
+    let ctx = GateCtx::minimal(dir.path());
     let r = eval_gate("does_not_exist", &toml::Table::new(), &empty_state(), &ctx);
     assert!(!r.ok);
     assert!(r.note.contains("unknown gate"));

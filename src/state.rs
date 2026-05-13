@@ -25,6 +25,8 @@ pub struct State {
     pub gate_evidence: BTreeMap<String, serde_json::Value>,
     /// `phase_index >= node_count` のとき true（`finalize` で確定）。
     pub done: bool,
+    /// `abandon` イベントが来たら true（terminal）。
+    pub abandoned: bool,
     pub history: Vec<HistoryItem>,
 }
 
@@ -37,6 +39,7 @@ impl State {
             artifacts: BTreeMap::new(),
             gate_evidence: BTreeMap::new(),
             done: false,
+            abandoned: false,
             history: Vec::new(),
         }
     }
@@ -117,6 +120,22 @@ pub fn derive_state(run_id: &str, events: &[Event]) -> State {
             EventKind::Reset => {
                 st = State::empty(run_id);
                 st.intent = first_intent(events);
+            }
+            EventKind::QuestionQueued { question_id, kind, .. } => {
+                st.history.push(HistoryItem {
+                    kind: "question_queued".into(),
+                    detail: format!("{question_id} ({kind})"),
+                });
+            }
+            EventKind::HumanAnswer { question_id, answer } => {
+                st.history.push(HistoryItem {
+                    kind: "human_answer".into(),
+                    detail: format!("{question_id} -> {answer}"),
+                });
+            }
+            EventKind::Abandon { reason } => {
+                st.abandoned = true;
+                st.history.push(HistoryItem { kind: "abandon".into(), detail: reason.clone() });
             }
         }
     }

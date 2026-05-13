@@ -1,15 +1,18 @@
 //! status / gates 表示のレンダリング。
 
 use crate::gate::GateResult;
-use crate::handlers2::eval_node_gates;
+use crate::handlers2::{eval_node_gates, RunCtx};
 use crate::paths;
 use crate::state::State;
 use crate::workflow::{current_node, Workflow};
 
 /// `harness status` の出力。
-pub fn print_status(wf: &Workflow, st: &State) {
+pub fn print_status(wf: &Workflow, st: &State, rc: &RunCtx) {
     println!("run_id : {}", st.run_id);
     println!("intent : {}", st.intent);
+    if st.abandoned {
+        println!("status : ✗ 放棄済み（abandon）── 以後の遷移はできない");
+    }
     let n = wf.nodes().len();
     match current_node(wf, st) {
         None => {
@@ -23,7 +26,7 @@ pub fn print_status(wf: &Workflow, st: &State) {
                 println!("skill  : (なし)");
             }
             println!("出口 gate:");
-            let results = eval_node_gates(wf, node, st);
+            let results = eval_node_gates(wf, node, st, rc);
             print_gate_lines(&results);
         }
     }
@@ -40,6 +43,15 @@ pub fn print_status(wf: &Workflow, st: &State) {
     } else {
         let keys: Vec<&str> = st.gate_evidence.keys().map(|s| s.as_str()).collect();
         println!("evidence : {}", keys.join(", "));
+    }
+    let pending: Vec<&str> = rc
+        .questions
+        .iter()
+        .filter(|q| !q.answered)
+        .map(|q| q.id.as_str())
+        .collect();
+    if !pending.is_empty() {
+        println!("質問待ち : {} （`harness questions` 参照）", pending.join(", "));
     }
 }
 

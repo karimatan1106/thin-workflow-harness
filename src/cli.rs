@@ -4,7 +4,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{handlers, handlers2};
+use crate::{handlers, handlers2, handlers3, handlers_advance};
 
 #[derive(Parser)]
 #[command(name = "harness", about = "thin workflow harness (Phase 0 walking skeleton)")]
@@ -49,12 +49,44 @@ pub enum Command {
         #[arg(long)]
         run: Option<String>,
     },
+    /// 構造化質問を質問キューに積む（worker 向け）。
+    Ask {
+        question: String,
+        #[arg(long = "option")]
+        option: Vec<String>,
+        #[arg(long)]
+        header: Option<String>,
+        #[arg(long)]
+        kind: Option<String>,
+        #[arg(long)]
+        required: bool,
+        #[arg(long)]
+        run: Option<String>,
+    },
+    /// 保留中の質問を一覧する（人間向け）。
+    Questions {
+        #[arg(long)]
+        run: Option<String>,
+    },
+    /// 質問に回答する（人間向け）。
+    Answer {
+        question_id: String,
+        choice: String,
+        #[arg(long)]
+        run: Option<String>,
+    },
     /// run をリセットする（要 --yes）。
     Reset {
         #[arg(long)]
         run: Option<String>,
         #[arg(long)]
         yes: bool,
+    },
+    /// run を放棄する（terminal）。
+    Abandon {
+        run_id: String,
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// workflow.toml / spec.toml の静的検証。
     Validate {
@@ -81,7 +113,7 @@ pub fn run() -> Result<(), String> {
     match cli.command {
         Command::Start { intent } => handlers::cmd_start(&intent),
         Command::Status { run } => handlers::cmd_status(run.as_deref()),
-        Command::Advance { run } => handlers::cmd_advance(run.as_deref()),
+        Command::Advance { run } => handlers_advance::cmd_advance(run.as_deref()),
         Command::Back { reason, run } => handlers::cmd_back(&reason, run.as_deref()),
         Command::RecordArtifact { name, path, tag, run } => {
             handlers::cmd_record_artifact(&name, &path, tag.as_deref(), run.as_deref())
@@ -89,7 +121,20 @@ pub fn run() -> Result<(), String> {
         Command::ReportEvidence { gate, json, run } => {
             handlers::cmd_report_evidence(&gate, &json, run.as_deref())
         }
+        Command::Ask { question, option, header, kind, required, run } => handlers3::cmd_ask(
+            &question,
+            &option,
+            header.as_deref(),
+            kind.as_deref(),
+            required,
+            run.as_deref(),
+        ),
+        Command::Questions { run } => handlers3::cmd_questions(run.as_deref()),
+        Command::Answer { question_id, choice, run } => {
+            handlers3::cmd_answer(&question_id, &choice, run.as_deref())
+        }
         Command::Reset { run, yes } => handlers::cmd_reset(run.as_deref(), yes),
+        Command::Abandon { run_id, reason } => handlers3::cmd_abandon(&run_id, reason.as_deref()),
         Command::Validate { workflow, spec } => {
             handlers2::cmd_validate(workflow.as_deref(), spec.as_deref())
         }

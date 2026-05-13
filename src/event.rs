@@ -45,6 +45,18 @@ pub enum EventKind {
         data: serde_json::Value,
     },
     Reset,
+    QuestionQueued {
+        question_id: String,
+        kind: String,
+        required: bool,
+    },
+    HumanAnswer {
+        question_id: String,
+        answer: String,
+    },
+    Abandon {
+        reason: String,
+    },
 }
 
 /// 1 イベント（`ts` + payload）。jsonl の 1 行に対応。

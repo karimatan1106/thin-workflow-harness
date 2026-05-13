@@ -2,18 +2,49 @@
 
 use std::path::PathBuf;
 
-use crate::gate::{eval_gate, GateCtx, GateResult};
+use crate::gate::{eval_gate, GateCtx, GateResult, Question};
 use crate::handlers::{load_wf, state_for};
-use crate::spec::load_spec;
+use crate::paths;
+use crate::questions::read_questions;
+use crate::spec::{load_spec, Spec};
 use crate::state::State;
 use crate::status_view::print_gate_lines;
 use crate::workflow::{current_node, load_workflow, validate, Node, Workflow};
-use crate::paths;
+
+/// run 文脈をまとめて読み込む（spec / 質問キュー / workflow スナップショット）。
+pub struct RunCtx {
+    pub spec: Option<Spec>,
+    pub questions: Vec<Question>,
+    pub snapshot: Option<String>,
+}
+
+impl RunCtx {
+    pub fn load(run_id: &str) -> RunCtx {
+        let spec = load_spec(&paths::spec_path()).ok();
+        let questions = read_questions(run_id).unwrap_or_default();
+        let snapshot = paths::workflow_snapshot_path(run_id)
+            .ok()
+            .and_then(|p| std::fs::read_to_string(p).ok());
+        RunCtx { spec, questions, snapshot }
+    }
+}
 
 /// 現ノードの全 gate（mandatory_gates + ノード固有 exit_gates）を評価する。
-pub fn eval_node_gates(wf: &Workflow, node: &Node, st: &State) -> Vec<(String, GateResult)> {
+pub fn eval_node_gates(
+    wf: &Workflow,
+    node: &Node,
+    st: &State,
+    rc: &RunCtx,
+) -> Vec<(String, GateResult)> {
     let home = paths::harness_home();
-    let ctx = GateCtx { home: &home };
+    let ctx = GateCtx {
+        home: &home,
+        workflow: Some(wf),
+        workflow_snapshot: rc.snapshot.as_deref(),
+        spec: rc.spec.as_ref(),
+        questions: &rc.questions,
+        current_node: Some(node),
+    };
     let mut out = Vec::new();
     for gs in wf.meta.mandatory_gates.iter().chain(node.exit_gates.iter()) {
         let r = eval_gate(&gs.gate, &gs.args_table(), st, &ctx);
@@ -66,7 +97,8 @@ pub fn cmd_gates(run: Option<&str>) -> Result<(), String> {
     let Some(node) = current_node(&wf, &st) else {
         return Err("既に完了している".to_string());
     };
-    let results = eval_node_gates(&wf, node, &st);
+    let rc = RunCtx::load(&run_id);
+    let results = eval_node_gates(&wf, node, &st, &rc);
     print_gate_lines(&results);
     Ok(())
 }

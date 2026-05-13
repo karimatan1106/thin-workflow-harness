@@ -47,6 +47,11 @@ pub fn event_log_path(run_id: &str) -> Result<PathBuf, String> {
     Ok(state_dir()?.join(format!("{run_id}.jsonl")))
 }
 
+/// run 開始時の workflow.toml スナップショットのサイドカーパス。
+pub fn workflow_snapshot_path(run_id: &str) -> Result<PathBuf, String> {
+    Ok(state_dir()?.join(format!("{run_id}.workflow-snapshot.toml")))
+}
+
 /// run_id を解決する。explicit → HARNESS_RUN → state/ 内で最新の *.jsonl の stem。
 pub fn resolve_run_id(explicit: Option<&str>) -> Result<String, String> {
     if let Some(r) = explicit {

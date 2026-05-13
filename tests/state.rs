@@ -108,5 +108,5 @@ next = ["nowhere"]
     let errs = thin_workflow_harness::workflow::validate(&wf, None);
     assert!(errs.iter().any(|e| e.contains("entry")));
     assert!(errs.iter().any(|e| e.contains("未知の gate")));
-    assert!(errs.iter().any(|e| e.contains("next")));
+    assert!(errs.iter().any(|e| e.contains("nowhere")));
 }

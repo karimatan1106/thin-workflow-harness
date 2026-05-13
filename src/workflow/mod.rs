@@ -1,14 +1,13 @@
 //! workflow.toml のロードと最小 validate。
 //!
-//! skeleton ではノードはファイル記載順で linear に扱う（fork/join は後フェーズ）。
+//! skeleton ではノードはファイル記載順で linear に扱う（fork/join の並列実行は後フェーズ）。
 
-use std::collections::HashSet;
+mod validate;
+
 use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::gate::known_gates;
-use crate::spec::Spec;
 use crate::state::State;
 
 fn empty_toml_value() -> toml::Value {
@@ -33,7 +32,40 @@ impl GateSpec {
     }
 }
 
-/// `[meta]` セクション（最小フィールド + optional）。
+/// `{max_tool_calls, max_tokens, max_wall_seconds}`。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Budget {
+    #[serde(default)]
+    pub max_tool_calls: Option<u64>,
+    #[serde(default)]
+    pub max_tokens: Option<u64>,
+    #[serde(default)]
+    pub max_wall_seconds: Option<u64>,
+}
+
+/// `{after, goto}`。
+#[derive(Debug, Clone, Deserialize)]
+pub struct OnReject {
+    pub after: usize,
+    pub goto: String,
+}
+
+/// `{include = [...]}`。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Context {
+    #[serde(default)]
+    pub include: Vec<String>,
+}
+
+/// `{tag, gates}`。
+#[derive(Debug, Clone, Deserialize)]
+pub struct ArtifactTag {
+    pub tag: String,
+    #[serde(default)]
+    pub gates: Vec<GateSpec>,
+}
+
+/// `[meta]` セクション。
 #[derive(Debug, Clone, Deserialize)]
 pub struct WorkflowMeta {
     pub name: String,
@@ -44,9 +76,15 @@ pub struct WorkflowMeta {
     pub host: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    #[serde(default)]
+    pub default_budget: Option<Budget>,
+    #[serde(default)]
+    pub run_cost_budget: Option<f64>,
+    #[serde(default)]
+    pub secrets_glob: Vec<String>,
 }
 
-/// 1 ノード（最小フィールド + optional は未使用で保持）。
+/// 1 ノード（全フィールド ── 多くはこのフェーズ未使用で保持）。
 #[derive(Debug, Clone, Deserialize)]
 pub struct Node {
     pub id: String,
@@ -55,25 +93,43 @@ pub struct Node {
     #[serde(default)]
     pub skill: Option<String>,
     #[serde(default)]
+    pub serves: Vec<String>,
+    #[serde(default)]
     pub exit_gates: Vec<GateSpec>,
     #[serde(default)]
     pub next: Vec<String>,
     #[serde(default)]
-    pub serves: Vec<String>,
+    pub branches: Vec<String>,
     #[serde(default)]
-    pub can_append: Option<bool>,
+    pub wait: Vec<String>,
+    #[serde(default)]
+    pub on_reject: Option<OnReject>,
     #[serde(default)]
     pub tools: Vec<String>,
     #[serde(default)]
-    pub on_reject: Option<toml::Value>,
+    pub can_append: bool,
     #[serde(default)]
-    pub context: Option<toml::Value>,
+    pub context: Option<Context>,
+    #[serde(default)]
+    pub artifact_tags: Vec<ArtifactTag>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub budget: Option<Budget>,
+    #[serde(default)]
+    pub cmd_allowlist: Vec<String>,
+    #[serde(default)]
+    pub network: bool,
 }
 
 impl Node {
-    /// 表示名（現状 id をそのまま使う ── `name` フィールドは無いので）。
+    /// 表示名（`name` フィールドは無いので id をそのまま使う）。
     pub fn display_name(&self) -> &str {
         &self.id
+    }
+    /// ノード種別（既定 "task"）。
+    pub fn node_type(&self) -> &str {
+        self.r#type.as_deref().unwrap_or("task")
     }
 }
 
@@ -89,6 +145,10 @@ impl Workflow {
     /// ノード列（ファイル記載順）。
     pub fn nodes(&self) -> &[Node] {
         &self.node
+    }
+    /// id でノードのインデックスを引く。
+    pub fn index_of(&self, id: &str) -> Option<usize> {
+        self.node.iter().position(|n| n.id == id)
     }
 }
 
@@ -107,38 +167,4 @@ pub fn current_node<'a>(wf: &'a Workflow, state: &State) -> Option<&'a Node> {
     wf.node.get(state.phase_index)
 }
 
-/// 最小の静的検証。エラーメッセージの Vec を返す（空なら OK）。
-pub fn validate(wf: &Workflow, _spec: Option<&Spec>) -> Vec<String> {
-    let mut errs = Vec::new();
-    let ids: HashSet<&str> = wf.node.iter().map(|n| n.id.as_str()).collect();
-
-    if !ids.contains(wf.meta.entry.as_str()) {
-        errs.push(format!("entry '{}' が実在ノード id でない", wf.meta.entry));
-    }
-    if wf.node.is_empty() {
-        errs.push("ノードが 1 つも無い".to_string());
-    }
-
-    let known = known_gates();
-    for gs in &wf.meta.mandatory_gates {
-        if !known.contains(&gs.gate.as_str()) {
-            errs.push(format!("mandatory_gates に未知の gate: {}", gs.gate));
-        }
-    }
-    for n in &wf.node {
-        for nx in &n.next {
-            if !ids.contains(nx.as_str()) {
-                errs.push(format!("ノード '{}' の next '{nx}' が実在ノード id でない", n.id));
-            }
-        }
-        for gs in &n.exit_gates {
-            if !known.contains(&gs.gate.as_str()) {
-                errs.push(format!("ノード '{}' に未知の gate: {}", n.id, gs.gate));
-            }
-        }
-        if n.r#type.as_deref().unwrap_or("task") == "task" && n.skill.is_none() {
-            errs.push(format!("task ノード '{}' に skill が無い", n.id));
-        }
-    }
-    errs
-}
+pub use validate::validate;

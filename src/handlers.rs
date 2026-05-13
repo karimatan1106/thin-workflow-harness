@@ -2,12 +2,13 @@
 
 use chrono::{SecondsFormat, Utc};
 
-use crate::event::{append_event, read_events, EventKind, FailedGate};
+use crate::event::{append_event, read_events, EventKind};
+use crate::handlers2::RunCtx;
 use crate::spec::load_spec;
 use crate::state::{derive_state, State};
 use crate::status_view::print_status;
-use crate::workflow::{current_node, load_workflow, validate, Workflow};
-use crate::{handlers2, paths};
+use crate::workflow::{load_workflow, validate, Workflow};
+use crate::paths;
 
 pub(crate) fn load_wf() -> Result<Workflow, String> {
     load_workflow(&paths::workflow_path())
@@ -16,6 +17,21 @@ pub(crate) fn load_wf() -> Result<Workflow, String> {
 pub(crate) fn state_for(run_id: &str, wf: &Workflow) -> Result<State, String> {
     let events = read_events(run_id)?;
     Ok(derive_state(run_id, &events).finalize(wf.nodes().len()))
+}
+
+/// abandon 済みなら遷移系コマンドを拒否する。
+pub(crate) fn ensure_active(st: &State) -> Result<(), String> {
+    if st.abandoned {
+        return Err("この run は放棄済み（abandon）── 遷移できない".to_string());
+    }
+    Ok(())
+}
+
+pub(crate) fn show(wf: &Workflow, run_id: &str) -> Result<(), String> {
+    let st = state_for(run_id, wf)?;
+    let rc = RunCtx::load(run_id);
+    print_status(wf, &st, &rc);
+    Ok(())
 }
 
 fn new_run_id() -> Result<String, String> {
@@ -40,71 +56,35 @@ pub fn cmd_start(intent: &str) -> Result<(), String> {
         return Err(format!("workflow.toml/spec.toml に問題:\n  - {}", errs.join("\n  - ")));
     }
     let run_id = new_run_id()?;
+    // workflow.toml スナップショットをサイドカーに保存（workflow_append_only 用）
+    if let Ok(text) = std::fs::read_to_string(paths::workflow_path()) {
+        let snap = paths::workflow_snapshot_path(&run_id)?;
+        std::fs::write(&snap, text).map_err(|e| format!("snapshot 書込失敗 {}: {e}", snap.display()))?;
+    }
     append_event(&run_id, EventKind::Start { intent: intent.to_string() })
         .map_err(|e| format!("start イベント書込失敗: {e}"))?;
     println!("run {run_id} を開始 ({})", Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
-    let st = state_for(&run_id, &wf)?;
-    print_status(&wf, &st);
-    Ok(())
+    show(&wf, &run_id)
 }
 
 pub fn cmd_status(run: Option<&str>) -> Result<(), String> {
     let run_id = paths::resolve_run_id(run)?;
     let wf = load_wf()?;
-    let st = state_for(&run_id, &wf)?;
-    print_status(&wf, &st);
-    Ok(())
-}
-
-pub fn cmd_advance(run: Option<&str>) -> Result<(), String> {
-    let run_id = paths::resolve_run_id(run)?;
-    let wf = load_wf()?;
-    let st = state_for(&run_id, &wf)?;
-    let Some(node) = current_node(&wf, &st) else {
-        return Err("既に完了している".to_string());
-    };
-    let results = handlers2::eval_node_gates(&wf, node, &st);
-    let failed: Vec<FailedGate> = results
-        .iter()
-        .filter(|(_, r)| !r.ok)
-        .map(|(g, r)| FailedGate { gate: g.clone(), reason: r.note.clone() })
-        .collect();
-    let from = node.id.clone();
-    if !failed.is_empty() {
-        append_event(&run_id, EventKind::AdvanceRejected { failed_gates: failed.clone() })
-            .map_err(|e| format!("advance_rejected 書込失敗: {e}"))?;
-        eprintln!("却下: {} 個の gate が fail", failed.len());
-        for f in &failed {
-            eprintln!("  [FAIL] {} — {}", f.gate, f.reason);
-        }
-        return Err("advance 却下".to_string());
-    }
-    let to = wf
-        .nodes()
-        .get(st.phase_index + 1)
-        .map(|n| n.id.clone())
-        .unwrap_or_else(|| "(done)".to_string());
-    append_event(&run_id, EventKind::Advance { from, to: to.clone() })
-        .map_err(|e| format!("advance 書込失敗: {e}"))?;
-    println!("advance → {to}");
-    let st2 = state_for(&run_id, &wf)?;
-    print_status(&wf, &st2);
-    Ok(())
+    show(&wf, &run_id)
 }
 
 pub fn cmd_back(reason: &str, run: Option<&str>) -> Result<(), String> {
     let run_id = paths::resolve_run_id(run)?;
     let wf = load_wf()?;
     let st = state_for(&run_id, &wf)?;
+    ensure_active(&st)?;
     if st.phase_index == 0 {
         return Err("先頭ノードなので戻れない".to_string());
     }
     append_event(&run_id, EventKind::Back { reason: reason.to_string() })
         .map_err(|e| format!("back 書込失敗: {e}"))?;
     println!("back: {reason}");
-    let st2 = state_for(&run_id, &wf)?;
-    print_status(&wf, &st2);
-    Ok(())
+    show(&wf, &run_id)
 }
 
 pub fn cmd_record_artifact(
@@ -155,7 +135,5 @@ pub fn cmd_reset(run: Option<&str>, yes: bool) -> Result<(), String> {
     append_event(&run_id, EventKind::Reset).map_err(|e| format!("reset 書込失敗: {e}"))?;
     println!("run {run_id} をリセット");
     let wf = load_wf()?;
-    let st = state_for(&run_id, &wf)?;
-    print_status(&wf, &st);
-    Ok(())
+    show(&wf, &run_id)
 }
