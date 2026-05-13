@@ -1,0 +1,7 @@
+# stuck ── node1 で worker が「詰まった」と自己申告 → escalation 質問が積まれ runtime は exit 1。
+[[step]]
+node = "node1"
+actions = [
+  { create_file = { path = "n1_out.txt", content = "halfway" } },
+  { stuck = { reason = "gate done1 を満たす方法が分からない" } },
+]

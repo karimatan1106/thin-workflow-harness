@@ -1,0 +1,17 @@
+# ハッピーパス ── node1 / node2 を 1 回ずつで done まで歩く。
+[[step]]
+node = "node1"
+actions = [
+  { create_file = { path = "n1_out.txt", content = "done" } },
+  { record_artifact = { name = "out1", path = "n1_out.txt" } },
+  { report_evidence = { gate = "done1", json = "{}" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "node2"
+actions = [
+  { create_file = { path = "n2_out.txt", content = "ok" } },
+  { record_artifact = { name = "out", path = "n2_out.txt" } },
+  { request_transition = {} },
+]

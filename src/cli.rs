@@ -4,7 +4,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{handlers, handlers2, handlers3, handlers_advance};
+use crate::{handlers, handlers2, handlers3, handlers_advance, runtime};
 
 #[derive(Parser)]
 #[command(name = "harness", about = "thin workflow harness (Phase 0 walking skeleton)")]
@@ -105,6 +105,13 @@ pub enum Command {
         #[arg(long)]
         run: Option<String>,
     },
+    /// runtime ループをスクリプト worker で駆動する（本物の API worker は Step 4 以降）。
+    Run {
+        #[arg(long)]
+        script: String,
+        #[arg(long)]
+        run: Option<String>,
+    },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
@@ -140,5 +147,6 @@ pub fn run() -> Result<(), String> {
         }
         Command::Skill { run } => handlers2::cmd_skill(run.as_deref()),
         Command::Gates { run } => handlers2::cmd_gates(run.as_deref()),
+        Command::Run { script, run } => runtime::cmd_run(&script, run.as_deref()),
     }
 }

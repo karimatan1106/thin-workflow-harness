@@ -1,12 +1,10 @@
 [meta]
-name = "fixture-flow"
+name = "fixture-onreject"
 entry = "node1"
 
 [[node]]
 id = "node1"
 skill = "n1.md"
-serves = ["F-001"]
-tools = ["read"]
 exit_gates = [
   { gate = "evidence_recorded", args = { key = "done1" } },
 ]
@@ -18,4 +16,5 @@ skill = "n2.md"
 exit_gates = [
   { gate = "artifact_registered", args = { name_or_prefix = "out" } },
 ]
+on_reject = { after = 2, goto = "__human__" }
 next = []

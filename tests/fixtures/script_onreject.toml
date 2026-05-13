@@ -1,0 +1,21 @@
+# on_reject ── node1 を通過、node2 で artifact を登録せず request_transition を繰り返す。
+# workflow_onreject.toml の node2 は on_reject = { after = 2, goto = "__human__" }
+# → 2 回 reject 後に escalation 質問が積まれ runtime は人間待ちで exit 1。
+[[step]]
+node = "node1"
+actions = [
+  { report_evidence = { gate = "done1", json = "{}" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "node2"
+actions = [{ request_transition = {} }]
+
+[[step]]
+node = "node2"
+actions = [{ request_transition = {} }]
+
+[[step]]
+node = "node2"
+actions = [{ request_transition = {} }]

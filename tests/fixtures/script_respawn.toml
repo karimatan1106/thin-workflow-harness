@@ -1,0 +1,23 @@
+# 再 spawn ── node1 の 1 回目は evidence を出さず gate fail → advance_rejected。
+# 2 回目は report_evidence を出して gate 充足 → advance。
+[[step]]
+node = "node1"
+actions = [
+  { create_file = { path = "n1_out.txt", content = "incomplete" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "node1"
+actions = [
+  { report_evidence = { gate = "done1", json = "{\"retry\":1}" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "node2"
+actions = [
+  { create_file = { path = "n2_out.txt", content = "ok" } },
+  { record_artifact = { name = "out", path = "n2_out.txt" } },
+  { request_transition = {} },
+]
