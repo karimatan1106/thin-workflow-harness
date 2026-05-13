@@ -2,6 +2,12 @@
 //!
 //! CLI ハンドラ（`api_run.rs`）と分離: ここは「準備済み deps」を受け取り純粋にループを回す。
 //! テストでは `MAX_SPAWNS` を小さく上書きできる（per-instance フィールド化）。
+//!
+//! ファイル分割:
+//! - `mod.rs` ── `RunnerDeps` と `run_loop` 本体（spawn 反復・metrics 出力）
+//! - `apply_dispatch.rs` ── 1 ツール呼び出しの apply（`apply_one` / `pre_check` / `action_ok_str` / `effective_budget`）
+
+mod apply_dispatch;
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -11,19 +17,15 @@ use crate::handlers::state_for;
 use crate::handlers2::RunCtx;
 use crate::metrics::{append_metrics, NodeMetrics, TokenBreakdown};
 use crate::runtime::api_worker::{ApiWorker, ApplyResult, Outcome};
-use crate::runtime::apply::{apply_action, has_pending_escalation, rejected_since_transition, Applied};
+use crate::runtime::apply::{has_pending_escalation, rejected_since_transition};
 use crate::runtime::auth::AuthMode;
 use crate::runtime::context;
 use crate::runtime::http_client::HttpClient;
-use crate::runtime::interceptor::{Interceptor, Verdict};
+use crate::runtime::interceptor::Interceptor;
 use crate::runtime::tools::ToolCall;
-use crate::runtime::worker::WorkerAction;
-use crate::workflow::{current_node, Budget, Workflow};
+use crate::workflow::{current_node, Workflow};
 
-/// `WorkerAction` のうち budget の「ツール呼び出し」としてカウントするもの（stuck は除外）。
-fn counts_as_tool_call(a: &WorkerAction) -> bool {
-    !matches!(a, WorkerAction::Stuck { .. })
-}
+use apply_dispatch::{apply_one, effective_budget};
 
 /// ノードループ実行に必要な依存をまとめた struct。
 pub struct RunnerDeps<'a> {
@@ -133,109 +135,4 @@ pub fn run_loop(d: RunnerDeps<'_>) -> Result<(), String> {
         }
     }
     Err(format!("run spawn 上限 {max_spawns} に到達"))
-}
-
-/// 1 ツール呼び出しを apply し、`ApplyResult` を返す。
-fn apply_one(
-    run_id: &str,
-    intc: &Interceptor,
-    call: ToolCall,
-    tool_calls_for_budget: &mut u64,
-) -> ApplyResult {
-    match call {
-        ToolCall::ReadFile(path) => {
-            let full = intc.cwd().join(&path);
-            match std::fs::read_to_string(&full) {
-                Ok(text) => ApplyResult {
-                    content: if text.len() > 4000 {
-                        format!("{}\n…（{} 文字、頭 4000 のみ表示）", &text[..4000], text.len())
-                    } else {
-                        text
-                    },
-                    is_error: false,
-                    terminal: None,
-                },
-                Err(e) => ApplyResult {
-                    content: format!("read_file 失敗 {}: {e}", full.display()),
-                    is_error: true,
-                    terminal: None,
-                },
-            }
-        }
-        ToolCall::Action(action) => {
-            if counts_as_tool_call(&action) {
-                *tool_calls_for_budget += 1;
-            }
-            // 事前 interceptor チェック（blast radius / cmd_allowlist）── 失敗なら apply せず error 返す。
-            if let Some(why) = pre_check(intc, &action) {
-                return ApplyResult { content: why, is_error: true, terminal: None };
-            }
-            match apply_action(run_id, &action, intc) {
-                Ok(Applied::Continued) => ApplyResult {
-                    content: action_ok_str(&action),
-                    is_error: false,
-                    terminal: None,
-                },
-                Ok(Applied::Transitioned) => ApplyResult {
-                    content: "request_transition: 評価完了 ── 次の status を確認しろ".to_string(),
-                    is_error: false,
-                    terminal: Some(Outcome::Transitioned),
-                },
-                Ok(Applied::WentBack) => ApplyResult {
-                    content: "back: 前ノードへ戻った".to_string(),
-                    is_error: false,
-                    terminal: Some(Outcome::WentBack(match &action {
-                        WorkerAction::Back { reason } => reason.clone(),
-                        _ => String::new(),
-                    })),
-                },
-                Ok(Applied::Stuck(reason)) => ApplyResult {
-                    content: format!("stuck: 質問キューに積んだ ── {reason}"),
-                    is_error: false,
-                    terminal: Some(Outcome::Stuck(reason)),
-                },
-                Err(e) => ApplyResult {
-                    content: format!("apply 失敗: {e}"),
-                    is_error: true,
-                    terminal: None,
-                },
-            }
-        }
-    }
-}
-
-fn pre_check(intc: &Interceptor, action: &WorkerAction) -> Option<String> {
-    match action {
-        WorkerAction::EditFile { path, .. } => {
-            let full = intc.cwd().join(path);
-            match intc.check_write(&full) {
-                Verdict::Allow => None,
-                Verdict::Deny(why) => Some(format!("edit_file 拒否: {why}")),
-            }
-        }
-        WorkerAction::RunCommand { cmd } => match intc.check_command(cmd) {
-            Verdict::Allow => None,
-            Verdict::Deny(why) => Some(format!("run_command 拒否: {why}")),
-        },
-        _ => None,
-    }
-}
-
-fn action_ok_str(action: &WorkerAction) -> String {
-    match action {
-        WorkerAction::RecordArtifact { name, .. } => format!("artifact '{name}' 登録"),
-        WorkerAction::ReportEvidence { gate, .. } => format!("evidence '{gate}' 記録"),
-        WorkerAction::EditFile { path, .. } => format!("ファイル '{path}' を書いた"),
-        WorkerAction::RunCommand { cmd } => format!("command '{cmd}' 実行"),
-        WorkerAction::Ask { question, .. } => format!("質問を積んだ: {question}"),
-        WorkerAction::Back { reason } => format!("back: {reason}"),
-        _ => "ok".to_string(),
-    }
-}
-
-fn effective_budget(wf: &Workflow, node: &crate::workflow::Node) -> Budget {
-    if let Some(b) = &node.budget {
-        return b.clone();
-    }
-    wf.meta.default_budget.clone().unwrap_or_default()
 }

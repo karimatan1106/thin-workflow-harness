@@ -11,13 +11,15 @@
 //!
 //! ファイル分割:
 //! - `mod.rs` ── 型 + public API（`ApiWorker::new`, `ApiWorker::drive`）
-//! - `drive.rs` ── drive ループ本体と message 構築
+//! - `drive.rs` ── drive ループ本体（ターン回し / budget / usage 累積）
+//! - `system.rs` ── system block 構築 と 初期 user メッセージ生成
 //! - `apply_loop.rs` ── tool_use の apply 反復（interceptor 通って tool_result を組む）
 //! - `retry.rs` ── 429/5xx の指数バックオフ retry
 
 mod apply_loop;
 mod drive;
 mod retry;
+mod system;
 
 use crate::runtime::anthropic::Usage;
 use crate::runtime::auth::AuthMode;
