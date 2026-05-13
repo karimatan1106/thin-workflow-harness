@@ -9,13 +9,16 @@
 
 pub mod anthropic;
 pub mod api_run;
+pub mod api_runner;
 pub mod api_worker;
 pub mod apply;
 pub mod auth;
+pub mod auth_credentials;
 pub mod context;
 pub mod http_client;
 pub mod interceptor;
 pub mod script;
+pub mod tool_schemas;
 pub mod tools;
 pub mod worker;
 

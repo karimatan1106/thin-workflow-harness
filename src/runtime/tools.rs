@@ -1,10 +1,13 @@
-//! Anthropic Tool Use にそのまま渡せるツール定義 ＋ `tool_use` の `input` を
-//! ハーネス側の `ToolCall` に正規化する変換（`docs/host-capabilities.md` の対応表と整合）。
+//! `tool_use` の `input` をハーネスの `ToolCall` に正規化する変換層。
+//!
+//! ツール定義（`input_schema` JSON）は `tool_schemas.rs` に分離。ここでは ToolCall 型と
+//! `tool_use_to_call` の引数バリデーションだけを扱う（`docs/host-capabilities.md` の対応表と整合）。
 
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use crate::runtime::anthropic::ToolDef;
 use crate::runtime::worker::WorkerAction;
+
+pub use crate::runtime::tool_schemas::tool_defs;
 
 /// assistant の tool_use を harness 内で 1 段抽象化した呼び出し ──
 /// 大半は既存の `WorkerAction` に流すが、`read_file` だけは戻り値が文字列なので別扱い。
@@ -13,106 +16,6 @@ pub enum ToolCall {
     Action(WorkerAction),
     /// `read_file` ── cwd 基準で読んで文字列で返す（blast radius チェックなし、読みは無害）。
     ReadFile(String),
-}
-
-/// このワーカーが使える全ツール定義を返す。
-/// blast radius / cmd_allowlist の強制は interceptor が行うので、ツール提示は常に同じ。
-pub fn tool_defs() -> Vec<ToolDef> {
-    vec![
-        ToolDef {
-            name: "record_artifact".into(),
-            description: "成果物を harness に登録する。`harness record-artifact <name> <path> [--tag T]` に相当。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "path": {"type": "string"},
-                    "tag": {"type": "string"}
-                },
-                "required": ["name", "path"]
-            }),
-        },
-        ToolDef {
-            name: "report_evidence".into(),
-            description: "gate 用 evidence を JSON で記録する。`harness report-evidence <gate> <json>` に相当。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "gate": {"type": "string"},
-                    "json": {"type": "object", "description": "evidence の中身（任意キー）"}
-                },
-                "required": ["gate", "json"]
-            }),
-        },
-        ToolDef {
-            name: "request_transition".into(),
-            description: "現ノードの出口 gate を全評価し、全 pass なら次ノードへ。失敗なら advance_rejected。".into(),
-            input_schema: json!({"type": "object", "properties": {}}),
-        },
-        ToolDef {
-            name: "back".into(),
-            description: "前ノードへ戻る（理由必須）。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {"reason": {"type": "string"}},
-                "required": ["reason"]
-            }),
-        },
-        ToolDef {
-            name: "ask".into(),
-            description: "人間に構造化質問を積む（選択肢付き）。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "question": {"type": "string"},
-                    "options": {"type": "array", "items": {"type": "string"}},
-                    "header": {"type": "string"},
-                    "kind": {"type": "string"},
-                    "required": {"type": "boolean"}
-                },
-                "required": ["question"]
-            }),
-        },
-        ToolDef {
-            name: "stuck".into(),
-            description: "詰まったことを申告（理由必須）── 人間にエスカレ。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {"reason": {"type": "string"}},
-                "required": ["reason"]
-            }),
-        },
-        ToolDef {
-            name: "edit_file".into(),
-            description: "ファイルを書く（blast radius 内のみ許可、interceptor が enforce）。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "content": {"type": "string"}
-                },
-                "required": ["path", "content"]
-            }),
-        },
-        ToolDef {
-            name: "run_command".into(),
-            description: "ワークディレクトリでコマンドを実行（cmd_allowlist に強制される）。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {"cmd": {"type": "string"}},
-                "required": ["cmd"]
-            }),
-        },
-        ToolDef {
-            name: "read_file".into(),
-            description: "ファイルを読む（読みは無害なので blast radius 制限なし）。content を返す。".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {"path": {"type": "string"}},
-                "required": ["path"]
-            }),
-        },
-    ]
 }
 
 /// assistant の `tool_use` を `ToolCall` に正規化する。引数不正は `Err`。
@@ -159,6 +62,7 @@ pub fn tool_use_to_call(name: &str, input: &Value) -> Result<ToolCall, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn record_artifact_maps_correctly() {
