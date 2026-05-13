@@ -1,0 +1,19 @@
+[meta]
+name = "fixture-flow"
+entry = "node1"
+
+[[node]]
+id = "node1"
+skill = "n1.md"
+exit_gates = [
+  { gate = "evidence_recorded", args = { key = "done1" } },
+]
+next = ["node2"]
+
+[[node]]
+id = "node2"
+skill = "n2.md"
+exit_gates = [
+  { gate = "artifact_registered", args = { name_or_prefix = "out" } },
+]
+next = []

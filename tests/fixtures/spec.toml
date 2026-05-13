@@ -1,0 +1,15 @@
+[meta]
+intent = "test fixture spec"
+status = "draft"
+
+[[requirement]]
+id = "F-001"
+text = "fixture requirement"
+files = ["src/lib.rs"]
+tests = ["cargo test"]
+
+[[acceptance]]
+id = "AC-1"
+requirement = "F-001"
+text = "fixture acceptance"
+test = "cargo test ac1"

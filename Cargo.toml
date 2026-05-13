@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "軽量ワークフローハーネス (thin harness / fat skills / 決定論的な状態管理)"
 
+[lib]
+name = "thin_workflow_harness"
+path = "src/lib.rs"
+
 [[bin]]
 name = "harness"
 path = "src/main.rs"
@@ -12,7 +16,11 @@ path = "src/main.rs"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 lto = true
