@@ -4,7 +4,7 @@
 
 use clap::{Parser, Subcommand};
 
-use crate::{handlers, handlers2, handlers3, handlers_advance, runtime};
+use crate::{handlers, handlers2, handlers3, handlers_advance, handlers_stats, runtime};
 
 #[derive(Parser)]
 #[command(name = "harness", about = "thin workflow harness (Phase 0 walking skeleton)")]
@@ -16,7 +16,12 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Command {
     /// 新 run を開始する。
-    Start { intent: String },
+    Start {
+        intent: String,
+        /// 作業ディレクトリ（worktree モード ── skeleton では scaffold、現状は受け取るだけ）。
+        #[arg(long)]
+        worktree: Option<String>,
+    },
     /// run の状態を表示する。
     Status {
         #[arg(long)]
@@ -26,6 +31,9 @@ pub enum Command {
     Advance {
         #[arg(long)]
         run: Option<String>,
+        /// 作業ディレクトリ（worktree モード ── skeleton では scaffold）。
+        #[arg(long)]
+        worktree: Option<String>,
     },
     /// 前ノードへ戻る。
     Back {
@@ -111,16 +119,21 @@ pub enum Command {
         script: String,
         #[arg(long)]
         run: Option<String>,
+        /// 作業ディレクトリ（worktree モード ── 編集/コマンドはこの cwd 基準。skeleton では隔離は scaffold）。
+        #[arg(long)]
+        worktree: Option<String>,
     },
+    /// ノードごとの metrics（tool_calls / wall_seconds / cost / tokens）を表示する。
+    Stats { run_id: String },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
 pub fn run() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Start { intent } => handlers::cmd_start(&intent),
+        Command::Start { intent, worktree } => handlers::cmd_start(&intent, worktree.as_deref()),
         Command::Status { run } => handlers::cmd_status(run.as_deref()),
-        Command::Advance { run } => handlers_advance::cmd_advance(run.as_deref()),
+        Command::Advance { run, worktree: _ } => handlers_advance::cmd_advance(run.as_deref()),
         Command::Back { reason, run } => handlers::cmd_back(&reason, run.as_deref()),
         Command::RecordArtifact { name, path, tag, run } => {
             handlers::cmd_record_artifact(&name, &path, tag.as_deref(), run.as_deref())
@@ -147,6 +160,9 @@ pub fn run() -> Result<(), String> {
         }
         Command::Skill { run } => handlers2::cmd_skill(run.as_deref()),
         Command::Gates { run } => handlers2::cmd_gates(run.as_deref()),
-        Command::Run { script, run } => runtime::cmd_run(&script, run.as_deref()),
+        Command::Run { script, run, worktree } => {
+            runtime::cmd_run(&script, run.as_deref(), worktree.as_deref())
+        }
+        Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
     }
 }

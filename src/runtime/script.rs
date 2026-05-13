@@ -45,6 +45,9 @@ pub struct Step {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum RawAction {
     CreateFile { path: String, content: String },
+    EditFile { path: String, content: String },
+    WriteFile { path: String, content: String },
+    RunCommand { cmd: String },
     RecordArtifact { name: String, path: String },
     ReportEvidence { gate: String, #[serde(default = "empty_json")] json: String },
     RequestTransition {},
@@ -67,6 +70,9 @@ impl From<RawAction> for WorkerAction {
     fn from(r: RawAction) -> Self {
         match r {
             RawAction::CreateFile { path, content } => WorkerAction::CreateFile { path, content },
+            RawAction::EditFile { path, content } => WorkerAction::EditFile { path, content },
+            RawAction::WriteFile { path, content } => WorkerAction::EditFile { path, content },
+            RawAction::RunCommand { cmd } => WorkerAction::RunCommand { cmd },
             RawAction::RecordArtifact { name, path } => WorkerAction::RecordArtifact { name, path },
             RawAction::ReportEvidence { gate, json } => WorkerAction::ReportEvidence { gate, json },
             RawAction::RequestTransition {} => WorkerAction::RequestTransition,

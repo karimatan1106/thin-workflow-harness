@@ -29,17 +29,28 @@ pub fn apply_action(
 ) -> Result<Applied, String> {
     match act {
         WorkerAction::CreateFile { path, content } => {
-            if let Verdict::Deny(why) = intc.check_write(std::path::Path::new(path)) {
-                return Err(format!("インターセプタが書込を拒否: {path} ── {why}"));
+            // create_file はアウトプット生成（インターセプタ対象外 ── ノードの成果物置き場）。
+            write_file_under(intc.cwd(), path, content)?;
+            Ok(Applied::Continued)
+        }
+        WorkerAction::EditFile { path, content } => {
+            let full = intc.cwd().join(path);
+            if let Verdict::Deny(why) = intc.check_write(&full) {
+                return Err(format!("インターセプタが編集を拒否: {path} ── {why}"));
             }
-            let cwd = std::env::current_dir().map_err(|e| format!("cwd 取得失敗: {e}"))?;
-            let full = cwd.join(path);
-            if let Some(parent) = full.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("ディレクトリ作成失敗 {}: {e}", parent.display()))?;
+            write_file_under(intc.cwd(), path, content)?;
+            println!("[interceptor] edit_file 許可: {path}");
+            Ok(Applied::Continued)
+        }
+        WorkerAction::RunCommand { cmd } => {
+            if let Verdict::Deny(why) = intc.check_command(cmd) {
+                return Err(format!("インターセプタがコマンドを拒否: {cmd} ── {why}"));
             }
-            std::fs::write(&full, content)
-                .map_err(|e| format!("ファイル書込失敗 {}: {e}", full.display()))?;
+            if intc.network_blocked() {
+                println!("[interceptor] 注意: network=false のノード ── 将来 sandbox で no-network を強制する: `{cmd}`");
+            }
+            println!("[interceptor] run_command 許可: {cmd}");
+            run_command_under(intc.cwd(), cmd)?;
             Ok(Applied::Continued)
         }
         WorkerAction::RecordArtifact { name, path } => {
@@ -67,6 +78,37 @@ pub fn apply_action(
             queue_stuck_escalation(run_id, reason)?;
             Ok(Applied::Stuck(reason.clone()))
         }
+    }
+}
+
+/// cwd 配下にファイルを書く（親ディレクトリを掘る）。
+fn write_file_under(cwd: &std::path::Path, path: &str, content: &str) -> Result<(), String> {
+    let full = cwd.join(path);
+    if let Some(parent) = full.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("ディレクトリ作成失敗 {}: {e}", parent.display()))?;
+    }
+    std::fs::write(&full, content).map_err(|e| format!("ファイル書込失敗 {}: {e}", full.display()))
+}
+
+/// cwd を作業ディレクトリにしてコマンドを実行する（exit code は問わない ── ログのみ）。
+fn run_command_under(cwd: &std::path::Path, cmd: &str) -> Result<(), String> {
+    let mut c = if cfg!(windows) {
+        let mut c = std::process::Command::new("cmd");
+        c.arg("/C").arg(cmd);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.arg("-c").arg(cmd);
+        c
+    };
+    c.current_dir(cwd);
+    match c.output() {
+        Ok(out) => {
+            println!("[run_command] `{cmd}` exit {:?}", out.status.code());
+            Ok(())
+        }
+        Err(e) => Err(format!("コマンド実行失敗 `{cmd}`: {e}")),
     }
 }
 

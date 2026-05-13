@@ -49,11 +49,15 @@ fn new_run_id() -> Result<String, String> {
     Err("run id の衝突を解消できない".to_string())
 }
 
-pub fn cmd_start(intent: &str) -> Result<(), String> {
+pub fn cmd_start(intent: &str, worktree: Option<&str>) -> Result<(), String> {
     let wf = load_wf()?;
     let errs = validate(&wf, load_spec(&paths::spec_path()).ok().as_ref());
     if !errs.is_empty() {
         return Err(format!("workflow.toml/spec.toml に問題:\n  - {}", errs.join("\n  - ")));
+    }
+    if let Some(wt) = worktree {
+        // worktree モードは skeleton では scaffold ── ここでは記録だけ（実体は後フェーズ）。
+        println!("(注) --worktree {wt} は scaffold ── 隔離の実体は未実装");
     }
     let run_id = new_run_id()?;
     // workflow.toml スナップショットをサイドカーに保存（workflow_append_only 用）

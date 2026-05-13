@@ -52,6 +52,11 @@ pub fn workflow_snapshot_path(run_id: &str) -> Result<PathBuf, String> {
     Ok(state_dir()?.join(format!("{run_id}.workflow-snapshot.toml")))
 }
 
+/// run のメトリクスサイドカー（`state/<run-id>.metrics.jsonl`）パス。
+pub fn metrics_path(run_id: &str) -> Result<PathBuf, String> {
+    Ok(state_dir()?.join(format!("{run_id}.metrics.jsonl")))
+}
+
 /// run_id を解決する。explicit → HARNESS_RUN → state/ 内で最新の *.jsonl の stem。
 pub fn resolve_run_id(explicit: Option<&str>) -> Result<String, String> {
     if let Some(r) = explicit {

@@ -7,11 +7,15 @@ use std::cell::RefCell;
 
 use crate::runtime::script::Step;
 
-/// worker が harness に出す操作（`harness` サブコマンドに 1:1 対応）。
+/// worker が harness に出す操作（`harness` サブコマンド／ツールに 1:1 対応）。
 #[derive(Debug, Clone)]
 pub enum WorkerAction {
     /// `create_file` ── スクリプト worker がアウトプットファイルを生成する（実 worker なら edit ツール経由）。
     CreateFile { path: String, content: String },
+    /// `edit_file` / `write_file` ── ファイル編集（インターセプタが blast radius を強制）。
+    EditFile { path: String, content: String },
+    /// `run_command` ── コマンド実行（インターセプタが cmd_allowlist を強制）。
+    RunCommand { cmd: String },
     /// `harness record-artifact <name> <path>`。
     RecordArtifact { name: String, path: String },
     /// `harness report-evidence <gate> <json>`。

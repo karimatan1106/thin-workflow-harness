@@ -7,6 +7,7 @@ mod file_gates;
 mod glob;
 mod spec_gates;
 mod state_gates;
+mod workflow_diff;
 mod workflow_gates;
 
 use std::path::{Path, PathBuf};
@@ -55,6 +56,8 @@ pub struct GateCtx<'a> {
     pub spec: Option<&'a Spec>,
     pub questions: &'a [Question],
     pub current_node: Option<&'a Node>,
+    /// イベント履歴から導出した「到達済みノード id 集合」（`workflow_append_only` の配線追加判定用）。
+    pub reached_nodes: &'a [String],
 }
 
 impl<'a> GateCtx<'a> {
@@ -67,6 +70,7 @@ impl<'a> GateCtx<'a> {
             spec: None,
             questions: &[],
             current_node: None,
+            reached_nodes: &[],
         }
     }
 }

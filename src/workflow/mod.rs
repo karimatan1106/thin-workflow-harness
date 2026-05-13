@@ -120,6 +120,9 @@ pub struct Node {
     pub cmd_allowlist: Vec<String>,
     #[serde(default)]
     pub network: bool,
+    /// ノードに直接付ける blast radius ファイル（任意 ── `serves` 由来とは別に追加できる）。
+    #[serde(default)]
+    pub files: Vec<String>,
 }
 
 impl Node {
@@ -130,6 +133,26 @@ impl Node {
     /// ノード種別（既定 "task"）。
     pub fn node_type(&self) -> &str {
         self.r#type.as_deref().unwrap_or("task")
+    }
+
+    /// このノードの blast radius ファイル glob 一覧 ──
+    /// `serves` の各 F-NNN の `requirement.files` の和集合 ∪ ノード直の `files`。
+    pub fn blast_radius(&self, spec: Option<&crate::spec::Spec>) -> Vec<String> {
+        let mut out: Vec<String> = self.files.clone();
+        if let Some(spec) = spec {
+            for fid in &self.serves {
+                for r in &spec.requirement {
+                    if &r.id == fid {
+                        for f in &r.files {
+                            if !out.contains(f) {
+                                out.push(f.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        out
     }
 }
 

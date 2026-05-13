@@ -10,6 +10,8 @@ pub mod handlers;
 pub mod handlers2;
 pub mod handlers3;
 pub mod handlers_advance;
+pub mod handlers_stats;
+pub mod metrics;
 pub mod paths;
 pub mod questions;
 pub mod runtime;

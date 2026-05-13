@@ -25,6 +25,19 @@ pub fn print_status(wf: &Workflow, st: &State, rc: &RunCtx) {
             } else {
                 println!("skill  : (なし)");
             }
+            let br = node.blast_radius(rc.spec.as_ref());
+            if br.is_empty() {
+                println!("blast radius: (宣言なし ── ファイル編集制限なし)");
+            } else {
+                println!("blast radius: {}", br.join(", "));
+            }
+            if let Some(orj) = &node.on_reject {
+                let remaining = orj.after.saturating_sub(rc.reject_streak);
+                println!(
+                    "reject : {} 回 / 上限 {} （あと {} 回で {}）",
+                    rc.reject_streak, orj.after, remaining, orj.goto
+                );
+            }
             println!("出口 gate:");
             let results = eval_node_gates(wf, node, st, rc);
             print_gate_lines(&results);

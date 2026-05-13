@@ -1,7 +1,9 @@
 //! CLI サブコマンドのハンドラ（読み取り系: validate / skill / gates）と gate 評価ヘルパ。
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
+use crate::event::{read_events, Event, EventKind};
 use crate::gate::{eval_gate, GateCtx, GateResult, Question};
 use crate::handlers::{load_wf, state_for};
 use crate::paths;
@@ -11,11 +13,43 @@ use crate::state::State;
 use crate::status_view::print_gate_lines;
 use crate::workflow::{current_node, load_workflow, validate, Node, Workflow};
 
-/// run 文脈をまとめて読み込む（spec / 質問キュー / workflow スナップショット）。
+/// run 文脈をまとめて読み込む（spec / 質問キュー / workflow スナップショット / イベント）。
 pub struct RunCtx {
     pub spec: Option<Spec>,
     pub questions: Vec<Question>,
     pub snapshot: Option<String>,
+    /// イベント履歴から導出した到達済みノード id（entry ＋ advance の from/to）。
+    pub reached: Vec<String>,
+    /// 最後の遷移/リセット以降の連続 `advance_rejected` 数（reject 残回数表示用）。
+    pub reject_streak: usize,
+}
+
+/// イベント列から到達済みノード id 集合を導出する（entry ＋ advance の from/to）。
+fn reached_from_events(wf: &Workflow, events: &[Event]) -> Vec<String> {
+    let mut set: HashSet<String> = HashSet::new();
+    set.insert(wf.meta.entry.clone());
+    for ev in events {
+        if let EventKind::Advance { from, to } = &ev.kind {
+            set.insert(from.clone());
+            set.insert(to.clone());
+        }
+    }
+    let mut v: Vec<String> = set.into_iter().collect();
+    v.sort();
+    v
+}
+
+/// 最後の遷移/リセット以降の `advance_rejected` 連続回数。
+fn reject_streak_of(events: &[Event]) -> usize {
+    let mut count = 0;
+    for ev in events {
+        match &ev.kind {
+            EventKind::Advance { .. } | EventKind::Back { .. } | EventKind::Reset => count = 0,
+            EventKind::AdvanceRejected { .. } => count += 1,
+            _ => {}
+        }
+    }
+    count
 }
 
 impl RunCtx {
@@ -25,7 +59,12 @@ impl RunCtx {
         let snapshot = paths::workflow_snapshot_path(run_id)
             .ok()
             .and_then(|p| std::fs::read_to_string(p).ok());
-        RunCtx { spec, questions, snapshot }
+        let events = read_events(run_id).unwrap_or_default();
+        let reject_streak = reject_streak_of(&events);
+        let reached = load_wf()
+            .map(|wf| reached_from_events(&wf, &events))
+            .unwrap_or_default();
+        RunCtx { spec, questions, snapshot, reached, reject_streak }
     }
 }
 
@@ -44,6 +83,7 @@ pub fn eval_node_gates(
         spec: rc.spec.as_ref(),
         questions: &rc.questions,
         current_node: Some(node),
+        reached_nodes: &rc.reached,
     };
     let mut out = Vec::new();
     for gs in wf.meta.mandatory_gates.iter().chain(node.exit_gates.iter()) {
