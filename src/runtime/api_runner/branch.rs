@@ -25,7 +25,7 @@
 //! - branch.rs ── drive_branch_api 本体（このファイル）
 //! - branch_apply.rs ── apply_fn ヘルパー（artifact / evidence / file write の sub-log 版）
 
-#![allow(dead_code)]
+
 
 use std::path::Path;
 

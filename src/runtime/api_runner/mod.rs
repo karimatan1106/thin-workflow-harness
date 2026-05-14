@@ -74,6 +74,31 @@ pub fn run_loop(d: RunnerDeps<'_>) -> Result<(), String> {
             return Ok(());
         };
         let node = node.clone();
+        // fork ノード: branches を ApiWorker 並列駆動し、成功なら Advance を書いて次へ。
+        // 失敗（branch Err / blast_radius 違反）は run_loop ごと Err 終了 ── 人間エスカレ相当。
+        if node.node_type() == "fork" {
+            crate::runtime::fork_join_api::run_parallel_api(
+                &run_id,
+                &wf,
+                &node,
+                http,
+                &auth,
+                &model_default,
+                &cwd,
+            )?;
+            let to = wf
+                .nodes()
+                .get(st.phase_index + 1)
+                .map(|n| n.id.clone())
+                .unwrap_or_else(|| "(done)".to_string());
+            append_event(
+                &run_id,
+                EventKind::Advance { from: node.id.clone(), to: to.clone() },
+            )
+            .map_err(|e| format!("fork advance write fail: {e}"))?;
+            println!("[fork {}] → advance → {to} (all api branches ok)", node.id);
+            continue;
+        }
         let model = node.model.clone().unwrap_or_else(|| model_default.clone());
         let rc = RunCtx::load(&run_id);
         let events = read_events(&run_id)?;

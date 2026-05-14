@@ -1,43 +1,36 @@
 //! ApiWorker 経路の fork/join 並列駆動 ── scripted 版 `fork_join::run_parallel_scripted`
-//! の API 版。各 branch を std::thread::spawn で並列起動し、各 thread が
-//! `api_runner::branch::drive_branch_api` を呼ぶ（前バッチ d5cad72 の足場）。
+//! の API 版。各 branch を `std::thread::scope` 内で並列起動し、各 thread が
+//! `api_runner::branch::drive_branch_api` を呼ぶ。
 //!
 //! 役割分担:
 //! - 事前 `blast_radius_disjoint` チェック（既存 `fork_join::check_pairwise_disjoint` を再利用）。
 //! - メイン log への `BranchForked` append（並列開始マーカー）。
-//! - `Arc<dyn HttpClient>` を全 thread で共有（HttpClient: Send+Sync 制約に依存）。
-//! - `Arc<Workflow>` / `AuthMode::clone` / cwd・model_default の owned clone で `static`
-//!   thread に渡す（参照を thread に持ち込まない）。
-//! - `JoinHandle::join()` の thread::Result<Result<(), String>> を集約 ── Ok(Ok) =
-//!   成功、Ok(Err) = branch 失敗、Err = panic（いずれも failures に積まれる）。
+//! - 各 branch を `thread::scope` で並列駆動 ── `HttpClient: Send+Sync` 制約のもと、
+//!   `&dyn HttpClient` / `&Workflow` を thread に borrow させる。`'static` clone 不要。
+//! - `ScopedJoinHandle::join()` の `thread::Result<Result<(), String>>` を集約 ──
+//!   Ok(Ok) = 成功、Ok(Err) = branch 失敗、Err = panic（いずれも failures に積まれる）。
 //! - 全成功なら `BranchJoined{status:"success", failures:None}` を append、Ok(())。
 //! - 1 つでも失敗なら `BranchJoined{status:"failed", failures:Some(...)}` を append、
 //!   集約メッセージで Err。
 //!
-//! ## なぜ Arc<Workflow>
-//! drive_branch_api は `&Workflow` を取るが、thread closure に持ち込むには `static`
-//! が要る。owned clone は重くなる + Node 探索が複数 branch で重複するので Arc で共有
-//! する（read-only）。AuthMode は Clone なので各 thread 個別に持つ（軽量）。
+//! ## なぜ thread::scope か
+//! `&dyn HttpClient` は `Send+Sync` だが `'static` ではない。`std::thread::spawn` に渡すには
+//! `'static` clone（or `Arc<dyn HttpClient>`）が要る。`thread::scope` ならスコープ内で
+//! borrow が成立するので、`RunnerDeps` の `&'a dyn HttpClient` を Arc 化せずそのまま渡せる。
+//! Workflow も同様 ── owned clone も Arc も不要、`&Workflow` だけで足りる。
 //!
-//! ## dispatch は未着手
-//! `api_runner::run_loop` から type=fork を本関数に振る配線は次バッチ。本ファイルは
-//! 「呼べる土台」までを提供する。
+//! ## dispatch
+//! `api_runner::run_loop` から `node.node_type() == "fork"` のとき本関数に振る。
+//! 成功時の Advance event 書き込みは `run_loop` 側で行う（scripted 経路と対称）。
 
-#![allow(dead_code)]
-
-use std::path::PathBuf;
-use std::sync::Arc;
 use std::thread;
 
 use crate::event::{append_event, EventKind};
 use crate::runtime::api_runner::branch::drive_branch_api;
 use crate::runtime::auth::AuthMode;
-use crate::runtime::http_client::HttpClient;
 use crate::runtime::fork_join::check_pairwise_disjoint;
+use crate::runtime::http_client::HttpClient;
 use crate::workflow::{Node, Workflow};
-
-/// 各 branch の thread join handle と branch_id のペア。
-type BranchHandle = (String, thread::JoinHandle<Result<(), String>>);
 
 /// ApiWorker 経路で fork ノードの全 branch を並列駆動する。
 ///
@@ -47,9 +40,9 @@ type BranchHandle = (String, thread::JoinHandle<Result<(), String>>);
 /// - blast_radius_disjoint 違反 → `Err` 即返し、log には何も書かない（scripted 版と同じ）。
 pub fn run_parallel_api(
     run_id: &str,
-    workflow: Arc<Workflow>,
+    workflow: &Workflow,
     fork_node: &Node,
-    http: Arc<dyn HttpClient>,
+    http: &dyn HttpClient,
     auth: &AuthMode,
     model_default: &str,
     cwd: &std::path::Path,
@@ -61,23 +54,13 @@ pub fn run_parallel_api(
             fork_node.id
         ));
     }
-    check_pairwise_disjoint(run_id, &workflow, &branches)?;
+    check_pairwise_disjoint(run_id, workflow, &branches)?;
 
     append_event(run_id, EventKind::BranchForked { branch_ids: branches.clone() })
         .map_err(|e| format!("branch_forked write fail: {e}"))?;
     println!("[fork {}] spawning api branches={:?}", fork_node.id, branches);
 
-    let handles = spawn_branches(
-        run_id,
-        &branches,
-        Arc::clone(&workflow),
-        Arc::clone(&http),
-        auth,
-        model_default,
-        cwd,
-    )?;
-
-    let failures = join_all(handles);
+    let failures = run_branches_scoped(run_id, &branches, workflow, http, auth, model_default, cwd)?;
 
     if !failures.is_empty() {
         append_event(
@@ -109,46 +92,57 @@ pub fn run_parallel_api(
     Ok(())
 }
 
-/// 各 branch ごとに thread を起動する。スピンナップ失敗 1 件で全体 Err（spawn 失敗は稀）。
-fn spawn_branches(
+/// scope 内で全 branch を並列駆動し、failures を集約して返す。
+/// spawn 失敗（OS リソース不足等、稀）は即 Err、それ以外は thread join 結果を畳む。
+fn run_branches_scoped(
     run_id: &str,
     branches: &[String],
-    workflow: Arc<Workflow>,
-    http: Arc<dyn HttpClient>,
+    workflow: &Workflow,
+    http: &dyn HttpClient,
     auth: &AuthMode,
     model_default: &str,
     cwd: &std::path::Path,
-) -> Result<Vec<BranchHandle>, String> {
-    let mut handles = Vec::with_capacity(branches.len());
-    for bid in branches {
-        let bid_owned = bid.clone();
-        let run_owned = run_id.to_string();
-        let wf_arc = Arc::clone(&workflow);
-        let http_arc = Arc::clone(&http);
-        let auth_clone = auth.clone();
-        let model_owned = model_default.to_string();
-        let cwd_owned: PathBuf = cwd.to_path_buf();
-        let h = thread::Builder::new()
-            .name(format!("api-branch-{bid_owned}"))
-            .spawn(move || {
-                drive_branch_api(
-                    &run_owned,
-                    &bid_owned,
-                    &wf_arc,
-                    &*http_arc,
-                    &auth_clone,
-                    &model_owned,
-                    &cwd_owned,
-                )
-            })
-            .map_err(|e| format!("api branch thread spawn fail ({bid}): {e}"))?;
-        handles.push((bid.clone(), h));
+) -> Result<Vec<String>, String> {
+    let mut spawn_err: Option<String> = None;
+    let failures = thread::scope(|s| {
+        let mut handles: Vec<(String, thread::ScopedJoinHandle<'_, Result<(), String>>)> =
+            Vec::with_capacity(branches.len());
+        for bid in branches {
+            let bid_clone = bid.clone();
+            let bid_thread_name = bid.clone();
+            let h = thread::Builder::new()
+                .name(format!("api-branch-{bid_thread_name}"))
+                .spawn_scoped(s, move || {
+                    drive_branch_api(
+                        run_id,
+                        &bid_clone,
+                        workflow,
+                        http,
+                        auth,
+                        model_default,
+                        cwd,
+                    )
+                });
+            match h {
+                Ok(handle) => handles.push((bid.clone(), handle)),
+                Err(e) => {
+                    spawn_err = Some(format!("api branch thread spawn fail ({bid}): {e}"));
+                    break;
+                }
+            }
+        }
+        join_all_scoped(handles)
+    });
+    if let Some(e) = spawn_err {
+        return Err(e);
     }
-    Ok(handles)
+    Ok(failures)
 }
 
 /// 全 thread の戻り値を集約。失敗（branch Err / panic）を `failures` Vec で返す。
-fn join_all(handles: Vec<BranchHandle>) -> Vec<String> {
+fn join_all_scoped(
+    handles: Vec<(String, thread::ScopedJoinHandle<'_, Result<(), String>>)>,
+) -> Vec<String> {
     let mut failures: Vec<String> = Vec::new();
     for (bid, h) in handles {
         match h.join() {
