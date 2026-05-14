@@ -5,6 +5,7 @@
 
 pub mod ckg;
 pub mod cli;
+pub mod cli_dispatch;
 pub mod detect;
 pub mod event;
 pub mod gate;
@@ -14,6 +15,7 @@ pub mod handlers3;
 pub mod handlers_advance;
 pub mod handlers_init;
 pub mod handlers_find_symbol;
+pub mod handlers_refs;
 pub mod handlers_outline;
 pub mod handlers_stats;
 pub mod metrics;

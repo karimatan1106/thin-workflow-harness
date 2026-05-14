@@ -32,7 +32,7 @@ pub fn cmd_find_symbol(
 }
 
 /// rust-analyzer を PATH から探す（粗いが pragmatic）。
-fn resolve_server_cmd() -> Result<String, String> {
+pub fn resolve_server_cmd() -> Result<String, String> {
     let cmd = "rust-analyzer";
     if which(cmd).is_some() {
         Ok(cmd.to_string())

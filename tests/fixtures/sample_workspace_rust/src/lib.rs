@@ -1,5 +1,8 @@
 //! workspace/symbol テスト用の最小 crate。
 //! `User` 構造体と `create_user` 関数だけ ── どちらも `user` で hit する。
+//! `use_user` モジュールは create_user の呼び出し元（refs / callers テスト用）。
+
+pub mod use_user;
 
 #[derive(Debug, Clone)]
 pub struct User {

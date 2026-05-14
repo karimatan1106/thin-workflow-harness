@@ -143,7 +143,7 @@ fn symbol_kind_name(n: u8) -> String {
 }
 
 /// 絶対パス → `file:///...` URI（粗いが LSP 実装はだいたい寛容）。
-fn path_to_file_uri(p: &Path) -> Result<String, String> {
+pub(super) fn path_to_file_uri(p: &Path) -> Result<String, String> {
     let abs: PathBuf = if p.is_absolute() {
         p.to_path_buf()
     } else {
@@ -160,7 +160,7 @@ fn path_to_file_uri(p: &Path) -> Result<String, String> {
 }
 
 /// `file:///C:/a/b` → `C:/a/b`、`file:///home/x` → `/home/x` （表示用、ゆるい）。
-fn uri_to_path_string(uri: &str) -> String {
+pub(super) fn uri_to_path_string(uri: &str) -> String {
     if let Some(rest) = uri.strip_prefix("file://") {
         let trimmed = rest.trim_start_matches('/');
         // Windows: `C:/...` で始まるなら頭の / は不要、それ以外（POSIX）は / を付け直す。
