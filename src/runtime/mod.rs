@@ -16,6 +16,7 @@ pub mod auth;
 pub mod auth_credentials;
 pub mod context;
 pub mod fork_join;
+pub mod fork_join_api;
 pub mod fork_join_branch;
 pub mod http_client;
 pub mod interceptor;

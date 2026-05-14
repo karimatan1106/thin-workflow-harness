@@ -106,7 +106,7 @@ pub fn run_parallel_scripted(
     Ok(())
 }
 
-fn check_pairwise_disjoint(run_id: &str, wf: &Workflow, branches: &[String]) -> Result<(), String> {
+pub(crate) fn check_pairwise_disjoint(run_id: &str, wf: &Workflow, branches: &[String]) -> Result<(), String> {
     let rc = RunCtx::load(run_id);
     let st = state_for(run_id, wf)?;
     let home = paths::harness_home();
