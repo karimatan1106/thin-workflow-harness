@@ -168,6 +168,26 @@ pub enum Command {
         #[arg(long, default_value = "text")]
         format: String,
     },
+    /// 変更影響範囲評価。closure direction=in の薄いラッパ。CKG layer 2 完結。
+    ImpactedBy {
+        qname: String,
+        #[arg(long, default_value_t = 3)]
+        depth: usize,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    /// 指定 symbol をテストしている test 関数一覧。closure direction=in の test フィルタ。CKG layer 2 完結。
+    TestedBy {
+        qname: String,
+        #[arg(long, default_value_t = 3)]
+        depth: usize,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
