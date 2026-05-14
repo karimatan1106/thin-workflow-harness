@@ -4,8 +4,8 @@
 
 use crate::cli::Command;
 use crate::{
-    handlers, handlers2, handlers3, handlers_advance, handlers_find_symbol, handlers_init,
-    handlers_outline, handlers_refs, handlers_stats, runtime,
+    handlers, handlers2, handlers3, handlers_advance, handlers_closure, handlers_find_symbol,
+    handlers_init, handlers_outline, handlers_refs, handlers_stats, runtime,
 };
 
 /// `Cli::parse()` 後の Command を実行する。
@@ -56,6 +56,9 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         }
         Command::Callers { qname, root, format } => {
             handlers_refs::cmd_callers(&qname, root.as_deref(), &format)
+        }
+        Command::Closure { qname, depth, direction, root, format } => {
+            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format)
         }
     }
 }

@@ -13,3 +13,12 @@ pub fn make_bob() -> User {
 pub fn make_direct() -> User {
     User::new(3, "carol".to_string())
 }
+
+pub fn make_pair() -> (User, User) {
+    (make_alice(), make_bob())
+}
+
+pub fn make_party() -> Vec<User> {
+    let (a, b) = make_pair();
+    vec![a, b, make_direct()]
+}

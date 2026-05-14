@@ -120,7 +120,7 @@ pub fn find_callers(
 }
 
 /// `qname` を workspace/symbol で解決する（空 or content modified ならリトライ）。
-fn resolve_position(
+pub(super) fn resolve_position(
     client: &mut LspClient,
     qname: &str,
     timeout: Duration,
@@ -143,7 +143,7 @@ fn resolve_position(
 }
 
 /// rust-analyzer の `content modified` (-32801) を short retry で吸収する request。
-fn request_with_retry(
+pub(super) fn request_with_retry(
     client: &mut LspClient,
     method: &str,
     params: Value,
@@ -165,6 +165,6 @@ fn request_with_retry(
     }
 }
 
-fn is_content_modified(e: &str) -> bool {
+pub(super) fn is_content_modified(e: &str) -> bool {
     e.contains("-32801") || e.contains("content modified")
 }

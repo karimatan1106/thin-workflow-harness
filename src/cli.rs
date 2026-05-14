@@ -156,6 +156,18 @@ pub enum Command {
     Refs { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String },
     /// 指定 function の呼び出し元一覧。CKG layer 2 (LSP / rust-analyzer)。
     Callers { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String },
+    /// refs/callers の transitive 閉包。CKG layer 2 続き (LSP / rust-analyzer)。
+    Closure {
+        qname: String,
+        #[arg(long, default_value_t = 2)]
+        depth: usize,
+        #[arg(long, default_value = "in")]
+        direction: String,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
