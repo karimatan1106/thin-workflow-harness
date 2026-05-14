@@ -1,0 +1,23 @@
+# fork→{b1,b2}: b1/b2 の serves が互いに素な F-NNN を指す ── blast_radius_disjoint pass。
+# fork が phase_index 0、b1/b2 がその後ろに並ぶ ── fork 通過後に runtime は b1/b2 を
+# 通常タスクとして 1 step ずつ進めて done に到達する（スクリプトに b1/b2 step あり）。
+[meta]
+name = "fixture-fork-disjoint"
+entry = "fork1"
+
+[[node]]
+id = "fork1"
+type = "fork"
+branches = ["b1", "b2"]
+
+[[node]]
+id = "b1"
+skill = "n1.md"
+serves = ["F-001"]
+next = []
+
+[[node]]
+id = "b2"
+skill = "n2.md"
+serves = ["F-002"]
+next = []

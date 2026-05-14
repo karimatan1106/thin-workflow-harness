@@ -1,0 +1,34 @@
+# fork happy path ── b1/b2 が並列で artifact を register、両方成功で main state に合流。
+# 各 branch は create_file → record_artifact → request_transition。
+# fork 通過後、runtime は b1 と b2 を通常ノードとして 1 step ずつ進める ── スクリプトの
+# 同名 step は 1 度しか消費されないため、再度実行される（idempotent な create_file +
+# record_artifact）。
+[[step]]
+node = "b1"
+actions = [
+  { create_file = { path = "b1_out.txt", content = "from b1" } },
+  { record_artifact = { name = "out1", path = "b1_out.txt" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "b2"
+actions = [
+  { create_file = { path = "b2_out.txt", content = "from b2" } },
+  { record_artifact = { name = "out2", path = "b2_out.txt" } },
+  { request_transition = {} },
+]
+
+# fork 後の main runtime は b1/b2 の step を再消費する ── 2 度目の record_artifact は
+# 同じ name に同じ path を上書きするだけで害なし、request_transition で next ノードへ。
+[[step]]
+node = "b1"
+actions = [
+  { request_transition = {} },
+]
+
+[[step]]
+node = "b2"
+actions = [
+  { request_transition = {} },
+]

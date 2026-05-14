@@ -1,0 +1,21 @@
+# fork→{b1,b2}: b1/b2 が同じ F-NNN を serves する ── blast_radius_disjoint 違反で fork が拒否される。
+[meta]
+name = "fixture-fork-overlap"
+entry = "fork1"
+
+[[node]]
+id = "fork1"
+type = "fork"
+branches = ["b1", "b2"]
+
+[[node]]
+id = "b1"
+skill = "n1.md"
+serves = ["F-001"]
+next = []
+
+[[node]]
+id = "b2"
+skill = "n2.md"
+serves = ["F-001"]
+next = []

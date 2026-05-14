@@ -1,0 +1,16 @@
+# fork テスト用 spec ── F-001 と F-002 で互いに素な files を宣言。
+[meta]
+intent = "fork test fixture"
+status = "draft"
+
+[[requirement]]
+id = "F-001"
+text = "branch 1 work"
+files = ["src/a.rs"]
+tests = ["cargo test"]
+
+[[requirement]]
+id = "F-002"
+text = "branch 2 work"
+files = ["src/b.rs"]
+tests = ["cargo test"]

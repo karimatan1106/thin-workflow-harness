@@ -1,0 +1,15 @@
+# fork 1 branch fail: b1 は通常通り artifact 登録 → request_transition、
+# b2 は stuck で branch_thread が Err 返却 → BranchJoined(status=failed) になる。
+[[step]]
+node = "b1"
+actions = [
+  { create_file = { path = "b1_out.txt", content = "from b1" } },
+  { record_artifact = { name = "out1", path = "b1_out.txt" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "b2"
+actions = [
+  { stuck = { reason = "intentional fail for fork test" } },
+]
