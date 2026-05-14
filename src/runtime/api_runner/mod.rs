@@ -15,6 +15,8 @@
 //! - cache_create=0 warning ── 1 run で 1 度だけ「cache 未作成」を警告（早期検知）。
 
 mod apply_dispatch;
+mod branch;
+mod branch_apply;
 mod guards;
 
 use std::path::PathBuf;
