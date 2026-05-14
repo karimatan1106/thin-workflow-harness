@@ -1,7 +1,10 @@
 //! workspace/symbol テスト用の最小 crate。
 //! `User` 構造体と `create_user` 関数だけ ── どちらも `user` で hit する。
 //! `use_user` モジュールは create_user の呼び出し元（refs / callers テスト用）。
+//! `inline_tests` は src/ 配下の `#[cfg(test)] mod tests { #[test] fn ... }`
+//! ── attr ベース判定の fixture。
 
+pub mod inline_tests;
 pub mod use_user;
 
 #[derive(Debug, Clone)]
