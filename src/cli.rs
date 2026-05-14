@@ -5,7 +5,8 @@
 use clap::{Parser, Subcommand};
 
 use crate::{
-    handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_stats, runtime,
+    handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_outline, handlers_stats,
+    runtime,
 };
 
 #[derive(Parser)]
@@ -143,6 +144,14 @@ pub enum Command {
         #[arg(long)]
         full: bool,
     },
+    /// 指定ファイルの outline（トップレベル/主要シンボル）を表示する。CKG layer 1。
+    Outline {
+        /// 対象ソースファイル（現状 Rust のみ対応）。
+        path: String,
+        /// 出力フォーマット: text|json
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
@@ -185,5 +194,6 @@ pub fn run() -> Result<(), String> {
         Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
+        Command::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
     }
 }
