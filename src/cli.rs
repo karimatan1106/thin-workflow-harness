@@ -188,6 +188,8 @@ pub enum Command {
         #[arg(long, default_value = "text")]
         format: String,
     },
+    /// CKG layer 2 の query primitive ファサード（outline/symbol/refs/callers/closure/impacted-by/tested-by）。
+    Query { #[command(subcommand)] cmd: crate::cli_query::QueryCmd },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。

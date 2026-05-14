@@ -1,0 +1,106 @@
+//! `harness query <subcommand>` ファサード ── CKG layer 2 の 7 primitive をまとめる。
+//!
+//! 既存トップレベルの `harness outline` / `find-symbol` / `refs` / `callers` /
+//! `closure` / `impacted-by` / `tested-by` は alias として完全に維持。
+//! 各バリアントは既存 handler をそのまま呼び出すだけ ── 破壊的変更なし。
+//! query 配下では `find-symbol` を `symbol` に短縮（find- prefix 不要）。
+
+use clap::Subcommand;
+
+use crate::{
+    handlers_closure, handlers_find_symbol, handlers_impacted, handlers_outline, handlers_refs,
+    handlers_tested,
+};
+
+#[derive(Subcommand)]
+pub enum QueryCmd {
+    /// 指定ファイルの outline（トップレベル/主要シンボル）を表示する。
+    Outline {
+        path: String,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    /// workspace のシンボル検索（旧 find-symbol）。
+    Symbol {
+        query: String,
+        #[arg(long)]
+        kind: Option<String>,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    /// 指定 symbol への参照箇所一覧。
+    Refs {
+        qname: String,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    /// 指定 function の呼び出し元一覧。
+    Callers {
+        qname: String,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    /// refs/callers の transitive 閉包。
+    Closure {
+        qname: String,
+        #[arg(long, default_value_t = 2)]
+        depth: usize,
+        #[arg(long, default_value = "in")]
+        direction: String,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    /// 変更影響範囲評価。closure direction=in の薄いラッパ。
+    ImpactedBy {
+        qname: String,
+        #[arg(long, default_value_t = 3)]
+        depth: usize,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    /// 指定 symbol をテストしている test 関数一覧。
+    TestedBy {
+        qname: String,
+        #[arg(long, default_value_t = 3)]
+        depth: usize,
+        #[arg(long)]
+        root: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+}
+
+/// `Command::Query { cmd }` の dispatch ── 各バリアントを既存 handler に振る。
+pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
+    match cmd {
+        QueryCmd::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
+        QueryCmd::Symbol { query, kind, root, format } => {
+            handlers_find_symbol::cmd_find_symbol(&query, kind.as_deref(), root.as_deref(), &format)
+        }
+        QueryCmd::Refs { qname, root, format } => {
+            handlers_refs::cmd_refs(&qname, root.as_deref(), &format)
+        }
+        QueryCmd::Callers { qname, root, format } => {
+            handlers_refs::cmd_callers(&qname, root.as_deref(), &format)
+        }
+        QueryCmd::Closure { qname, depth, direction, root, format } => {
+            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format)
+        }
+        QueryCmd::ImpactedBy { qname, depth, root, format } => {
+            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format)
+        }
+        QueryCmd::TestedBy { qname, depth, root, format } => {
+            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format)
+        }
+    }
+}
