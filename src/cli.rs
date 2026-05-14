@@ -5,8 +5,8 @@
 use clap::{Parser, Subcommand};
 
 use crate::{
-    handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_outline, handlers_stats,
-    runtime,
+    handlers, handlers2, handlers3, handlers_advance, handlers_find_symbol, handlers_init,
+    handlers_outline, handlers_stats, runtime,
 };
 
 #[derive(Parser)]
@@ -152,6 +152,8 @@ pub enum Command {
         #[arg(long, default_value = "text")]
         format: String,
     },
+    /// workspace のシンボル検索。CKG layer 2 (LSP / rust-analyzer)。
+    FindSymbol { query: String, #[arg(long)] kind: Option<String>, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
@@ -168,14 +170,9 @@ pub fn run() -> Result<(), String> {
         Command::ReportEvidence { gate, json, run } => {
             handlers::cmd_report_evidence(&gate, &json, run.as_deref())
         }
-        Command::Ask { question, option, header, kind, required, run } => handlers3::cmd_ask(
-            &question,
-            &option,
-            header.as_deref(),
-            kind.as_deref(),
-            required,
-            run.as_deref(),
-        ),
+        Command::Ask { question, option, header, kind, required, run } => {
+            handlers3::cmd_ask(&question, &option, header.as_deref(), kind.as_deref(), required, run.as_deref())
+        }
         Command::Questions { run } => handlers3::cmd_questions(run.as_deref()),
         Command::Answer { question_id, choice, run } => {
             handlers3::cmd_answer(&question_id, &choice, run.as_deref())
@@ -195,5 +192,8 @@ pub fn run() -> Result<(), String> {
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
         Command::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
+        Command::FindSymbol { query, kind, root, format } => {
+            handlers_find_symbol::cmd_find_symbol(&query, kind.as_deref(), root.as_deref(), &format)
+        }
     }
 }

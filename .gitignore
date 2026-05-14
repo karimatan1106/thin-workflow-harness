@@ -2,3 +2,4 @@
 **/*.rs.bk
 /state/*.jsonl
 !/state/.gitkeep
+tests/fixtures/**/target/
