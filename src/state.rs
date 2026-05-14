@@ -61,10 +61,19 @@ fn first_intent(events: &[Event]) -> String {
         .unwrap_or_default()
 }
 
-/// イベント列から State を導出する純粋 fold。
-///
-/// 最後の `Reset` 以降のスライスで本体を再構築するが、`run_id`/`intent` は保持する。
+/// イベント列から State を導出する純粋 fold（workflow を見ない後方互換版）。
+/// `Reset` 以降のスライスで再構築するが、`run_id`/`intent` は保持。
 pub fn derive_state(run_id: &str, events: &[Event]) -> State {
+    derive_state_inner(run_id, events, None)
+}
+
+/// `derive_state` の workflow 解決版 ── Advance の `to` が wf 内のノード id ならその
+/// index へジャンプ（fork→jn の非自然遷移用）、未知 id なら `phase_index += 1`。
+pub fn derive_state_resolving(run_id: &str, events: &[Event], wf: &crate::workflow::Workflow) -> State {
+    derive_state_inner(run_id, events, Some(wf))
+}
+
+fn derive_state_inner(run_id: &str, events: &[Event], wf: Option<&crate::workflow::Workflow>) -> State {
     let last_reset = events
         .iter()
         .rposition(|e| matches!(e.kind, EventKind::Reset));
@@ -82,7 +91,10 @@ pub fn derive_state(run_id: &str, events: &[Event]) -> State {
                 st.intent = intent.clone();
             }
             EventKind::Advance { from, to } => {
-                st.phase_index += 1;
+                match wf.and_then(|w| w.index_of(to)) {
+                    Some(idx) => st.phase_index = idx,
+                    None => st.phase_index += 1,
+                }
                 st.history.push(HistoryItem {
                     kind: "advance".into(),
                     detail: format!("{from} -> {to}"),

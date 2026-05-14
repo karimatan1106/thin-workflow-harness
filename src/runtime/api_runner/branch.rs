@@ -28,10 +28,12 @@
 
 
 use std::path::Path;
+use std::time::Instant;
 
 use crate::event::{append_branch_event, read_events, EventKind};
 use crate::handlers::state_for;
 use crate::handlers2::RunCtx;
+use crate::metrics::{append_metrics, NodeMetrics, TokenBreakdown};
 use crate::runtime::api_worker::{ApiWorker, ApplyResult, Outcome};
 use crate::runtime::auth::AuthMode;
 use crate::runtime::context;
@@ -91,7 +93,20 @@ pub fn drive_branch_api(
     };
 
     let worker = ApiWorker::new(auth.clone(), model, http);
-    let (outcome, _metrics) = worker.drive(&ctx, &budget, &mut apply_fn);
+    let node_start = Instant::now();
+    let (outcome, metrics) = worker.drive(&ctx, &budget, &mut apply_fn);
+    let elapsed = node_start.elapsed().as_secs_f64();
+
+    // branch ごとに main の metrics サイドカーへ 1 行（main path の spawn と同形式）。
+    // `node` は branch_id ── join 側で集約しやすいよう main path と区別がつく。
+    let breakdown = TokenBreakdown {
+        input: metrics.usage.input_tokens,
+        output: metrics.usage.output_tokens,
+        cache_create: metrics.usage.cache_creation_input_tokens,
+        cache_read: metrics.usage.cache_read_input_tokens,
+    };
+    let m = NodeMetrics::api(branch_id, metrics.tool_calls, elapsed, breakdown, metrics.cost_usd);
+    append_metrics(run_id, &m)?;
 
     match outcome {
         Outcome::Transitioned => {

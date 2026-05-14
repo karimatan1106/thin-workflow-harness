@@ -5,7 +5,7 @@ use chrono::{SecondsFormat, Utc};
 use crate::event::{append_event, read_events, EventKind};
 use crate::handlers2::RunCtx;
 use crate::spec::load_spec;
-use crate::state::{derive_state, State};
+use crate::state::{derive_state_resolving, State};
 use crate::status_view::print_status;
 use crate::workflow::{load_workflow, validate, Workflow};
 use crate::paths;
@@ -16,7 +16,7 @@ pub(crate) fn load_wf() -> Result<Workflow, String> {
 
 pub(crate) fn state_for(run_id: &str, wf: &Workflow) -> Result<State, String> {
     let events = read_events(run_id)?;
-    Ok(derive_state(run_id, &events).finalize(wf.nodes().len()))
+    Ok(derive_state_resolving(run_id, &events, wf).finalize(wf.nodes().len()))
 }
 
 /// abandon 済みなら遷移系コマンドを拒否する。

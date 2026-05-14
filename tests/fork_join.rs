@@ -3,6 +3,9 @@
 //! 既存 `runtime.rs` と同じく `harness` バイナリを subprocess で叩く。fork ノードを
 //! entry に持つ workflow に差し替えて `start` → `run --script <fork>` を回し、blast
 //! radius 違反 / artifact 合流 / 1 branch fail の3経路を確認する。
+//!
+//! 注: case4/case5（fork→jn dispatch & branch metrics 回帰テスト）は 200 行制限の
+//! ため `tests/fork_join_dispatch.rs` に分離してある。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

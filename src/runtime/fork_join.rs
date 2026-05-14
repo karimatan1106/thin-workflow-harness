@@ -95,11 +95,16 @@ pub fn run_parallel_scripted(
     .map_err(|e| format!("branch_joined write fail: {e}"))?;
 
     let st = state_for(run_id, wf)?;
-    let to = wf
-        .nodes()
-        .get(st.phase_index + 1)
-        .map(|n| n.id.clone())
-        .unwrap_or_else(|| "(done)".to_string());
+    // fork.next[0] が指定されていればそこへ非自然遷移（fork→jn 直行）。
+    // 未指定（既存 fixture）は phase_index+1 ── branches[0] へ進む旧挙動互換。
+    let to = if let Some(nxt) = fork_node.next.first() {
+        nxt.clone()
+    } else {
+        wf.nodes()
+            .get(st.phase_index + 1)
+            .map(|n| n.id.clone())
+            .unwrap_or_else(|| "(done)".to_string())
+    };
     append_event(run_id, EventKind::Advance { from: fork_node.id.clone(), to: to.clone() })
         .map_err(|e| format!("advance write fail: {e}"))?;
     println!("[fork {}] -> advance -> {to} (all branches ok)", fork_node.id);

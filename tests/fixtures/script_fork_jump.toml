@@ -1,0 +1,23 @@
+# fork jump path ── b1/b2 は fork 内で 1 度ずつ実行され、main runtime は再走行しない。
+# main runtime は fork → jn にジャンプし、jn の step だけ消費する。
+[[step]]
+node = "b1"
+actions = [
+  { create_file = { path = "b1_out.txt", content = "from b1" } },
+  { record_artifact = { name = "out1", path = "b1_out.txt" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "b2"
+actions = [
+  { create_file = { path = "b2_out.txt", content = "from b2" } },
+  { record_artifact = { name = "out2", path = "b2_out.txt" } },
+  { request_transition = {} },
+]
+
+[[step]]
+node = "jn"
+actions = [
+  { request_transition = {} },
+]

@@ -1,0 +1,29 @@
+# fork→{b1,b2}→jn: fork ノードに next=["jn"] を明示。
+# 修正後の挙動では fork 完了後 main runtime は b1/b2 を再走行せず、直接 jn にジャンプする。
+[meta]
+name = "fixture-fork-jump"
+entry = "fork1"
+
+[[node]]
+id = "fork1"
+type = "fork"
+branches = ["b1", "b2"]
+next = ["jn"]
+
+[[node]]
+id = "b1"
+skill = "n1.md"
+serves = ["F-001"]
+next = []
+
+[[node]]
+id = "b2"
+skill = "n2.md"
+serves = ["F-002"]
+next = []
+
+[[node]]
+id = "jn"
+skill = "n1.md"
+serves = []
+next = []

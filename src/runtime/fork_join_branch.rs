@@ -2,19 +2,31 @@
 //!
 //! 元 fork_join.rs を 200 行ルールに収めるために分離。
 
+use std::time::Instant;
+
 use serde_json::Value as JsonValue;
 
 use crate::event::{append_branch_event, EventKind};
+use crate::metrics::{append_metrics, NodeMetrics};
 use crate::runtime::script::Step;
 use crate::runtime::worker::WorkerAction;
+
+fn counts_as_tool_call(a: &WorkerAction) -> bool {
+    !matches!(a, WorkerAction::Stuck { .. })
+}
 
 pub(super) fn branch_thread(run_id: &str, branch_id: &str, steps: Vec<Step>) -> Result<(), String> {
     if steps.is_empty() {
         return Err(format!("branch {branch_id} has no matching step (script mismatch)"));
     }
+    let start = Instant::now();
+    let mut tool_calls: u64 = 0;
     for step in steps {
         for act in step.actions {
             println!("[branch {branch_id}] action: {}", action_label(&act));
+            if counts_as_tool_call(&act) {
+                tool_calls += 1;
+            }
             match act {
                 WorkerAction::RecordArtifact { name, path } => {
                     let cwd = std::env::current_dir().map_err(|e| format!("cwd: {e}"))?;
@@ -56,6 +68,9 @@ pub(super) fn branch_thread(run_id: &str, branch_id: &str, steps: Vec<Step>) -> 
                         EventKind::Advance { from: branch_id.to_string(), to: "(branch-done)".into() },
                     )
                     .map_err(|e| format!("branch advance write fail: {e}"))?;
+                    // branch 完了時に main の metrics サイドカーへ 1 行（main path と同形式）。
+                    let m = NodeMetrics::scripted(branch_id, tool_calls, start.elapsed().as_secs_f64());
+                    append_metrics(run_id, &m)?;
                     return Ok(());
                 }
                 WorkerAction::Stuck { reason } => return Err(format!("stuck: {reason}")),

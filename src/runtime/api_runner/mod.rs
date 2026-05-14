@@ -86,11 +86,16 @@ pub fn run_loop(d: RunnerDeps<'_>) -> Result<(), String> {
                 &model_default,
                 &cwd,
             )?;
-            let to = wf
-                .nodes()
-                .get(st.phase_index + 1)
-                .map(|n| n.id.clone())
-                .unwrap_or_else(|| "(done)".to_string());
+            // fork.next[0] が指定されていればそこへ非自然遷移（fork→jn 直行）。
+            // 未指定（旧 fixture 等）は phase_index+1 にフォールバック ── 既存挙動互換。
+            let to = if let Some(nxt) = node.next.first() {
+                nxt.clone()
+            } else {
+                wf.nodes()
+                    .get(st.phase_index + 1)
+                    .map(|n| n.id.clone())
+                    .unwrap_or_else(|| "(done)".to_string())
+            };
             append_event(
                 &run_id,
                 EventKind::Advance { from: node.id.clone(), to: to.clone() },
