@@ -9,6 +9,8 @@
 //!    `apply_loop::run_tool_uses` 風の経路で subprocess を呼んで結果が tool_result に
 //!    詰まる ── ここは `tool_use_to_call` + `run_query` の手動結線で確認する
 //!    （実 ApiWorker drive は API キーが要るので scope 外）。
+//! 4. lang 流通: `lang="ts"` を渡したとき build_query_spec が拾い、run_query が
+//!    `--lang ts` を subprocess に渡すこと。lang 省略時は従来挙動と同じ。
 
 use std::path::{Path, PathBuf};
 
@@ -34,6 +36,8 @@ fn query_outline_tool_use_maps_to_query_variant() {
         ToolCall::Query(q) => {
             assert_eq!(q.subcommand, "outline");
             assert_eq!(q.positional, "src/lib.rs");
+            // outline は CLI 側が --lang を受け付けないので tool_use_to_call は必ず None。
+            assert!(q.lang.is_none(), "outline には lang を流さない");
         }
         _ => panic!("query_outline は ToolCall::Query を返すべき"),
     }
@@ -45,7 +49,7 @@ fn run_query_outline_against_real_harness_subprocess() {
     let spec = QuerySpec {
         subcommand: "outline".into(),
         positional: "tests/fixtures/sample_workspace_rust/src/lib.rs".into(),
-        depth: None, direction: None, root: None, format: None,
+        depth: None, direction: None, root: None, format: None, lang: None,
     };
     let out = run_query(&spec, &manifest_dir()).expect("run_query 起動");
     assert!(out.success, "outline subprocess が失敗: stderr={}", out.stderr);
@@ -60,7 +64,7 @@ fn run_query_unknown_subcommand_returns_error_subprocess() {
     let spec = QuerySpec {
         subcommand: "definitely-not-a-subcommand".into(),
         positional: "x".into(),
-        depth: None, direction: None, root: None, format: None,
+        depth: None, direction: None, root: None, format: None, lang: None,
     };
     let out = run_query(&spec, &manifest_dir()).expect("起動自体は成功する");
     assert!(!out.success, "未知 subcommand なら non-zero exit");
@@ -95,9 +99,64 @@ fn run_query_uses_provided_cwd_for_relative_paths() {
     let spec = QuerySpec {
         subcommand: "outline".into(),
         positional: "tests/fixtures/sample_workspace_rust/src/lib.rs".into(),
-        depth: None, direction: None, root: None, format: None,
+        depth: None, direction: None, root: None, format: None, lang: None,
     };
     let cwd: &Path = &manifest_dir();
     let out = run_query(&spec, cwd).expect("subprocess");
     assert!(out.success, "cwd 解決失敗: stderr={}", out.stderr);
+}
+
+/// lang 流通の round-trip ── tool_use_to_call で lang="ts" を渡したとき、
+/// QuerySpec.lang に伝播することを assert（schema は枠だけ提供する LLM 向けで、
+/// 実 dispatch では build_query_spec が拾う ── そこを検証する）。
+#[test]
+fn query_symbol_tool_use_propagates_lang_to_spec() {
+    let c = tool_use_to_call("query_symbol", &json!({"qname":"User.create", "lang":"ts"})).unwrap();
+    match c {
+        ToolCall::Query(q) => {
+            assert_eq!(q.subcommand, "symbol");
+            assert_eq!(q.lang.as_deref(), Some("ts"), "lang=ts が流通していない");
+        }
+        _ => panic!("query_symbol は ToolCall::Query"),
+    }
+}
+
+/// run_query で lang を持つ spec を回したとき、subprocess 側が --lang を受理して
+/// non-zero exit せずに stdout を返すこと（backward compat の確認も兼ねる）。
+/// rust-analyzer/typescript-language-server がなくても outline は通るが、
+/// 6 query は LSP 不在で stderr に詰まるので、ここでは stdout が呼べることだけを assert。
+#[test]
+fn run_query_appends_lang_arg_when_present() {
+    set_harness_bin_for_tests();
+    // 存在しないシンボルでもよい ── --lang フラグが args に乗って subprocess が起動できるか
+    // だけを見たい。LSP 不在環境では stderr に "language server" 等が出るが起動はする。
+    let spec = QuerySpec {
+        subcommand: "symbol".into(),
+        positional: "definitely_nonexistent_symbol_xyz".into(),
+        depth: None, direction: None, root: None, format: Some("json".into()),
+        lang: Some("rust".into()),
+    };
+    let out = run_query(&spec, &manifest_dir()).expect("subprocess 起動");
+    // success/fail は LSP 有無に依存するので、stderr が `--lang` 自体の reject を
+    // 出していないこと（"unexpected argument" 等を含まない）を確認するに留める。
+    let combined = format!("{}{}", out.stdout, out.stderr);
+    assert!(!combined.contains("unexpected argument"),
+        "--lang フラグが CLI 側で reject された: {combined}");
+    assert!(!combined.contains("invalid value for"),
+        "--lang の値 'rust' が enum reject された: {combined}");
+}
+
+/// lang 省略 (= None) のときに run_query が --lang を一切 append しないこと。
+/// 直接 args 観測はできないので、CLI 既定 auto と同等に subprocess が動くことを
+/// 既存 outline test と同じパターンで担保する（backward compat スモーク）。
+#[test]
+fn run_query_without_lang_remains_backward_compatible() {
+    set_harness_bin_for_tests();
+    let spec = QuerySpec {
+        subcommand: "outline".into(),
+        positional: "tests/fixtures/sample_workspace_rust/src/lib.rs".into(),
+        depth: None, direction: None, root: None, format: None, lang: None,
+    };
+    let out = run_query(&spec, &manifest_dir()).expect("run_query");
+    assert!(out.success, "lang 省略時に outline が壊れている: stderr={}", out.stderr);
 }

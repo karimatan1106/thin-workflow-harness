@@ -27,9 +27,13 @@ pub struct QuerySpec {
     pub root: Option<String>,
     /// `--format text|json`。Some なら付ける（既定 text）。
     pub format: Option<String>,
+    /// `--lang auto|rust|ts`。Some なら付ける。
+    /// outline は CLI 側が `--lang` を受け付けないので必ず None。
+    /// 値検証は harness CLI 側に任せる（無効値は CLI が reject）。
+    pub lang: Option<String>,
 }
 
-/// query_* 系（outline 以外）の共通ビルダ ── qname/depth/direction/root/format を拾う。
+/// query_* 系（outline 以外）の共通ビルダ ── qname/depth/direction/root/format/lang を拾う。
 pub fn build_query_spec(tool_name: &str, input: &Value) -> Result<QuerySpec, String> {
     let qname = input.get("qname").and_then(|v| v.as_str())
         .ok_or_else(|| format!("tool '{tool_name}' に必須キー 'qname'（string）が無い"))?
@@ -40,7 +44,8 @@ pub fn build_query_spec(tool_name: &str, input: &Value) -> Result<QuerySpec, Str
     let direction = input.get("direction").and_then(|v| v.as_str()).map(|s| s.to_string());
     let root = input.get("root").and_then(|v| v.as_str()).map(|s| s.to_string());
     let format = input.get("format").and_then(|v| v.as_str()).map(|s| s.to_string());
-    Ok(QuerySpec { subcommand: sub, positional: qname, depth, direction, root, format })
+    let lang = input.get("lang").and_then(|v| v.as_str()).map(|s| s.to_string());
+    Ok(QuerySpec { subcommand: sub, positional: qname, depth, direction, root, format, lang })
 }
 
 /// `harness` バイナリのパスを決める。`HARNESS_BIN` 環境変数が立っていればそれ、
@@ -57,7 +62,7 @@ pub struct QueryOutput {
     pub success: bool,
 }
 
-/// `harness query <sub> <positional> [--depth N] [--direction D] [--root R] [--format F]` を実行。
+/// `harness query <sub> <positional> [--depth N] [--direction D] [--root R] [--format F] [--lang L]` を実行。
 pub fn run_query(spec: &QuerySpec, cwd: &Path) -> Result<QueryOutput, String> {
     let bin = harness_bin();
     let mut cmd = Command::new(&bin);
@@ -66,6 +71,7 @@ pub fn run_query(spec: &QuerySpec, cwd: &Path) -> Result<QueryOutput, String> {
     if let Some(dir) = &spec.direction { cmd.arg("--direction").arg(dir); }
     if let Some(r) = &spec.root { cmd.arg("--root").arg(r); }
     if let Some(f) = &spec.format { cmd.arg("--format").arg(f); }
+    if let Some(l) = &spec.lang { cmd.arg("--lang").arg(l); }
     let out = cmd.output().map_err(|e| format!("subprocess '{bin}' 起動失敗: {e}"))?;
     Ok(QueryOutput {
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -84,17 +90,32 @@ mod tests {
         let q = build_query_spec("query_refs", &json!({"qname":"foo::bar"})).unwrap();
         assert_eq!(q.subcommand, "refs");
         assert_eq!(q.positional, "foo::bar");
-        assert!(q.depth.is_none() && q.direction.is_none() && q.root.is_none() && q.format.is_none());
+        assert!(q.depth.is_none() && q.direction.is_none() && q.root.is_none()
+            && q.format.is_none() && q.lang.is_none());
     }
 
     #[test]
     fn build_query_spec_full_args() {
         let q = build_query_spec("query_closure",
-            &json!({"qname":"x", "depth":5, "direction":"both", "root":"/r", "format":"json"})).unwrap();
+            &json!({"qname":"x", "depth":5, "direction":"both", "root":"/r", "format":"json", "lang":"ts"})).unwrap();
         assert_eq!(q.depth, Some(5));
         assert_eq!(q.direction.as_deref(), Some("both"));
         assert_eq!(q.root.as_deref(), Some("/r"));
         assert_eq!(q.format.as_deref(), Some("json"));
+        assert_eq!(q.lang.as_deref(), Some("ts"));
+    }
+
+    #[test]
+    fn build_query_spec_lang_optional_defaults_to_none() {
+        // lang を渡さなければ None ── run_query は --lang を一切付けず、CLI 既定 auto に委ねる。
+        let q = build_query_spec("query_symbol", &json!({"qname":"X"})).unwrap();
+        assert!(q.lang.is_none(), "lang 未指定なら None");
+    }
+
+    #[test]
+    fn build_query_spec_lang_passthrough_rust() {
+        let q = build_query_spec("query_refs", &json!({"qname":"foo::bar", "lang":"rust"})).unwrap();
+        assert_eq!(q.lang.as_deref(), Some("rust"));
     }
 
     #[test]

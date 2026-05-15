@@ -64,6 +64,7 @@ pub fn tool_use_to_call(name: &str, input: &Value) -> Result<ToolCall, String> {
                 positional: s("file")?,
                 depth: None, direction: None, root: None,
                 format: input.get("format").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                lang: None,
             })),
         "query_symbol" | "query_refs" | "query_callers"
         | "query_closure" | "query_impacted_by" | "query_tested_by" => {
