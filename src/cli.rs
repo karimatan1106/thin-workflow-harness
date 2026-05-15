@@ -152,10 +152,10 @@ pub enum Command {
     },
     /// workspace のシンボル検索。CKG layer 2 (多言語 LSP / rust-analyzer + typescript-language-server)。
     FindSymbol { query: String, #[arg(long)] kind: Option<String>, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
-    /// 指定 symbol への参照箇所一覧。CKG layer 2 (LSP / rust-analyzer)。
-    Refs { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String },
-    /// 指定 function の呼び出し元一覧。CKG layer 2 (LSP / rust-analyzer)。
-    Callers { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String },
+    /// 指定 symbol への参照箇所一覧。CKG layer 2 (多言語 LSP)。
+    Refs { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    /// 指定 function の呼び出し元一覧。CKG layer 2 (多言語 LSP)。
+    Callers { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
     /// refs/callers の transitive 閉包。CKG layer 2 続き (LSP / rust-analyzer)。
     Closure {
         qname: String,

@@ -8,8 +8,8 @@
 //! - `impacted`: closure direction=in の薄いラッパ（変更影響範囲）
 //! - `tested`: closure direction=in の結果から test 関数だけ抽出
 //!
-//! 多言語 LSP の足場として `lang` / `query_lang` を追加。
-//! 現状 query (find_symbol) のみ Lang 受付。refs / callers / closure 等は別バッチ。
+//! 多言語 LSP の足場として `lang` / `query_lang` / `refs_lang` を追加。
+//! query (find_symbol) と refs / callers が Lang 受付。closure 等は別バッチ。
 
 pub mod client;
 pub mod closure;
@@ -19,6 +19,7 @@ pub mod lang;
 pub mod query;
 pub mod query_lang;
 pub mod refs;
+pub mod refs_lang;
 mod refs_parse;
 pub mod tested;
 pub mod uri;
@@ -30,4 +31,5 @@ pub use lang::{detect_lang, detect_lang_from_qname, lsp_server_cmd, root_lang, L
 pub use query::{find_symbol, SymbolInfo};
 pub use query_lang::find_symbol_for_lang;
 pub use refs::{find_callers, find_refs, CallerInfo, RefLocation};
+pub use refs_lang::{find_callers_for_lang, find_refs_for_lang};
 pub use tested::{find_tested_by, TestedNode};

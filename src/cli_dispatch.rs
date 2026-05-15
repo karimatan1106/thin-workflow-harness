@@ -52,11 +52,11 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::FindSymbol { query, kind, root, format, lang } => handlers_find_symbol::cmd_find_symbol(
             &query, kind.as_deref(), root.as_deref(), &format, &lang,
         ),
-        Command::Refs { qname, root, format } => {
-            handlers_refs::cmd_refs(&qname, root.as_deref(), &format)
+        Command::Refs { qname, root, format, lang } => {
+            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang)
         }
-        Command::Callers { qname, root, format } => {
-            handlers_refs::cmd_callers(&qname, root.as_deref(), &format)
+        Command::Callers { qname, root, format, lang } => {
+            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang)
         }
         Command::Closure { qname, depth, direction, root, format } => {
             handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format)

@@ -33,21 +33,27 @@ pub enum QueryCmd {
         #[arg(long, default_value = "auto")]
         lang: String,
     },
-    /// 指定 symbol への参照箇所一覧。
+    /// 指定 symbol への参照箇所一覧。多言語 LSP 対応。
     Refs {
         qname: String,
         #[arg(long)]
         root: Option<String>,
         #[arg(long, default_value = "text")]
         format: String,
+        /// 言語を指定する。auto なら qname/root から推定。
+        #[arg(long, default_value = "auto")]
+        lang: String,
     },
-    /// 指定 function の呼び出し元一覧。
+    /// 指定 function の呼び出し元一覧。多言語 LSP 対応。
     Callers {
         qname: String,
         #[arg(long)]
         root: Option<String>,
         #[arg(long, default_value = "text")]
         format: String,
+        /// 言語を指定する。auto なら qname/root から推定。
+        #[arg(long, default_value = "auto")]
+        lang: String,
     },
     /// refs/callers の transitive 閉包。
     Closure {
@@ -90,11 +96,11 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
         QueryCmd::Symbol { query, kind, root, format, lang } => handlers_find_symbol::cmd_find_symbol(
             &query, kind.as_deref(), root.as_deref(), &format, &lang,
         ),
-        QueryCmd::Refs { qname, root, format } => {
-            handlers_refs::cmd_refs(&qname, root.as_deref(), &format)
+        QueryCmd::Refs { qname, root, format, lang } => {
+            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang)
         }
-        QueryCmd::Callers { qname, root, format } => {
-            handlers_refs::cmd_callers(&qname, root.as_deref(), &format)
+        QueryCmd::Callers { qname, root, format, lang } => {
+            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang)
         }
         QueryCmd::Closure { qname, depth, direction, root, format } => {
             handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format)

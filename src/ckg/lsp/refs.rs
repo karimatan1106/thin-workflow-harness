@@ -8,16 +8,22 @@
 //!
 //! parser は `refs_parse` モジュールに切り出し。indexing は short retry で待つ
 //! （rust-analyzer の `content modified` -32801 もリトライ対象）。
+//!
+//! 多言語版は `refs_lang::find_refs_for_lang` / `find_callers_for_lang` を使う。
+//! 当ファイルの `find_refs` / `find_callers` は rust-analyzer 固定の薄ラッパとして残す
+//! （backward compat）。`resolve_position` / `request_with_retry` /
+//! `is_content_modified` は pub(super) で refs_lang から再利用する。
 
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use super::client::LspClient;
-use super::query::path_to_file_uri;
-use super::refs_parse::{parse_incoming_calls, parse_references, pick_best_match};
+use super::lang::Lang;
+use super::refs_lang::{find_callers_for_lang, find_refs_for_lang};
+use super::refs_parse::pick_best_match;
 
 /// `find_refs` が返す 1 件分。
 #[derive(Debug, Clone, Serialize)]
@@ -48,75 +54,26 @@ impl ResolvedPos {
     }
 }
 
-/// `harness refs <qname>` 本体。
+/// `harness refs <qname>` ── rust-analyzer 固定の薄ラッパ。
+///
+/// `server_cmd` は API 互換のため受け取るが現在は使わず、`Lang::Rust` で固定する。
 pub fn find_refs(
-    server_cmd: &str,
+    _server_cmd: &str,
     root: &Path,
     qname: &str,
     timeout: Duration,
 ) -> Result<Vec<RefLocation>, String> {
-    let mut client = LspClient::spawn(server_cmd)?;
-    let root_uri = path_to_file_uri(root)?;
-    let _ = client.initialize(&root_uri)?;
-
-    let started = Instant::now();
-    let pos = resolve_position(&mut client, qname, timeout)?;
-    let params = json!({
-        "textDocument": { "uri": pos.uri },
-        "position": { "line": pos.line, "character": pos.character },
-        "context": { "includeDeclaration": false },
-    });
-    let resp = request_with_retry(&mut client, "textDocument/references", params, timeout, started)?;
-    let refs = parse_references(&resp);
-    let _ = client.shutdown();
-    Ok(refs)
+    find_refs_for_lang(Lang::Rust, root, qname, timeout)
 }
 
-/// `harness callers <qname>` 本体。
+/// `harness callers <qname>` ── rust-analyzer 固定の薄ラッパ。
 pub fn find_callers(
-    server_cmd: &str,
+    _server_cmd: &str,
     root: &Path,
     qname: &str,
     timeout: Duration,
 ) -> Result<Vec<CallerInfo>, String> {
-    let mut client = LspClient::spawn(server_cmd)?;
-    let root_uri = path_to_file_uri(root)?;
-    let _ = client.initialize(&root_uri)?;
-
-    let started = Instant::now();
-    let pos = resolve_position(&mut client, qname, timeout)?;
-    let prepare_params = json!({
-        "textDocument": { "uri": pos.uri },
-        "position": { "line": pos.line, "character": pos.character },
-    });
-    let prepare = request_with_retry(
-        &mut client,
-        "textDocument/prepareCallHierarchy",
-        prepare_params,
-        timeout,
-        started,
-    )?;
-    let items = match prepare.as_array() {
-        Some(a) if !a.is_empty() => a.clone(),
-        _ => {
-            let _ = client.shutdown();
-            return Ok(Vec::new());
-        }
-    };
-
-    let mut callers: Vec<CallerInfo> = Vec::new();
-    for item in &items {
-        let resp = request_with_retry(
-            &mut client,
-            "callHierarchy/incomingCalls",
-            json!({ "item": item }),
-            timeout,
-            started,
-        )?;
-        callers.extend(parse_incoming_calls(&resp));
-    }
-    let _ = client.shutdown();
-    Ok(callers)
+    find_callers_for_lang(Lang::Rust, root, qname, timeout)
 }
 
 /// `qname` を workspace/symbol で解決する（空 or content modified ならリトライ）。
@@ -127,7 +84,9 @@ pub(super) fn resolve_position(
 ) -> Result<ResolvedPos, String> {
     let started = Instant::now();
     loop {
-        let resp = match client.request::<Value>("workspace/symbol", json!({ "query": qname })) {
+        let resp = match client
+            .request::<Value>("workspace/symbol", serde_json::json!({ "query": qname }))
+        {
             Ok(v) => v,
             Err(e) if is_content_modified(&e) => Value::Array(Vec::new()),
             Err(e) => return Err(e),

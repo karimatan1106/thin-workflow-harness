@@ -1,20 +1,30 @@
 //! `harness refs <qname>` / `harness callers <qname>` ハンドラ。
 //!
-//! rust-analyzer を spawn して位置解決 → references / callHierarchy を 1 往復させ、
-//! text/json で stdout に出力する。rust-analyzer が PATH に無ければエラー。
+//! LSP server を spawn して位置解決 → references / callHierarchy を 1 往復させ、
+//! text/json で stdout に出力する。`--lang auto|rust|ts` で言語を選択。
+//! auto は `detect_lang_from_qname(qname).or(root_lang(root))` で推定し、
+//! 決まらなければエラー（"--lang を明示してください"）。
 
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::ckg::lsp::{find_callers, find_refs, CallerInfo, RefLocation};
-use crate::handlers_find_symbol::resolve_server_cmd;
+use crate::ckg::lsp::{
+    find_callers_for_lang, find_refs_for_lang, CallerInfo, RefLocation,
+};
+use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
 
 /// `harness refs` CLI ハンドラ。
-pub fn cmd_refs(qname: &str, root: Option<&str>, format: &str) -> Result<(), String> {
-    let server_cmd = resolve_server_cmd()?;
+pub fn cmd_refs(
+    qname: &str,
+    root: Option<&str>,
+    format: &str,
+    lang_arg: &str,
+) -> Result<(), String> {
     let root_path = resolve_root(root)?;
+    let lang = resolve_lang(lang_arg, qname, &root_path)?;
+    ensure_server_available(lang)?;
     let timeout = Duration::from_secs(30);
-    let refs = find_refs(&server_cmd, &root_path, qname, timeout)?;
+    let refs = find_refs_for_lang(lang, &root_path, qname, timeout)?;
     match format {
         "json" => print_refs_json(qname, &refs)?,
         "text" => print_refs_text(qname, &refs),
@@ -24,11 +34,17 @@ pub fn cmd_refs(qname: &str, root: Option<&str>, format: &str) -> Result<(), Str
 }
 
 /// `harness callers` CLI ハンドラ。
-pub fn cmd_callers(qname: &str, root: Option<&str>, format: &str) -> Result<(), String> {
-    let server_cmd = resolve_server_cmd()?;
+pub fn cmd_callers(
+    qname: &str,
+    root: Option<&str>,
+    format: &str,
+    lang_arg: &str,
+) -> Result<(), String> {
     let root_path = resolve_root(root)?;
+    let lang = resolve_lang(lang_arg, qname, &root_path)?;
+    ensure_server_available(lang)?;
     let timeout = Duration::from_secs(30);
-    let callers = find_callers(&server_cmd, &root_path, qname, timeout)?;
+    let callers = find_callers_for_lang(lang, &root_path, qname, timeout)?;
     match format {
         "json" => print_callers_json(qname, &callers)?,
         "text" => print_callers_text(qname, &callers),
