@@ -1,31 +1,34 @@
 //! 多言語 LSP の言語識別ヘルパ。
 //!
-//! - Lang: 対応言語 enum（現状 Rust / Ts）
-//! - detect_lang: 拡張子（.rs / .ts / .tsx）から判定
-//! - detect_lang_from_qname: 「::」を含めば Rust、「.」を含めば Ts（曖昧 / 不明は None）
-//! - root_lang: workspace ルートの Cargo.toml / package.json から判定
+//! - Lang: 対応言語 enum（現状 Rust / Ts / Py）
+//! - detect_lang: 拡張子（.rs / .ts / .tsx / .py）から判定
+//! - detect_lang_from_qname: 「::」のみ含めば Rust。「.」のみは TS/Py 曖昧で None。
+//! - root_lang: workspace ルートの Cargo.toml / package.json / pyproject.toml 等から判定
 //! - lsp_server_cmd: 各 Lang に対応する subprocess コマンドと args
 //!
 //! 各関数は副作用無し（root_lang のみファイル存在を見る）。
 
 use std::path::Path;
 
-/// 対応言語。現状は Rust と TypeScript のみ。Python / Go は別バッチ送り。
+/// 対応言語。現状は Rust / TypeScript / Python。Go は別バッチ送り。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lang {
     Rust,
     Ts,
+    Py,
 }
 
 /// 拡張子から Lang を推定する。
-/// - .rs               → Rust
-/// - .ts / .tsx        → Ts
-/// - 上記以外 / 拡張子無し → None
+/// - .rs               -> Rust
+/// - .ts / .tsx        -> Ts
+/// - .py               -> Py
+/// - 上記以外 / 拡張子無し -> None
 pub fn detect_lang(file: &Path) -> Option<Lang> {
     let ext = file.extension().and_then(|e| e.to_str())?.to_ascii_lowercase();
     match ext.as_str() {
         "rs" => Some(Lang::Rust),
         "ts" | "tsx" => Some(Lang::Ts),
+        "py" => Some(Lang::Py),
         _ => None,
     }
 }
@@ -39,31 +42,42 @@ pub fn lsp_server_cmd(lang: Lang) -> (String, Vec<String>) {
             "typescript-language-server".to_string(),
             vec!["--stdio".to_string()],
         ),
+        Lang::Py => (
+            "pyright-langserver".to_string(),
+            vec!["--stdio".to_string()],
+        ),
     }
 }
 
 /// qname の表記から Lang を推定する。
-/// - 「::」を含む → Rust（User::new、crate::foo::bar 等）
-/// - 「.」を含む  → Ts（User.create、mod.foo 等）
-/// - 両方該当 / 両方非該当 → None（呼び側で root_lang 等にフォールバック）
+/// - 「::」のみ含む -> Rust（User::new、crate::foo::bar 等）
+/// - 「.」のみ含む -> None（TS の `User.create` と Py の `module.Class.method` が
+///   衝突するので曖昧 -> 呼び側で root_lang() にフォールバック）
+/// - 両方該当 / 両方非該当 -> None
 pub fn detect_lang_from_qname(qname: &str) -> Option<Lang> {
     let has_rust = qname.contains("::");
-    let has_ts = qname.contains('.');
-    match (has_rust, has_ts) {
+    let has_dot = qname.contains('.');
+    match (has_rust, has_dot) {
         (true, false) => Some(Lang::Rust),
-        (false, true) => Some(Lang::Ts),
         _ => None,
     }
 }
 
 /// workspace ルートのマーカーファイルから Lang を推定する。
-/// 両方ある場合は Rust を優先（Crypto プロジェクトのような Rust + node 混在を想定）。
+/// 優先順は Rust > Ts > Py（Crypto プロジェクト等の Rust + node + python 混在で
+/// 既存挙動を維持しつつ Python を追加）。
 pub fn root_lang(root: &Path) -> Option<Lang> {
     if root.join("Cargo.toml").is_file() {
         return Some(Lang::Rust);
     }
     if root.join("package.json").is_file() {
         return Some(Lang::Ts);
+    }
+    if root.join("pyproject.toml").is_file()
+        || root.join("setup.py").is_file()
+        || root.join("requirements.txt").is_file()
+    {
+        return Some(Lang::Py);
     }
     None
 }
@@ -78,7 +92,8 @@ mod tests {
         assert_eq!(detect_lang(&PathBuf::from("a.rs")), Some(Lang::Rust));
         assert_eq!(detect_lang(&PathBuf::from("a.ts")), Some(Lang::Ts));
         assert_eq!(detect_lang(&PathBuf::from("a.tsx")), Some(Lang::Ts));
-        assert_eq!(detect_lang(&PathBuf::from("a.py")), None);
+        assert_eq!(detect_lang(&PathBuf::from("a.py")), Some(Lang::Py));
+        assert_eq!(detect_lang(&PathBuf::from("a.go")), None);
         assert_eq!(detect_lang(&PathBuf::from("noext")), None);
     }
 
@@ -86,10 +101,12 @@ mod tests {
     fn detect_lang_from_qname_rules() {
         assert_eq!(detect_lang_from_qname("User::new"), Some(Lang::Rust));
         assert_eq!(detect_lang_from_qname("crate::foo::bar"), Some(Lang::Rust));
-        assert_eq!(detect_lang_from_qname("User.create"), Some(Lang::Ts));
-        // 両方該当: 曖昧 → None
+        // 「.」のみは TS/Py で曖昧 -> None（root_lang フォールバック前提）
+        assert_eq!(detect_lang_from_qname("User.create"), None);
+        assert_eq!(detect_lang_from_qname("module.Class.method"), None);
+        // 両方該当: 曖昧 -> None
         assert_eq!(detect_lang_from_qname("a::b.c"), None);
-        // 両方非該当: 単独 ident → None
+        // 両方非該当: 単独 ident -> None
         assert_eq!(detect_lang_from_qname("User"), None);
     }
 
@@ -102,5 +119,42 @@ mod tests {
         let (cmd, args) = lsp_server_cmd(Lang::Ts);
         assert_eq!(cmd, "typescript-language-server");
         assert_eq!(args, vec!["--stdio".to_string()]);
+        let (cmd, args) = lsp_server_cmd(Lang::Py);
+        assert_eq!(cmd, "pyright-langserver");
+        assert_eq!(args, vec!["--stdio".to_string()]);
+    }
+
+    #[test]
+    fn root_lang_python_pyproject() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("pyproject.toml"), "[project]
+").unwrap();
+        assert_eq!(root_lang(tmp.path()), Some(Lang::Py));
+    }
+
+    #[test]
+    fn root_lang_rust_preferred_over_python() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("pyproject.toml"), "[project]
+").unwrap();
+        std::fs::write(tmp.path().join("Cargo.toml"), "[package]
+").unwrap();
+        assert_eq!(root_lang(tmp.path()), Some(Lang::Rust));
+    }
+
+    #[test]
+    fn root_lang_python_via_setup_py() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("setup.py"), "from setuptools import setup
+").unwrap();
+        assert_eq!(root_lang(tmp.path()), Some(Lang::Py));
+    }
+
+    #[test]
+    fn root_lang_python_via_requirements_txt() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("requirements.txt"), "pytest
+").unwrap();
+        assert_eq!(root_lang(tmp.path()), Some(Lang::Py));
     }
 }

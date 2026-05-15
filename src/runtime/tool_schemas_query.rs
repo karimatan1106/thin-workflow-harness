@@ -63,9 +63,9 @@ fn td(name: &str, desc: &str, schema: Value) -> ToolDef {
 fn lang_prop() -> Value {
     json!({
         "type": "string",
-        "enum": ["auto", "rust", "ts"],
+        "enum": ["auto", "rust", "ts", "py"],
         "default": "auto",
-        "description": "対象言語。auto は qname の `::` (Rust) / `.` (TS) と project root の Cargo.toml / package.json から推定。"
+        "description": "対象言語。auto は qname の `::` (Rust) と project root の Cargo.toml / package.json / pyproject.toml / setup.py / requirements.txt から推定。`.` 含み qname は TS/Py 曖昧なため root で決まる。"
     })
 }
 
@@ -177,7 +177,7 @@ mod tests {
                 assert_eq!(lang.get("default").and_then(|v| v.as_str()), Some("auto"));
                 let enum_arr = lang.get("enum").and_then(|v| v.as_array()).unwrap();
                 let vals: Vec<&str> = enum_arr.iter().filter_map(|v| v.as_str()).collect();
-                assert!(vals.contains(&"auto") && vals.contains(&"rust") && vals.contains(&"ts"),
+                assert!(vals.contains(&"auto") && vals.contains(&"rust") && vals.contains(&"ts") && vals.contains(&"py"),
                     "lang enum 不足: {:?}", vals);
             }
         }

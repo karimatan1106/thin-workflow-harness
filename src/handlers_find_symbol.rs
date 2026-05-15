@@ -1,7 +1,7 @@
-//! `harness find-symbol <query> [--lang auto|rust|ts]` ハンドラ。
+//! `harness find-symbol <query> [--lang auto|rust|ts|py]` ハンドラ。
 //!
 //! - `--lang auto` 既定: `detect_lang_from_qname(query).or(root_lang(root))`
-//! - `--lang rust|ts` 明示: その Lang で固定
+//! - `--lang rust|ts|py` 明示: その Lang で固定（`python` も `py` の alias）
 //! - 推定不能なら「--lang を明示してください」エラー
 //!
 //! LSP server が PATH に無い時は「インストールしてください」エラー。
@@ -40,12 +40,13 @@ pub fn cmd_find_symbol(
 
 /// `--lang` 引数を `Lang` に解決する。
 /// - "auto": qname → root の順で推定。決まらなければエラー。
-/// - "rust" / "ts": 明示固定。
+/// - "rust" / "ts" / "py": 明示固定（py は python alias を受付）。
 /// - その他: エラー。
 pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, String> {
     match lang_arg.to_ascii_lowercase().as_str() {
         "rust" => Ok(Lang::Rust),
         "ts" | "typescript" => Ok(Lang::Ts),
+        "py" | "python" => Ok(Lang::Py),
         "auto" => {
             if let Some(l) = crate::ckg::lsp::detect_lang_from_qname(qname) {
                 return Ok(l);
@@ -54,11 +55,11 @@ pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, St
                 return Ok(l);
             }
             Err(
-                "言語推定に失敗しました。--lang <rust|ts> を明示してください"
+                "言語推定に失敗しました。--lang <rust|ts|py> を明示してください"
                     .to_string(),
             )
         }
-        other => Err(format!("unknown --lang: {other} (auto|rust|ts)")),
+        other => Err(format!("unknown --lang: {other} (auto|rust|ts|py)")),
     }
 }
 
@@ -71,6 +72,7 @@ pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
     let hint = match lang {
         Lang::Rust => "`rustup component add rust-analyzer`",
         Lang::Ts => "`npm i -g typescript-language-server typescript`",
+        Lang::Py => "`pip install pyright` または `npm i -g pyright`",
     };
     Err(format!(
         "{cmd} が PATH に見つかりません。{hint} でインストールしてください"

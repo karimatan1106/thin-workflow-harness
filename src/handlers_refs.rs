@@ -2,7 +2,7 @@
 //!
 //! LSP server を spawn して位置解決 → references / callHierarchy を 1 往復させ、
 //! text/json で stdout に出力する。`--lang auto|rust|ts` で言語を選択。
-//! auto は `detect_lang_from_qname(qname).or(root_lang(root))` で推定し、
+//! auto は `detect_lang_from_qname(qname).or(root_lang(root))` で推定し（`.` は TS/Py 曖昧、root_lang で解決）、
 //! 決まらなければエラー（"--lang を明示してください"）。
 
 use std::path::PathBuf;

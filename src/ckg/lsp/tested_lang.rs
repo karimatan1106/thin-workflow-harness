@@ -12,6 +12,7 @@ use super::closure::{ClosureNode, Direction, MAX_DEPTH};
 use super::closure_lang::find_closure_for_lang;
 use super::lang::Lang;
 use super::tested::TestedNode;
+use super::tested_py::is_test_node_py;
 use super::tested_ts::{is_test_node_ts, TsTestCache};
 use super::uri::percent_decode;
 use crate::ckg::test_attrs::list_test_function_lines;
@@ -56,6 +57,8 @@ fn is_test_node_for_lang(
     match lang {
         Lang::Rust => is_test_node_rust(&node.name, &node.file, node.line, rust_cache),
         Lang::Ts => is_test_node_ts(&node.name, &node.file, node.line, ts_cache),
+        // Python は heuristic のみ（path + name）。本格的な pytest fixture 解析は次バッチ送り。
+        Lang::Py => is_test_node_py(&node.name, &node.file),
     }
 }
 

@@ -24,6 +24,7 @@ pub mod refs_lang;
 mod refs_parse;
 pub mod tested;
 pub mod tested_lang;
+pub mod tested_py;
 pub mod tested_ts;
 pub mod uri;
 
