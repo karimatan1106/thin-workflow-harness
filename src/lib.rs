@@ -6,6 +6,7 @@
 pub mod ckg;
 pub mod cli;
 pub mod cli_dispatch;
+pub mod cli_index;
 pub mod cli_query;
 pub mod detect;
 pub mod event;

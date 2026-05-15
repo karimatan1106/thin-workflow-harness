@@ -4,7 +4,7 @@
 
 use crate::cli::Command;
 use crate::{
-    cli_query, handlers, handlers2, handlers3, handlers_advance, handlers_closure,
+    cli_index, cli_query, handlers, handlers2, handlers3, handlers_advance, handlers_closure,
     handlers_find_symbol, handlers_impacted, handlers_init, handlers_outline, handlers_refs,
     handlers_stats, handlers_tested, runtime,
 };
@@ -67,6 +67,7 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::TestedBy { qname, depth, root, format, lang } => {
             handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format, &lang)
         }
+        Command::Index { cmd } => cli_index::dispatch_index(cmd),
         Command::Query { cmd } => cli_query::dispatch_query(cmd),
     }
 }

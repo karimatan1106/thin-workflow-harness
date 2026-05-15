@@ -7,6 +7,7 @@
 //!
 //! 多言語 / SCIP / SQLite ストアは後続バッチ。
 
+pub mod index;
 pub mod lsp;
 pub mod outline;
 pub mod test_attrs;
