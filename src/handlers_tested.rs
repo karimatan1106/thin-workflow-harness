@@ -1,8 +1,9 @@
 //! `harness tested-by <qname>` ハンドラ。
 //!
-//! `--lang auto|rust|ts` を受け、対応 LSP server を spawn して
+//! `--lang auto|rust|ts|py` を受け、対応 LSP server を spawn して
 //! find_tested_by_for_lang を回し、text/json で stdout 出力。
 //! find_closure_for_lang(direction=in) の結果から test 関数のみフィルタする。
+//! Python は `pytest.mark.*` decorator / `class Test*` メソッドも tree-sitter で検出。
 
 use std::path::PathBuf;
 

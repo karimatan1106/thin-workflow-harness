@@ -4,6 +4,7 @@
 //! - Rust: attr ベース (`test_attrs::list_test_function_lines`) +
 //!   `cfg(test) mod` 親階層判定 (`test_mod_scan`) + heuristic fallback
 //! - TS: `tested_ts::is_test_node_ts` (tree-sitter + heuristic fallback)
+//! - Py: `tested_py::is_test_node_py` (tree-sitter + heuristic fallback)
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,7 +13,7 @@ use super::closure::{ClosureNode, Direction, MAX_DEPTH};
 use super::closure_lang::find_closure_for_lang;
 use super::lang::Lang;
 use super::tested::TestedNode;
-use super::tested_py::is_test_node_py;
+use super::tested_py::{is_test_node_py, PyTestCache};
 use super::tested_ts::{is_test_node_ts, TsTestCache};
 use super::uri::percent_decode;
 use crate::ckg::test_attrs::list_test_function_lines;
@@ -27,14 +28,21 @@ pub fn find_tested_by_for_lang(
 ) -> Result<Vec<TestedNode>, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let nodes = find_closure_for_lang(qname, depth, Direction::In, lang, root)?;
-    let mut rust_cache: RustTestCache = HashMap::new();
-    let mut ts_cache: TsTestCache = HashMap::new();
+    let mut caches = TestCaches::default();
     let filtered: Vec<TestedNode> = nodes
         .into_iter()
-        .filter(|n| is_test_node_for_lang(n, lang, &mut rust_cache, &mut ts_cache))
+        .filter(|n| is_test_node_for_lang(n, lang, &mut caches))
         .map(TestedNode::from)
         .collect();
     Ok(filtered)
+}
+
+/// Lang ごとの test fn キャッシュをまとめた struct。
+#[derive(Default)]
+struct TestCaches {
+    rust: RustTestCache,
+    ts: TsTestCache,
+    py: PyTestCache,
 }
 
 /// 1 file 分の Rust attr 情報キャッシュ。
@@ -48,17 +56,11 @@ struct RustTestInfo {
 type RustTestCache = HashMap<PathBuf, Option<RustTestInfo>>;
 
 /// Lang ごとの test ノード判定。
-fn is_test_node_for_lang(
-    node: &ClosureNode,
-    lang: Lang,
-    rust_cache: &mut RustTestCache,
-    ts_cache: &mut TsTestCache,
-) -> bool {
+fn is_test_node_for_lang(node: &ClosureNode, lang: Lang, caches: &mut TestCaches) -> bool {
     match lang {
-        Lang::Rust => is_test_node_rust(&node.name, &node.file, node.line, rust_cache),
-        Lang::Ts => is_test_node_ts(&node.name, &node.file, node.line, ts_cache),
-        // Python は heuristic のみ（path + name）。本格的な pytest fixture 解析は次バッチ送り。
-        Lang::Py => is_test_node_py(&node.name, &node.file),
+        Lang::Rust => is_test_node_rust(&node.name, &node.file, node.line, &mut caches.rust),
+        Lang::Ts => is_test_node_ts(&node.name, &node.file, node.line, &mut caches.ts),
+        Lang::Py => is_test_node_py(&node.name, &node.file, node.line, &mut caches.py),
     }
 }
 
@@ -144,24 +146,22 @@ mod tests {
 
     #[test]
     fn ts_test_file_path_heuristic() {
-        let mut rc = HashMap::new();
-        let mut tc = HashMap::new();
-        assert!(is_test_node_for_lang(&mk("foo", "src/user.test.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(is_test_node_for_lang(&mk("foo", "src/user.spec.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(is_test_node_for_lang(&mk("foo", "src/__tests__/user.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(is_test_node_for_lang(&mk("foo", "tests/user.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(!is_test_node_for_lang(&mk("foo", "src/user.ts"), Lang::Ts, &mut rc, &mut tc));
+        let mut caches = TestCaches::default();
+        assert!(is_test_node_for_lang(&mk("foo", "src/user.test.ts"), Lang::Ts, &mut caches));
+        assert!(is_test_node_for_lang(&mk("foo", "src/user.spec.ts"), Lang::Ts, &mut caches));
+        assert!(is_test_node_for_lang(&mk("foo", "src/__tests__/user.ts"), Lang::Ts, &mut caches));
+        assert!(is_test_node_for_lang(&mk("foo", "tests/user.ts"), Lang::Ts, &mut caches));
+        assert!(!is_test_node_for_lang(&mk("foo", "src/user.ts"), Lang::Ts, &mut caches));
     }
 
     #[test]
     fn ts_test_name_heuristic() {
-        let mut rc = HashMap::new();
-        let mut tc = HashMap::new();
-        assert!(is_test_node_for_lang(&mk("describe", "src/user.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(is_test_node_for_lang(&mk("it", "src/user.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(is_test_node_for_lang(&mk("test_foo", "src/user.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(is_test_node_for_lang(&mk("my_test", "src/user.ts"), Lang::Ts, &mut rc, &mut tc));
-        assert!(!is_test_node_for_lang(&mk("createUser", "src/user.ts"), Lang::Ts, &mut rc, &mut tc));
+        let mut caches = TestCaches::default();
+        assert!(is_test_node_for_lang(&mk("describe", "src/user.ts"), Lang::Ts, &mut caches));
+        assert!(is_test_node_for_lang(&mk("it", "src/user.ts"), Lang::Ts, &mut caches));
+        assert!(is_test_node_for_lang(&mk("test_foo", "src/user.ts"), Lang::Ts, &mut caches));
+        assert!(is_test_node_for_lang(&mk("my_test", "src/user.ts"), Lang::Ts, &mut caches));
+        assert!(!is_test_node_for_lang(&mk("createUser", "src/user.ts"), Lang::Ts, &mut caches));
     }
 
     #[test]
@@ -172,17 +172,16 @@ mod tests {
         fs::write(&path, src).expect("write");
         let file_str = path.to_string_lossy().to_string();
 
-        let mut rc = HashMap::new();
-        let mut tc = HashMap::new();
+        let mut caches = TestCaches::default();
         let node = mk_at("createUser", &file_str, 2);
         assert!(
-            is_test_node_for_lang(&node, Lang::Ts, &mut rc, &mut tc),
+            is_test_node_for_lang(&node, Lang::Ts, &mut caches),
             "tree-sitter describe block 内 line 2 が hit すべき"
         );
 
         let node_outside = mk_at("createUser", &file_str, 100);
         assert!(
-            !is_test_node_for_lang(&node_outside, Lang::Ts, &mut rc, &mut tc),
+            !is_test_node_for_lang(&node_outside, Lang::Ts, &mut caches),
             "line 100 は範囲外で hit してはならない"
         );
     }

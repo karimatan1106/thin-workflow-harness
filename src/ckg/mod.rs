@@ -10,6 +10,7 @@
 pub mod lsp;
 pub mod outline;
 pub mod test_attrs;
+pub mod test_attrs_py;
 pub mod test_attrs_ts;
 pub mod test_mod_scan;
 

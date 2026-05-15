@@ -1,6 +1,6 @@
 //! `harness impacted-by <qname>` ハンドラ。
 //!
-//! `--lang auto|rust|ts` を受け、対応 LSP server を spawn して
+//! `--lang auto|rust|ts|py` を受け、対応 LSP server を spawn して
 //! find_impacted_by_for_lang を回し、text/json で stdout 出力。
 //! 内部は find_closure_for_lang(direction=in) の薄いラッパ。
 
