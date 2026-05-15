@@ -14,8 +14,8 @@
 //! - `query_tested_by`   ── tested-by <qname> --depth N
 //!
 //! description には「いつ使うか」を 1 行で書く ── system_prompt を膨らませる代わりに
-//! schema 経由で LLM に伝える。outline 以外の 6 tool は `lang` プロパティで Rust/TS を
-//! 切り替えられる（auto は qname の `::`/`.` と project root から推定）。
+//! schema 経由で LLM に伝える。outline 以外の 6 tool は `lang` プロパティで
+//! Rust/TS/Py/Go を切り替えられる（auto は qname の `::`/`.` と project root から推定）。
 
 use serde_json::{json, Value};
 
@@ -29,22 +29,22 @@ pub fn query_tool_defs() -> Vec<ToolDef> {
            "指定ファイルの outline（top-level シンボル列挙）を取得する。改修対象ファイルの全体像を最低限の token で掴むときに使う。",
            schema_outline()),
         td("query_symbol",
-           "workspace 内のシンボル qname 検索（旧 find-symbol）。「あの関数どこ？」を解決する。`lang=ts` で TS workspace に問い合わせ可、既定 auto。",
+           "workspace 内のシンボル qname 検索（旧 find-symbol）。「あの関数どこ？」を解決する。`lang=ts|py|go` で他言語 workspace に問い合わせ可、既定 auto。",
            schema_symbol()),
         td("query_refs",
-           "指定 symbol への参照箇所一覧。型/関数を rename/署名変更する前の影響範囲評価に使う。`lang=ts` で TS workspace に問い合わせ可、既定 auto。",
+           "指定 symbol への参照箇所一覧。型/関数を rename/署名変更する前の影響範囲評価に使う。`lang=ts|py|go` で他言語 workspace に問い合わせ可、既定 auto。",
            schema_refs()),
         td("query_callers",
-           "指定 function の呼び出し元一覧。関数の挙動を変える前に caller の前提を確認する。`lang=ts` で TS workspace に問い合わせ可、既定 auto。",
+           "指定 function の呼び出し元一覧。関数の挙動を変える前に caller の前提を確認する。`lang=ts|py|go` で他言語 workspace に問い合わせ可、既定 auto。",
            schema_refs()),
         td("query_closure",
-           "refs/callers の transitive 閉包（depth/direction 指定）。広範な影響を 1 ホップでなく多段で追う。`lang=ts` で TS workspace に問い合わせ可、既定 auto。",
+           "refs/callers の transitive 閉包（depth/direction 指定）。広範な影響を 1 ホップでなく多段で追う。`lang=ts|py|go` で他言語 workspace に問い合わせ可、既定 auto。",
            schema_closure()),
         td("query_impacted_by",
-           "closure direction=in の薄いラッパ ── 「この symbol を変えると壊れる範囲は？」を解決する。`lang=ts` で TS workspace に問い合わせ可、既定 auto。",
+           "closure direction=in の薄いラッパ ── 「この symbol を変えると壊れる範囲は？」を解決する。`lang=ts|py|go` で他言語 workspace に問い合わせ可、既定 auto。",
            schema_depth()),
         td("query_tested_by",
-           "指定 symbol をテストしている test 関数一覧。改修前に「どの test が落ちうるか」を引く。`lang=ts` で TS workspace に問い合わせ可、既定 auto。",
+           "指定 symbol をテストしている test 関数一覧。改修前に「どの test が落ちうるか」を引く。`lang=ts|py|go` で他言語 workspace に問い合わせ可、既定 auto。",
            schema_depth()),
     ]
 }
@@ -63,9 +63,9 @@ fn td(name: &str, desc: &str, schema: Value) -> ToolDef {
 fn lang_prop() -> Value {
     json!({
         "type": "string",
-        "enum": ["auto", "rust", "ts", "py"],
+        "enum": ["auto", "rust", "ts", "py", "go"],
         "default": "auto",
-        "description": "対象言語。auto は qname の `::` (Rust) と project root の Cargo.toml / package.json / pyproject.toml / setup.py / requirements.txt から推定。`.` 含み qname は TS/Py 曖昧なため root で決まる。"
+        "description": "対象言語。auto は qname の `::` (Rust) と project root の Cargo.toml / package.json / pyproject.toml / setup.py / requirements.txt / go.mod から推定。`.` 含み qname は TS/Py/Go 曖昧なため root で決まる。"
     })
 }
 
@@ -177,8 +177,15 @@ mod tests {
                 assert_eq!(lang.get("default").and_then(|v| v.as_str()), Some("auto"));
                 let enum_arr = lang.get("enum").and_then(|v| v.as_array()).unwrap();
                 let vals: Vec<&str> = enum_arr.iter().filter_map(|v| v.as_str()).collect();
-                assert!(vals.contains(&"auto") && vals.contains(&"rust") && vals.contains(&"ts") && vals.contains(&"py"),
-                    "lang enum 不足: {:?}", vals);
+                assert!(
+                    vals.contains(&"auto")
+                        && vals.contains(&"rust")
+                        && vals.contains(&"ts")
+                        && vals.contains(&"py")
+                        && vals.contains(&"go"),
+                    "lang enum 不足: {:?}",
+                    vals
+                );
             }
         }
     }

@@ -5,6 +5,7 @@
 //!   `cfg(test) mod` 親階層判定 (`test_mod_scan`) + heuristic fallback
 //! - TS: `tested_ts::is_test_node_ts` (tree-sitter + heuristic fallback)
 //! - Py: `tested_py::is_test_node_py` (tree-sitter + heuristic fallback)
+//! - Go: `tested_go::is_test_node_go` (heuristic のみ MVP、tree-sitter-go は次バッチ)
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,6 +14,7 @@ use super::closure::{ClosureNode, Direction, MAX_DEPTH};
 use super::closure_lang::find_closure_for_lang;
 use super::lang::Lang;
 use super::tested::TestedNode;
+use super::tested_go::is_test_node_go;
 use super::tested_py::{is_test_node_py, PyTestCache};
 use super::tested_ts::{is_test_node_ts, TsTestCache};
 use super::uri::percent_decode;
@@ -61,6 +63,7 @@ fn is_test_node_for_lang(node: &ClosureNode, lang: Lang, caches: &mut TestCaches
         Lang::Rust => is_test_node_rust(&node.name, &node.file, node.line, &mut caches.rust),
         Lang::Ts => is_test_node_ts(&node.name, &node.file, node.line, &mut caches.ts),
         Lang::Py => is_test_node_py(&node.name, &node.file, node.line, &mut caches.py),
+        Lang::Go => is_test_node_go(&node.name, &node.file),
     }
 }
 
@@ -184,5 +187,13 @@ mod tests {
             !is_test_node_for_lang(&node_outside, Lang::Ts, &mut caches),
             "line 100 は範囲外で hit してはならない"
         );
+    }
+
+    #[test]
+    fn go_test_file_heuristic_via_lang_dispatch() {
+        let mut caches = TestCaches::default();
+        assert!(is_test_node_for_lang(&mk("CreateUser", "user_test.go"), Lang::Go, &mut caches));
+        assert!(is_test_node_for_lang(&mk("TestCreateUser", "user.go"), Lang::Go, &mut caches));
+        assert!(!is_test_node_for_lang(&mk("CreateUser", "user.go"), Lang::Go, &mut caches));
     }
 }

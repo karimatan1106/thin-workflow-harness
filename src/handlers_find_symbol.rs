@@ -1,7 +1,7 @@
-//! `harness find-symbol <query> [--lang auto|rust|ts|py]` ハンドラ。
+//! `harness find-symbol <query> [--lang auto|rust|ts|py|go]` ハンドラ。
 //!
 //! - `--lang auto` 既定: `detect_lang_from_qname(query).or(root_lang(root))`
-//! - `--lang rust|ts|py` 明示: その Lang で固定（`python` も `py` の alias）
+//! - `--lang rust|ts|py|go` 明示: その Lang で固定（`python` は `py`、`typescript` は `ts` の alias）
 //! - 推定不能なら「--lang を明示してください」エラー
 //!
 //! LSP server が PATH に無い時は「インストールしてください」エラー。
@@ -40,13 +40,14 @@ pub fn cmd_find_symbol(
 
 /// `--lang` 引数を `Lang` に解決する。
 /// - "auto": qname → root の順で推定。決まらなければエラー。
-/// - "rust" / "ts" / "py": 明示固定（py は python alias を受付）。
+/// - "rust" / "ts" / "py" / "go": 明示固定（py は python、ts は typescript alias 受付）。
 /// - その他: エラー。
 pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, String> {
     match lang_arg.to_ascii_lowercase().as_str() {
         "rust" => Ok(Lang::Rust),
         "ts" | "typescript" => Ok(Lang::Ts),
         "py" | "python" => Ok(Lang::Py),
+        "go" => Ok(Lang::Go),
         "auto" => {
             if let Some(l) = crate::ckg::lsp::detect_lang_from_qname(qname) {
                 return Ok(l);
@@ -55,11 +56,11 @@ pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, St
                 return Ok(l);
             }
             Err(
-                "言語推定に失敗しました。--lang <rust|ts|py> を明示してください"
+                "言語推定に失敗しました。--lang <rust|ts|py|go> を明示してください"
                     .to_string(),
             )
         }
-        other => Err(format!("unknown --lang: {other} (auto|rust|ts|py)")),
+        other => Err(format!("unknown --lang: {other} (auto|rust|ts|py|go)")),
     }
 }
 
@@ -73,6 +74,7 @@ pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
         Lang::Rust => "`rustup component add rust-analyzer`",
         Lang::Ts => "`npm i -g typescript-language-server typescript`",
         Lang::Py => "`pip install pyright` または `npm i -g pyright`",
+        Lang::Go => "`go install golang.org/x/tools/gopls@latest`",
     };
     Err(format!(
         "{cmd} が PATH に見つかりません。{hint} でインストールしてください"

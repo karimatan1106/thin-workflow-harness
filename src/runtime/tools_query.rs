@@ -27,7 +27,7 @@ pub struct QuerySpec {
     pub root: Option<String>,
     /// `--format text|json`。Some なら付ける（既定 text）。
     pub format: Option<String>,
-    /// `--lang auto|rust|ts`。Some なら付ける。
+    /// `--lang auto|rust|ts|py|go`。Some なら付ける。
     /// outline は CLI 側が `--lang` を受け付けないので必ず None。
     /// 値検証は harness CLI 側に任せる（無効値は CLI が reject）。
     pub lang: Option<String>,

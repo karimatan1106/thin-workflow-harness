@@ -1,6 +1,6 @@
 //! `harness closure <qname>` ハンドラ。
 //!
-//! `--lang auto|rust|ts|py` を受け、対応 LSP server (rust-analyzer /
+//! `--lang auto|rust|ts|py|go` を受け、対応 LSP server (rust-analyzer /
 //! typescript-language-server / pyright) を spawn して find_closure_for_lang を回す。
 //! text/json で stdout 出力。auto は qname/root から推定。
 
