@@ -18,6 +18,7 @@ pub mod query;
 pub mod refs;
 mod refs_parse;
 pub mod tested;
+pub mod uri;
 
 pub use client::LspClient;
 pub use closure::{find_closure, ClosureNode, Direction};

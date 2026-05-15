@@ -1,10 +1,13 @@
 //! `harness tested-by <qname>` ── 「qname をテストしている test 関数集合」抽出。
 //!
 //! `find_closure(direction=in)` の結果から test 関数のみフィルタする。
-//! 判定順: (1) tree-sitter で `#[test]` 系 attr 直接検出（精度優先、対応 attr は
-//! `test_attrs.rs` 参照）、 (2) parse 不可 / file 不在のみ heuristic fallback。
-//! 同一 file の重複 parse を避けるため `find_tested_by` 内でローカルキャッシュ保持。
-//! `#[cfg(test)] mod` 親判定は次バッチ送り（attr 直接検出のみ）。
+//! 判定順:
+//!   (1) tree-sitter で `#[test]` 系 attr 直接検出（精度優先、対応 attr は
+//!       `test_attrs.rs` 参照）
+//!   (2) `#[cfg(test)] mod` 内側か（`test_mod_scan.rs`）── attr 無し helper も拾う
+//!   (3) parse 不可 / file 不在のみ heuristic fallback
+//! 同一 file の重複 parse を避けるため `find_tested_by` 内でローカルキャッシュ保持
+//! （test 行 + cfg(test) mod range ペア）。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,7 +16,9 @@ use std::time::Duration;
 use serde::Serialize;
 
 use super::closure::{find_closure, ClosureNode, Direction, MAX_DEPTH};
+use super::uri::percent_decode;
 use crate::ckg::test_attrs::list_test_function_lines;
+use crate::ckg::test_mod_scan::{line_in_ranges, list_cfg_test_mod_ranges};
 
 /// tested-by 結果の 1 ノード。
 #[derive(Debug, Clone, Serialize)]
@@ -47,20 +52,34 @@ pub fn is_test_node(name: &str, file: &str) -> bool {
     is_test_name(name)
 }
 
-/// attr ベース判定（line 単位）。parse 可能なら attr 結果のみ、parse 不可 /
-/// file 不在のみ heuristic に fallback。
+/// attr ベース判定（line 単位）。判定順:
+///   (1) attr 直接（`#[test]` 系）── line が test fn の開始行と一致
+///   (2) `#[cfg(test)] mod` 内側 ── attr 無し helper も test 扱い
+///   (3) parse 不可 / file 不在のみ heuristic に fallback
 fn is_test_node_at(name: &str, file: &str, line: usize, cache: &mut TestLineCache) -> bool {
-    match attr_lines(file, cache) {
-        Some(lines) => lines.contains(&line),
+    match attr_entries(file, cache) {
+        Some(entry) => {
+            if entry.test_lines.contains(&line) {
+                return true;
+            }
+            line_in_ranges(line, &entry.cfg_mod_ranges)
+        }
         None => is_test_node(name, file),
     }
 }
 
-/// 同一 file の重複 parse を回避するキャッシュ。`Some(vec)` = parse 成功
-/// (test fn の行番号)、`None` = parse 不可 → heuristic fallback 対象。
-type TestLineCache = HashMap<PathBuf, Option<Vec<usize>>>;
+/// 1 file 分のキャッシュエントリ。test fn 開始行 + cfg(test) mod の line range ペア。
+#[derive(Debug, Default, Clone)]
+struct FileTestInfo {
+    test_lines: Vec<usize>,
+    cfg_mod_ranges: Vec<(usize, usize)>,
+}
 
-fn attr_lines<'a>(file: &str, cache: &'a mut TestLineCache) -> Option<&'a Vec<usize>> {
+/// 同一 file の重複 parse を回避するキャッシュ。`Some(entry)` = parse 成功、
+/// `None` = parse 不可 / file 不在 → heuristic fallback 対象。
+type TestLineCache = HashMap<PathBuf, Option<FileTestInfo>>;
+
+fn attr_entries<'a>(file: &str, cache: &'a mut TestLineCache) -> Option<&'a FileTestInfo> {
     // ClosureNode.file は uri_to_path_string で `file://` prefix だけ剥がれた
     // percent-encoded path（`c:/%E3%83%84...`）が来るので decode してから Path 化。
     let decoded = percent_decode(file);
@@ -69,39 +88,19 @@ fn attr_lines<'a>(file: &str, cache: &'a mut TestLineCache) -> Option<&'a Vec<us
         return None;
     }
     if !cache.contains_key(&path) {
-        let parsed = list_test_function_lines(&path).ok();
+        let parsed = match list_test_function_lines(&path).ok() {
+            Some(lines) => {
+                let ranges = list_cfg_test_mod_ranges(&path).unwrap_or_default();
+                Some(FileTestInfo {
+                    test_lines: lines,
+                    cfg_mod_ranges: ranges,
+                })
+            }
+            None => None,
+        };
         cache.insert(path.clone(), parsed);
     }
     cache.get(&path).and_then(|x| x.as_ref())
-}
-
-/// 最小 percent-decode。`%HH` → 1 byte → UTF-8 lossy 復号。`%` を含まない
-/// path には identity。rust-analyzer の non-ASCII URI を `Path` 化する前段。
-fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(hi), Some(lo)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
-                out.push(hi * 16 + lo);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn hex_val(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
 }
 
 /// `tests/` 配下 or `_test.rs` / `_tests.rs` 末尾。
@@ -170,9 +169,9 @@ mod unit {
     }
 
     #[test]
-    fn attr_lines_returns_none_for_missing_file() {
+    fn attr_entries_returns_none_for_missing_file() {
         let mut cache: TestLineCache = HashMap::new();
-        assert!(attr_lines("/nonexistent/path/xxx.rs", &mut cache).is_none());
+        assert!(attr_entries("/nonexistent/path/xxx.rs", &mut cache).is_none());
     }
 
     #[test]
@@ -182,18 +181,4 @@ mod unit {
         assert!(!is_test_node_at("helper", "/nonexistent/path/xxx.rs", 1, &mut cache));
     }
 
-    #[test]
-    fn percent_decode_handles_utf8_and_passthrough() {
-        // %E3%83%84 = "ツ" (UTF-8 3byte)
-        assert_eq!(percent_decode("c:/%E3%83%84/x.rs"), "c:/ツ/x.rs");
-        // 含まない path は identity
-        assert_eq!(percent_decode("/home/user/x.rs"), "/home/user/x.rs");
-        // 末尾の incomplete escape は素通し
-        assert_eq!(percent_decode("abc%"), "abc%");
-        assert_eq!(percent_decode("abc%E"), "abc%E");
-        // 大文字小文字どちらも OK
-        assert_eq!(percent_decode("%e3%83%84"), "ツ");
-        // 非 hex の %XX は素通し
-        assert_eq!(percent_decode("a%ZZb"), "a%ZZb");
-    }
 }
