@@ -10,12 +10,15 @@ use crate::runtime::worker::WorkerAction;
 pub use crate::runtime::tool_schemas::tool_defs;
 
 /// assistant の tool_use を harness 内で 1 段抽象化した呼び出し ──
-/// 大半は既存の `WorkerAction` に流すが、`read_file` だけは戻り値が文字列なので別扱い。
+/// 大半は既存の `WorkerAction` に流すが、`read_file` と `query_*` は戻り値が文字列なので別扱い。
 pub enum ToolCall {
     /// 既存 apply 経路（artifact / evidence / transition / back / ask / stuck / edit / run / read 以外）。
     Action(WorkerAction),
     /// `read_file` ── cwd 基準で読んで文字列で返す（blast radius チェックなし、読みは無害）。
     ReadFile(String),
+    /// `query_*` 系 ── subprocess `harness query <sub> [args...]` を起動し stdout を返す。
+    /// 副作用なし（CKG 読み取り専用）なので blast radius / cmd_allowlist 制限は不要。
+    Query(crate::runtime::tools_query::QuerySpec),
 }
 
 /// assistant の `tool_use` を `ToolCall` に正規化する。引数不正は `Err`。
@@ -54,6 +57,19 @@ pub fn tool_use_to_call(name: &str, input: &Value) -> Result<ToolCall, String> {
         "edit_file" => WorkerAction::EditFile { path: s("path")?, content: s_or("content", "") },
         "run_command" => WorkerAction::RunCommand { cmd: s("cmd")? },
         "read_file" => return Ok(ToolCall::ReadFile(s("path")?)),
+        // query 系: subcommand 名は tool 名から `query_` prefix を剥がして `_` → `-` 変換。
+        "query_outline" => return Ok(ToolCall::Query(
+            crate::runtime::tools_query::QuerySpec {
+                subcommand: "outline".into(),
+                positional: s("file")?,
+                depth: None, direction: None, root: None,
+                format: input.get("format").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            })),
+        "query_symbol" | "query_refs" | "query_callers"
+        | "query_closure" | "query_impacted_by" | "query_tested_by" => {
+            return Ok(ToolCall::Query(
+                crate::runtime::tools_query::build_query_spec(name, input)?));
+        }
         other => return Err(format!("未対応ツール: {other}")),
     };
     Ok(ToolCall::Action(action))
@@ -100,7 +116,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_defs_includes_all_nine() {
+    fn tool_defs_includes_all_nine_basics() {
         let defs = tool_defs();
         let names: Vec<&str> = defs.iter().map(|t| t.name.as_str()).collect();
         for required in &[
@@ -109,5 +125,49 @@ mod tests {
         ] {
             assert!(names.contains(required), "missing tool: {required}");
         }
+    }
+
+    #[test]
+    fn query_outline_maps_to_query_variant() {
+        let c = tool_use_to_call("query_outline", &json!({"file":"src/lib.rs"})).unwrap();
+        match c {
+            ToolCall::Query(q) => {
+                assert_eq!(q.subcommand, "outline");
+                assert_eq!(q.positional, "src/lib.rs");
+                assert!(q.depth.is_none() && q.direction.is_none() && q.root.is_none());
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn query_closure_carries_depth_direction_root() {
+        let inp = json!({"qname":"foo::bar", "depth": 4, "direction":"both", "root":"/tmp", "format":"json"});
+        let c = tool_use_to_call("query_closure", &inp).unwrap();
+        match c {
+            ToolCall::Query(q) => {
+                assert_eq!(q.subcommand, "closure");
+                assert_eq!(q.positional, "foo::bar");
+                assert_eq!(q.depth, Some(4));
+                assert_eq!(q.direction.as_deref(), Some("both"));
+                assert_eq!(q.root.as_deref(), Some("/tmp"));
+                assert_eq!(q.format.as_deref(), Some("json"));
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn query_impacted_by_subcommand_is_hyphenated() {
+        // tool 名 `query_impacted_by` → subprocess subcommand "impacted-by"。
+        let c = tool_use_to_call("query_impacted_by", &json!({"qname":"X"})).unwrap();
+        if let ToolCall::Query(q) = c {
+            assert_eq!(q.subcommand, "impacted-by");
+        } else { panic!("wrong variant"); }
+    }
+
+    #[test]
+    fn query_missing_required_qname_errors() {
+        assert!(tool_use_to_call("query_tested_by", &json!({})).is_err());
     }
 }

@@ -35,12 +35,34 @@ pub(super) fn branch_apply_one(
 ) -> ApplyResult {
     match call {
         ToolCall::ReadFile(path) => read_file_branch(intc, &path),
+        ToolCall::Query(spec) => {
+            *tool_calls_for_budget += 1;
+            query_branch(&spec, intc)
+        }
         ToolCall::Action(action) => {
             if !matches!(action, WorkerAction::Stuck { .. }) {
                 *tool_calls_for_budget += 1;
             }
             apply_branch_action(run_id, branch_id, intc, action)
         }
+    }
+}
+
+fn query_branch(spec: &crate::runtime::tools_query::QuerySpec, intc: &Interceptor) -> ApplyResult {
+    match crate::runtime::tools_query::run_query(spec, intc.cwd()) {
+        Ok(out) => {
+            let body = if out.success { out.stdout } else {
+                format!("{}
+--- stderr ---
+{}", out.stdout, out.stderr)
+            };
+            let content = if body.len() > 8000 {
+                format!("{}
+…（{} 文字、頭 8000 のみ表示）", &body[..8000], body.len())
+            } else { body };
+            ApplyResult { content, is_error: !out.success, terminal: None }
+        }
+        Err(e) => err(format!("harness query 起動失敗: {e}")),
     }
 }
 

@@ -1,0 +1,34 @@
+# dogfood 7 workflow ── ApiWorker が query_outline を呼んで CKG layer 2 を実証する
+# 最小 toy workflow。Phase 2 で live API を回して cache_create / cache_read / tool round
+# trip / cost を測る予定。**この fixture は実行手順の宣言だけで、本リポジトリ test では
+# 実行されない**（live API キーが要るため）。
+
+[meta]
+name = "dogfood7_self_query"
+description = "ApiWorker が harness query outline を 1 回呼び、CKG primitive を tool として叩けることを実証する。"
+default_budget = { max_api_calls = 4, max_tool_calls = 4, wall_seconds = 60 }
+
+[[nodes]]
+id = "probe_outline"
+type = "research"
+description = """
+1. query_outline を `src/lib.rs` で 1 回呼ぶ。
+2. 結果（top-level シンボルの列挙）を record_artifact で保存する。
+3. request_transition を呼ぶ。
+"""
+serves = []
+cmd_allowlist = []
+network = false
+budget = { max_api_calls = 4, max_tool_calls = 4, wall_seconds = 60 }
+exit_gates = [
+  { type = "artifact_exists", name = "outline_probe" },
+]
+
+[[nodes]]
+id = "done"
+type = "review"
+description = "終了ノード。出口 gate は無く、ここまで来たら成功。"
+serves = []
+cmd_allowlist = []
+network = false
+exit_gates = []

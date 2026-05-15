@@ -1,24 +1,20 @@
-//! 9 ツールの `input_schema` JSON 定数（`tool_defs()` から呼ばれる）。
+//! 9 基本ツール + 7 query ツール = 計 16 ツールの `input_schema` JSON 定数。
+//! query 系 7 個は `tool_schemas_query.rs` に切り出して 200 行制約を守る。
 //!
-//! 分離理由: `tools.rs` 本体は ToolCall 型 + tool_use_to_call 変換に専念し、
-//! schema は宣言的な JSON のかたまりとして 1 ファイルにまとめる。
-//!
-//! ## tools 配列の cache_control 戦略
-//!
-//! 最後のツール定義に `cache_control: ephemeral` を付ける ── Anthropic 仕様で
-//! 「最後の cache_control マーカーまでが cache prefix」なので、system blocks(2)
-//! ＋ tools 配列 全体が cache 対象になる。これで system + tools の合計が
+//! cache_control 戦略: 最後のツール（= 末尾の query tool）に `cache_control: ephemeral`
+//! を付け、tools 配列 全体を cache prefix に含める。これで system + tools の合計が
 //! 1024 input token 閾値（cache 作成の最低条件）を確実に超える。
 
 use serde_json::{json, Value};
 
 use crate::runtime::anthropic::{CacheControl, ToolDef};
+use crate::runtime::tool_schemas_query::query_tool_defs;
 
-/// このワーカーが使える全ツール定義を返す。
+/// このワーカーが使える全ツール定義を返す（基本 9 ＋ query 7 ＝ 16 ツール）。
 /// blast radius / cmd_allowlist の強制は interceptor が行うので、ツール提示は常に同じ。
 ///
-/// 最後のツール（`read_file`）には `cache_control: ephemeral` を付け、tools 配列 全体を
-/// prompt cache の対象に含める（cache 1024 token 閾値到達のため）。
+/// 最後のツール（= 末尾の query tool）には `cache_control: ephemeral` を付け、tools 配列
+/// 全体を prompt cache の対象に含める（cache 1024 token 閾値到達のため）。
 pub fn tool_defs() -> Vec<ToolDef> {
     let mut defs = vec![
         td("record_artifact",
@@ -43,6 +39,8 @@ pub fn tool_defs() -> Vec<ToolDef> {
            "ファイルを読む（読みは無害なので blast radius 制限なし）。content を返す。",
            schema_read_file()),
     ];
+    // query 系 7 tool を末尾に追加（subprocess で `harness query <sub>` を呼ぶ）。
+    defs.extend(query_tool_defs());
     // 最後のツールに cache_control を付ける ── tools 配列全体が cache prefix になる。
     if let Some(last) = defs.last_mut() {
         last.cache_control = Some(CacheControl::ephemeral());
@@ -172,8 +170,26 @@ mod tests {
     fn tools_serialize_with_cache_control_on_last() {
         let defs = tool_defs();
         let j = serde_json::to_string(&defs).unwrap();
-        // 最後のツール（read_file）に cache_control が付いている。
-        assert!(j.contains(r#""name":"read_file""#), "read_file が無い: {j}");
+        // 末尾は query_tested_by（query 系の最後）── そこに cache_control が乗る。
+        assert!(defs.last().map(|d| d.name.as_str()) == Some("query_tested_by"),
+            "末尾 tool が query_tested_by でない: {:?}", defs.last().map(|d| &d.name));
+        assert!(j.contains(r#""name":"query_tested_by""#), "query_tested_by が無い: {j}");
         assert!(j.contains(r#""cache_control":{"type":"ephemeral"}"#), "cache_control 不在: {j}");
+    }
+
+    /// 16 ツール全部が含まれている（9 基本 + 7 query）。
+    #[test]
+    fn tool_defs_contains_all_sixteen() {
+        let defs = tool_defs();
+        assert_eq!(defs.len(), 16, "想定 16、実 {}", defs.len());
+        let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+        for required in &[
+            "record_artifact", "report_evidence", "request_transition", "back", "ask",
+            "stuck", "edit_file", "run_command", "read_file",
+            "query_outline", "query_symbol", "query_refs", "query_callers",
+            "query_closure", "query_impacted_by", "query_tested_by",
+        ] {
+            assert!(names.contains(required), "missing tool: {required}");
+        }
     }
 }

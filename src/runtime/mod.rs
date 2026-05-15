@@ -23,7 +23,9 @@ pub mod interceptor;
 pub mod script;
 pub mod system_prompt;
 pub mod tool_schemas;
+pub mod tool_schemas_query;
 pub mod tools;
+pub mod tools_query;
 pub mod worker;
 
 pub use api_run::{cmd_run_api, cmd_run_api_with};
