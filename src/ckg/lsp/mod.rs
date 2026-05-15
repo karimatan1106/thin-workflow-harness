@@ -38,6 +38,6 @@ pub use lang::{detect_lang, detect_lang_from_qname, lsp_server_cmd, root_lang, L
 pub use query::{find_symbol, SymbolInfo};
 pub use query_lang::find_symbol_for_lang;
 pub use refs::{find_callers, find_refs, CallerInfo, RefLocation};
-pub use refs_lang::{find_callers_for_lang, find_refs_for_lang};
+pub use refs_lang::{find_callers_for_lang, find_outgoing_for_lang, find_refs_for_lang};
 pub use tested::{find_tested_by, TestedNode};
 pub use tested_lang::find_tested_by_for_lang;

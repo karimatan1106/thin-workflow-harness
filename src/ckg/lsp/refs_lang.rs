@@ -17,7 +17,7 @@ use super::query::path_to_file_uri;
 use super::refs::{
     request_with_retry, resolve_position, CallerInfo, RefLocation,
 };
-use super::refs_parse::{parse_incoming_calls, parse_references};
+use super::refs_parse::{parse_incoming_calls, parse_outgoing_calls, parse_references};
 
 /// `find_refs` の Lang 版。
 ///
@@ -98,4 +98,53 @@ pub fn find_callers_for_lang(
     }
     let _ = client.shutdown();
     Ok(callers)
+}
+
+/// `find_callers_for_lang` の outgoing 版。`prepareCallHierarchy` →
+/// `callHierarchy/outgoingCalls` の 2 段で、qname が呼び出している関数一覧（1 段）を返す。
+/// 戻り値の `CallerInfo` は構造的に同じだが、意味は「callee（呼び出し先）」。
+pub fn find_outgoing_for_lang(
+    lang: Lang,
+    root: &Path,
+    qname: &str,
+    timeout: Duration,
+) -> Result<Vec<CallerInfo>, String> {
+    let mut client = LspClient::start_for_lang(lang)?;
+    let root_uri = path_to_file_uri(root)?;
+    let _ = client.initialize(&root_uri)?;
+
+    let started = Instant::now();
+    let pos = resolve_position(&mut client, qname, timeout)?;
+    let prepare_params = json!({
+        "textDocument": { "uri": pos.uri },
+        "position": { "line": pos.line, "character": pos.character },
+    });
+    let prepare = request_with_retry(
+        &mut client,
+        "textDocument/prepareCallHierarchy",
+        prepare_params,
+        timeout,
+        started,
+    )?;
+    let items = match prepare.as_array() {
+        Some(a) if !a.is_empty() => a.clone(),
+        _ => {
+            let _ = client.shutdown();
+            return Ok(Vec::new());
+        }
+    };
+
+    let mut callees: Vec<CallerInfo> = Vec::new();
+    for item in &items {
+        let resp = request_with_retry(
+            &mut client,
+            "callHierarchy/outgoingCalls",
+            json!({ "item": item }),
+            timeout,
+            started,
+        )?;
+        callees.extend(parse_outgoing_calls(&resp));
+    }
+    let _ = client.shutdown();
+    Ok(callees)
 }

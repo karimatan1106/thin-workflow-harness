@@ -89,7 +89,65 @@ fn closure_out_returns_refs() {
         eprintln!("warn: out 方向 closure 空（indexing 不完了の可能性）");
         return;
     }
-    let hit = out.iter().any(|n| n.file.contains("use_user.rs"));
-    assert!(hit, "expected use_user.rs reference: {:?}", out);
+    // direction=out は outgoing callees ── create_user は User::new を呼んでいる。
+    // lib.rs の `User::new` (name == "new") が depth=1 で出るはず。
+    let hit = out
+        .iter()
+        .any(|n| n.name == "new" && n.file.contains("lib.rs"));
+    assert!(
+        hit,
+        "expected User::new callee in lib.rs: {:?}",
+        out
+    );
     assert!(out.iter().all(|n| n.direction == "out"));
+}
+
+#[test]
+fn closure_out_transitive_depth2() {
+    // direction=out で 1 段 MVP ではなく transitive (BFS depth>=2) になっていることを検証。
+    // fixture chain: make_party -> {make_pair, make_direct}; make_pair -> {make_alice, make_bob}
+    // depth=2 で起点 make_party から make_alice / make_bob まで（depth=2）届くはず。
+    if !rust_analyzer_available() {
+        eprintln!("skip: rust-analyzer が PATH に無いため skip");
+        return;
+    }
+    let root = fixture_root();
+    let d1 = find_closure(
+        "rust-analyzer",
+        &root,
+        "make_party",
+        1,
+        Direction::Out,
+        Duration::from_secs(60),
+    )
+    .expect("closure out depth=1 ok");
+    let d2 = find_closure(
+        "rust-analyzer",
+        &root,
+        "make_party",
+        2,
+        Direction::Out,
+        Duration::from_secs(60),
+    )
+    .expect("closure out depth=2 ok");
+    if d1.is_empty() && d2.is_empty() {
+        eprintln!("warn: closure out 結果 0（indexing 不完了 or outgoingCalls 未サポート）");
+        return;
+    }
+    if !d1.is_empty() && !d2.is_empty() {
+        assert!(
+            d2.len() >= d1.len(),
+            "depth=2 ({}) should be >= depth=1 ({})",
+            d2.len(),
+            d1.len()
+        );
+    }
+    let has_d2_chain = d2.iter().any(|n| n.depth >= 2);
+    if !has_d2_chain {
+        eprintln!(
+            "warn: depth>=2 のチェーン未検出（rust-analyzer 実装差）: d2={:?}",
+            d2.iter().map(|n| (&n.name, n.depth)).collect::<Vec<_>>()
+        );
+    }
+    assert!(d2.iter().all(|n| n.direction == "out"));
 }

@@ -96,3 +96,33 @@ pub(super) fn parse_incoming_calls(v: &Value) -> Vec<CallerInfo> {
     }
     out
 }
+
+/// `callHierarchy/outgoingCalls` のレスポンス（CallHierarchyOutgoingCall[]）をパース。
+/// 各 entry の `to` フィールドが「この関数から呼ばれている対象関数」を表す。
+/// 戻り値は構造的に `CallerInfo` と同じだが、意味は「callee（呼び出し先）」。
+/// incoming 側は `from` を見るのに対し、outgoing 側は `to` を見る（LSP 仕様で対称）。
+pub(super) fn parse_outgoing_calls(v: &Value) -> Vec<CallerInfo> {
+    let arr = match v.as_array() {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+    let mut out = Vec::with_capacity(arr.len());
+    for entry in arr {
+        let to = match entry.get("to") {
+            Some(t) => t,
+            None => continue,
+        };
+        let name = to.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let uri = to.get("uri").and_then(|x| x.as_str()).unwrap_or("");
+        let file = uri_to_path_string(uri);
+        let line = to
+            .get("range")
+            .and_then(|r| r.get("start"))
+            .and_then(|s| s.get("line"))
+            .and_then(|x| x.as_u64())
+            .unwrap_or(0) as usize
+            + 1;
+        out.push(CallerInfo { name, file, line });
+    }
+    out
+}
