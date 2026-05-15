@@ -49,9 +49,9 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
         Command::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
-        Command::FindSymbol { query, kind, root, format } => {
-            handlers_find_symbol::cmd_find_symbol(&query, kind.as_deref(), root.as_deref(), &format)
-        }
+        Command::FindSymbol { query, kind, root, format, lang } => handlers_find_symbol::cmd_find_symbol(
+            &query, kind.as_deref(), root.as_deref(), &format, &lang,
+        ),
         Command::Refs { qname, root, format } => {
             handlers_refs::cmd_refs(&qname, root.as_deref(), &format)
         }

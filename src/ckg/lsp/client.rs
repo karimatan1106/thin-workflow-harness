@@ -22,9 +22,15 @@ pub struct LspClient {
 }
 
 impl LspClient {
-    /// LSP サーバを spawn する（PATH 経由）。
+    /// LSP サーバを spawn する（PATH 経由、args 無し）。Rust の rust-analyzer 等向け。
     pub fn spawn(cmd: &str) -> Result<Self, String> {
+        Self::spawn_with_args(cmd, &[])
+    }
+
+    /// LSP サーバを spawn する。args は typescript-language-server の `--stdio` 等で使う。
+    pub fn spawn_with_args(cmd: &str, args: &[String]) -> Result<Self, String> {
         let mut child = Command::new(cmd)
+            .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -44,6 +50,12 @@ impl LspClient {
             stdout: BufReader::new(stdout),
             next_id: 1,
         })
+    }
+
+    /// `Lang` から server コマンドを解決して spawn する薄いラッパ。
+    pub fn start_for_lang(lang: super::lang::Lang) -> Result<Self, String> {
+        let (cmd, args) = super::lang::lsp_server_cmd(lang);
+        Self::spawn_with_args(&cmd, &args)
     }
 
     /// `initialize` リクエスト + `initialized` 通知。`root_uri` は file:// URI。

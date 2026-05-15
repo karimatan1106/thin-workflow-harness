@@ -20,7 +20,7 @@ pub enum QueryCmd {
         #[arg(long, default_value = "text")]
         format: String,
     },
-    /// workspace のシンボル検索（旧 find-symbol）。
+    /// workspace のシンボル検索（旧 find-symbol）。多言語 LSP 対応。
     Symbol {
         query: String,
         #[arg(long)]
@@ -29,6 +29,9 @@ pub enum QueryCmd {
         root: Option<String>,
         #[arg(long, default_value = "text")]
         format: String,
+        /// 言語を指定する。auto なら qname/root から推定。
+        #[arg(long, default_value = "auto")]
+        lang: String,
     },
     /// 指定 symbol への参照箇所一覧。
     Refs {
@@ -84,9 +87,9 @@ pub enum QueryCmd {
 pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
     match cmd {
         QueryCmd::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
-        QueryCmd::Symbol { query, kind, root, format } => {
-            handlers_find_symbol::cmd_find_symbol(&query, kind.as_deref(), root.as_deref(), &format)
-        }
+        QueryCmd::Symbol { query, kind, root, format, lang } => handlers_find_symbol::cmd_find_symbol(
+            &query, kind.as_deref(), root.as_deref(), &format, &lang,
+        ),
         QueryCmd::Refs { qname, root, format } => {
             handlers_refs::cmd_refs(&qname, root.as_deref(), &format)
         }

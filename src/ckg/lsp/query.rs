@@ -71,7 +71,7 @@ pub fn find_symbol(
 
 /// `WorkspaceSymbolResponse` は SymbolInformation[] または WorkspaceSymbol[] どちらでも来る。
 /// どちらでも対応できるよう Value からゆるく拾う。
-fn parse_workspace_symbols(v: &Value) -> Vec<SymbolInfo> {
+pub(super) fn parse_workspace_symbols(v: &Value) -> Vec<SymbolInfo> {
     let arr = match v.as_array() {
         Some(a) => a,
         None => return Vec::new(),
