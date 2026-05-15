@@ -1,16 +1,44 @@
 //! Go 専用 test 判定ヘルパ。`tested_lang.rs` から分離して 200 行ルールを保つ。
 //!
-//! Phase A MVP は heuristic のみ（tree-sitter-go 連携は次バッチ送り）:
-//! - path: ファイル名が `*_test.go` で終わる（Go の test ファイル規約）
-//! - name: 関数名が `Test*` / `Benchmark*` / `Example*` / `Fuzz*` で始まる
-//!
-//! tree-sitter なしで判定するため file 単位キャッシュは不要。
+//! - tree-sitter ベース attr 検出 (`test_attrs_go::list_test_function_lines`)
+//! - path heuristic (`*_test.go`)
+//! - name heuristic (`Test*` / `Benchmark*` / `Example*` / `Fuzz*`)
+//!   の 3 段で `is_test_node_go` を判定する（Rust/TS/Py と対称）。
+
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 use super::uri::percent_decode;
+use crate::ckg::test_attrs_go::list_test_function_lines as list_test_function_lines_go;
 
-/// Go: path heuristic または name heuristic のどちらかで test と判定。
-pub fn is_test_node_go(name: &str, file: &str) -> bool {
+/// Go 用の file 単位 test fn line キャッシュ。
+pub type GoTestCache = HashMap<PathBuf, Option<Vec<usize>>>;
+
+/// Go: tree-sitter attr → path heuristic → name heuristic の 3 段。
+pub fn is_test_node_go(name: &str, file: &str, line: usize, cache: &mut GoTestCache) -> bool {
+    if let Some(lines) = go_attr_entries(file, cache) {
+        if lines.contains(&line) {
+            return true;
+        }
+    }
     is_test_file_go(file) || is_test_name_go(name)
+}
+
+fn go_attr_entries<'a>(file: &str, cache: &'a mut GoTestCache) -> Option<&'a Vec<usize>> {
+    let decoded = percent_decode(file);
+    let path = PathBuf::from(&decoded);
+    if !path.exists() {
+        return None;
+    }
+    let ext_ok = path.extension().and_then(|s| s.to_str()) == Some("go");
+    if !ext_ok {
+        return None;
+    }
+    if !cache.contains_key(&path) {
+        let parsed = list_test_function_lines_go(&path).ok();
+        cache.insert(path.clone(), parsed);
+    }
+    cache.get(&path).and_then(|x| x.as_ref())
 }
 
 /// Go test 規約（`*_test.go`）。
@@ -43,6 +71,8 @@ pub fn is_test_name_go(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn go_test_file_path_heuristic() {
@@ -60,7 +90,6 @@ mod tests {
         assert!(is_test_name_go("BenchmarkSort"));
         assert!(is_test_name_go("ExampleHello"));
         assert!(is_test_name_go("FuzzParse"));
-        // method-style qname
         assert!(is_test_name_go("pkg.TestCreateUser"));
         assert!(!is_test_name_go("CreateUser"));
         assert!(!is_test_name_go("testHelper"));
@@ -68,12 +97,22 @@ mod tests {
     }
 
     #[test]
-    fn go_non_test_function() {
-        // file も name も非 test なら hit しない
-        assert!(!is_test_node_go("CreateUser", "user.go"));
-        // file 規約 hit
-        assert!(is_test_node_go("CreateUser", "user_test.go"));
-        // name 規約 hit
-        assert!(is_test_node_go("TestCreateUser", "user.go"));
+    fn go_non_test_function_via_node() {
+        let mut c: GoTestCache = HashMap::new();
+        assert!(!is_test_node_go("CreateUser", "user.go", 1, &mut c));
+        assert!(is_test_node_go("CreateUser", "user_test.go", 1, &mut c));
+        assert!(is_test_node_go("TestCreateUser", "user.go", 1, &mut c));
+    }
+
+    #[test]
+    fn detects_attr_less_test_function_via_tree_sitter() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("more.go");
+        let src = "package main\n\nimport \"testing\"\n\nfunc TestSomething(t *testing.T) {}\n";
+        fs::write(&path, src).expect("write");
+        let file_str = path.to_string_lossy().to_string();
+        let mut c: GoTestCache = HashMap::new();
+        assert!(is_test_node_go("createUser", &file_str, 5, &mut c));
+        assert!(!is_test_node_go("createUser", &file_str, 100, &mut c));
     }
 }

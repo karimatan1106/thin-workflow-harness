@@ -26,6 +26,7 @@ pub mod tested;
 pub mod tested_go;
 pub mod tested_lang;
 pub mod tested_py;
+pub mod tested_rust;
 pub mod tested_ts;
 pub mod uri;
 
