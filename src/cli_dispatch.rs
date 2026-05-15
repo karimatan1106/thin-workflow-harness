@@ -58,14 +58,14 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::Callers { qname, root, format, lang } => {
             handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang)
         }
-        Command::Closure { qname, depth, direction, root, format } => {
-            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format)
+        Command::Closure { qname, depth, direction, root, format, lang } => {
+            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format, &lang)
         }
-        Command::ImpactedBy { qname, depth, root, format } => {
-            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format)
+        Command::ImpactedBy { qname, depth, root, format, lang } => {
+            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format, &lang)
         }
-        Command::TestedBy { qname, depth, root, format } => {
-            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format)
+        Command::TestedBy { qname, depth, root, format, lang } => {
+            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format, &lang)
         }
         Command::Query { cmd } => cli_query::dispatch_query(cmd),
     }

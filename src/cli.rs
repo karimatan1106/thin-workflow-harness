@@ -131,64 +131,24 @@ pub enum Command {
     /// ノードごとの metrics（tool_calls / wall_seconds / cost / tokens）を表示する。
     Stats { run_id: String },
     /// 既存 repo に `.harness/` をスキャフォールド（プロジェクト検出＋スモークチェック）。
-    Init {
-        dir: Option<String>,
-        #[arg(long)]
-        force: bool,
-    },
+    Init { dir: Option<String>, #[arg(long)] force: bool },
     /// `.harness/` の健全性チェック（validate + gate cmd + skill ファイル）。
-    Doctor {
-        dir: Option<String>,
-        #[arg(long)]
-        full: bool,
-    },
+    Doctor { dir: Option<String>, #[arg(long)] full: bool },
     /// 指定ファイルの outline（トップレベル/主要シンボル）を表示する。CKG layer 1。
-    Outline {
-        /// 対象ソースファイル（現状 Rust のみ対応）。
-        path: String,
-        /// 出力フォーマット: text|json
-        #[arg(long, default_value = "text")]
-        format: String,
-    },
-    /// workspace のシンボル検索。CKG layer 2 (多言語 LSP / rust-analyzer + typescript-language-server)。
+    Outline { path: String, #[arg(long, default_value = "text")] format: String },
+    /// workspace のシンボル検索。CKG layer 2 (多言語 LSP)。
     FindSymbol { query: String, #[arg(long)] kind: Option<String>, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
     /// 指定 symbol への参照箇所一覧。CKG layer 2 (多言語 LSP)。
     Refs { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
     /// 指定 function の呼び出し元一覧。CKG layer 2 (多言語 LSP)。
     Callers { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
-    /// refs/callers の transitive 閉包。CKG layer 2 続き (LSP / rust-analyzer)。
-    Closure {
-        qname: String,
-        #[arg(long, default_value_t = 2)]
-        depth: usize,
-        #[arg(long, default_value = "in")]
-        direction: String,
-        #[arg(long)]
-        root: Option<String>,
-        #[arg(long, default_value = "text")]
-        format: String,
-    },
-    /// 変更影響範囲評価。closure direction=in の薄いラッパ。CKG layer 2 完結。
-    ImpactedBy {
-        qname: String,
-        #[arg(long, default_value_t = 3)]
-        depth: usize,
-        #[arg(long)]
-        root: Option<String>,
-        #[arg(long, default_value = "text")]
-        format: String,
-    },
-    /// 指定 symbol をテストしている test 関数一覧。closure direction=in の test フィルタ。CKG layer 2 完結。
-    TestedBy {
-        qname: String,
-        #[arg(long, default_value_t = 3)]
-        depth: usize,
-        #[arg(long)]
-        root: Option<String>,
-        #[arg(long, default_value = "text")]
-        format: String,
-    },
-    /// CKG layer 2 の query primitive ファサード（outline/symbol/refs/callers/closure/impacted-by/tested-by）。
+    /// refs/callers の transitive 閉包。CKG layer 2 (多言語 LSP)。
+    Closure { qname: String, #[arg(long, default_value_t = 2)] depth: usize, #[arg(long, default_value = "in")] direction: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    /// 変更影響範囲評価。closure direction=in の薄いラッパ。CKG layer 2 (多言語 LSP)。
+    ImpactedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    /// 指定 symbol をテストしている test 関数一覧。CKG layer 2 (多言語 LSP)。
+    TestedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    /// CKG layer 2 の query primitive ファサード。
     Query { #[command(subcommand)] cmd: crate::cli_query::QueryCmd },
 }
 

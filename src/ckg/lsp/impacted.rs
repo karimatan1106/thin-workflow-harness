@@ -13,6 +13,8 @@ use std::time::Duration;
 use serde::Serialize;
 
 use super::closure::{find_closure, ClosureNode, Direction, MAX_DEPTH};
+use super::closure_lang::find_closure_for_lang;
+use super::lang::Lang;
 
 /// impacted-by 結果の 1 ノード（direction を落とした closure ノードのビュー）。
 #[derive(Debug, Clone, Serialize)]
@@ -37,9 +39,7 @@ impl From<ClosureNode> for ImpactedNode {
 /// impacted-by の既定 depth。
 pub const DEFAULT_DEPTH: usize = 3;
 
-/// `harness impacted-by <qname>` 本体。
-///
-/// `find_closure(direction=in)` の薄いラッパ。depth は内部で `MAX_DEPTH` に clamp。
+/// `harness impacted-by <qname>` 本体（Rust 固定の後方互換ラッパ）。
 pub fn find_impacted_by(
     server_cmd: &str,
     root: &Path,
@@ -49,5 +49,17 @@ pub fn find_impacted_by(
 ) -> Result<Vec<ImpactedNode>, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let nodes = find_closure(server_cmd, root, qname, depth, Direction::In, timeout)?;
+    Ok(nodes.into_iter().map(ImpactedNode::from).collect())
+}
+
+/// Lang 引数版 ── `find_closure_for_lang(direction=in)` の薄いラッパ。
+pub fn find_impacted_by_for_lang(
+    qname: &str,
+    depth: usize,
+    lang: Lang,
+    root: &Path,
+) -> Result<Vec<ImpactedNode>, String> {
+    let depth = depth.clamp(1, MAX_DEPTH);
+    let nodes = find_closure_for_lang(qname, depth, Direction::In, lang, root)?;
     Ok(nodes.into_iter().map(ImpactedNode::from).collect())
 }

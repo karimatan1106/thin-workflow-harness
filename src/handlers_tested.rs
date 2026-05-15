@@ -1,13 +1,14 @@
 //! `harness tested-by <qname>` ハンドラ。
 //!
-//! rust-analyzer を spawn して find_tested_by を 1 回回し、text/json で stdout 出力。
-//! find_closure(direction=in) の結果から test 関数のみフィルタする。
+//! `--lang auto|rust|ts` を受け、対応 LSP server を spawn して
+//! find_tested_by_for_lang を回し、text/json で stdout 出力。
+//! find_closure_for_lang(direction=in) の結果から test 関数のみフィルタする。
 
 use std::path::PathBuf;
-use std::time::Duration;
 
-use crate::ckg::lsp::tested::{find_tested_by, TestedNode};
-use crate::handlers_find_symbol::resolve_server_cmd;
+use crate::ckg::lsp::tested::TestedNode;
+use crate::ckg::lsp::tested_lang::find_tested_by_for_lang;
+use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
 
 /// `harness tested-by` CLI ハンドラ。
 pub fn cmd_tested_by(
@@ -15,11 +16,12 @@ pub fn cmd_tested_by(
     depth: usize,
     root: Option<&str>,
     format: &str,
+    lang_arg: &str,
 ) -> Result<(), String> {
-    let server_cmd = resolve_server_cmd()?;
     let root_path = resolve_root(root)?;
-    let timeout = Duration::from_secs(60);
-    let nodes = find_tested_by(&server_cmd, &root_path, qname, depth, timeout)?;
+    let lang = resolve_lang(lang_arg, qname, &root_path)?;
+    ensure_server_available(lang)?;
+    let nodes = find_tested_by_for_lang(qname, depth, lang, &root_path)?;
     match format {
         "json" => print_json(qname, depth, &nodes)?,
         "text" => print_text(qname, depth, &nodes),

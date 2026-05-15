@@ -1,13 +1,13 @@
 //! `harness impacted-by <qname>` ハンドラ。
 //!
-//! rust-analyzer を spawn して find_impacted_by を 1 回回し、text/json で stdout 出力。
-//! 内部は find_closure(direction=in) の薄いラッパ。
+//! `--lang auto|rust|ts` を受け、対応 LSP server を spawn して
+//! find_impacted_by_for_lang を回し、text/json で stdout 出力。
+//! 内部は find_closure_for_lang(direction=in) の薄いラッパ。
 
 use std::path::PathBuf;
-use std::time::Duration;
 
-use crate::ckg::lsp::impacted::{find_impacted_by, ImpactedNode};
-use crate::handlers_find_symbol::resolve_server_cmd;
+use crate::ckg::lsp::impacted::{find_impacted_by_for_lang, ImpactedNode};
+use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
 
 /// `harness impacted-by` CLI ハンドラ。
 pub fn cmd_impacted_by(
@@ -15,11 +15,12 @@ pub fn cmd_impacted_by(
     depth: usize,
     root: Option<&str>,
     format: &str,
+    lang_arg: &str,
 ) -> Result<(), String> {
-    let server_cmd = resolve_server_cmd()?;
     let root_path = resolve_root(root)?;
-    let timeout = Duration::from_secs(60);
-    let nodes = find_impacted_by(&server_cmd, &root_path, qname, depth, timeout)?;
+    let lang = resolve_lang(lang_arg, qname, &root_path)?;
+    ensure_server_available(lang)?;
+    let nodes = find_impacted_by_for_lang(qname, depth, lang, &root_path)?;
     match format {
         "json" => print_json(qname, depth, &nodes)?,
         "text" => print_text(qname, depth, &nodes),

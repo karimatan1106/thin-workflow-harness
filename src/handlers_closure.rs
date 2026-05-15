@@ -1,13 +1,13 @@
 //! `harness closure <qname>` ハンドラ。
 //!
-//! rust-analyzer を spawn して find_closure を 1 回回し、text/json で stdout 出力。
-//! rust-analyzer が PATH に無ければエラー。
+//! `--lang auto|rust|ts` を受け、対応 LSP server (rust-analyzer /
+//! typescript-language-server) を spawn して find_closure_for_lang を回す。
+//! text/json で stdout 出力。auto は qname/root から推定。
 
 use std::path::PathBuf;
-use std::time::Duration;
 
-use crate::ckg::lsp::{find_closure, ClosureNode, Direction};
-use crate::handlers_find_symbol::resolve_server_cmd;
+use crate::ckg::lsp::{find_closure_for_lang, ClosureNode, Direction};
+use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
 
 /// `harness closure` CLI ハンドラ。
 pub fn cmd_closure(
@@ -16,12 +16,13 @@ pub fn cmd_closure(
     direction: &str,
     root: Option<&str>,
     format: &str,
+    lang_arg: &str,
 ) -> Result<(), String> {
-    let server_cmd = resolve_server_cmd()?;
     let root_path = resolve_root(root)?;
+    let lang = resolve_lang(lang_arg, qname, &root_path)?;
+    ensure_server_available(lang)?;
     let dir = Direction::parse(direction)?;
-    let timeout = Duration::from_secs(60);
-    let nodes = find_closure(&server_cmd, &root_path, qname, depth, dir, timeout)?;
+    let nodes = find_closure_for_lang(qname, depth, dir, lang, &root_path)?;
     match format {
         "json" => print_json(qname, depth, dir, &nodes)?,
         "text" => print_text(qname, depth, dir, &nodes),

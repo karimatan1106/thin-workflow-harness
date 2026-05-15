@@ -55,7 +55,7 @@ pub enum QueryCmd {
         #[arg(long, default_value = "auto")]
         lang: String,
     },
-    /// refs/callers の transitive 閉包。
+    /// refs/callers の transitive 閉包。多言語 LSP 対応。
     Closure {
         qname: String,
         #[arg(long, default_value_t = 2)]
@@ -66,8 +66,11 @@ pub enum QueryCmd {
         root: Option<String>,
         #[arg(long, default_value = "text")]
         format: String,
+        /// 言語を指定する。auto なら qname/root から推定。
+        #[arg(long, default_value = "auto")]
+        lang: String,
     },
-    /// 変更影響範囲評価。closure direction=in の薄いラッパ。
+    /// 変更影響範囲評価。closure direction=in の薄いラッパ。多言語 LSP 対応。
     ImpactedBy {
         qname: String,
         #[arg(long, default_value_t = 3)]
@@ -76,8 +79,11 @@ pub enum QueryCmd {
         root: Option<String>,
         #[arg(long, default_value = "text")]
         format: String,
+        /// 言語を指定する。auto なら qname/root から推定。
+        #[arg(long, default_value = "auto")]
+        lang: String,
     },
-    /// 指定 symbol をテストしている test 関数一覧。
+    /// 指定 symbol をテストしている test 関数一覧。多言語 LSP 対応。
     TestedBy {
         qname: String,
         #[arg(long, default_value_t = 3)]
@@ -86,6 +92,9 @@ pub enum QueryCmd {
         root: Option<String>,
         #[arg(long, default_value = "text")]
         format: String,
+        /// 言語を指定する。auto なら qname/root から推定。
+        #[arg(long, default_value = "auto")]
+        lang: String,
     },
 }
 
@@ -102,14 +111,14 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
         QueryCmd::Callers { qname, root, format, lang } => {
             handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang)
         }
-        QueryCmd::Closure { qname, depth, direction, root, format } => {
-            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format)
+        QueryCmd::Closure { qname, depth, direction, root, format, lang } => {
+            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format, &lang)
         }
-        QueryCmd::ImpactedBy { qname, depth, root, format } => {
-            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format)
+        QueryCmd::ImpactedBy { qname, depth, root, format, lang } => {
+            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format, &lang)
         }
-        QueryCmd::TestedBy { qname, depth, root, format } => {
-            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format)
+        QueryCmd::TestedBy { qname, depth, root, format, lang } => {
+            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format, &lang)
         }
     }
 }
