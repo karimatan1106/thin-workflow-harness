@@ -1,7 +1,7 @@
-//! `harness find-symbol <query> [--lang ...] [--daemon-port <port>]` ハンドラ。
+//! `harness find-symbol <query> [--lang ...] [--daemon-port <port>] [--use-daemon]` ハンドラ。
 //!
 //! `--lang auto`: `detect_lang_from_qname(query).or(root_lang(root))`。
-//! `--daemon-port <port>` 指定時は LSP 直接 spawn を bypass、layer 2.5 daemon に投げる。
+//! `--daemon-port <port>` で固定 port、`--use-daemon` で auto-spawn (~/.cache/.../*.port)。
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::ckg::lsp::{find_symbol_for_lang, lsp_server_cmd, Lang, SymbolInfo};
 use crate::lsp_daemon::{DaemonClient, SymbolPayload};
 
-/// CLI ハンドラ本体。
+/// 優先順: daemon_port > use_daemon > 直接 LSP spawn。
 pub fn cmd_find_symbol(
     query: &str,
     kind: Option<&str>,
@@ -17,20 +17,20 @@ pub fn cmd_find_symbol(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
+    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path: PathBuf = match root {
         Some(r) => PathBuf::from(r),
         None => std::env::current_dir().map_err(|e| format!("cwd: {e}"))?,
     };
-    let syms = if let Some(port) = daemon_port {
-        fetch_via_daemon(port, query, &root_path, kind)?
+    let lang_lazy = || resolve_lang(lang_arg, query, &root_path);
+    let syms = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+        let p = c.find_symbol(query, &root_path, kind, Duration::from_secs(60))?;
+        p.into_iter().map(payload_to_info).collect()
     } else {
-        let lang = resolve_lang(lang_arg, query, &root_path)?;
+        let lang = lang_lazy()?;
         ensure_server_available(lang)?;
-        let timeout = match lang {
-            Lang::Ts => Duration::from_secs(60),
-            _ => Duration::from_secs(30),
-        };
+        let timeout = match lang { Lang::Ts => Duration::from_secs(60), _ => Duration::from_secs(30) };
         find_symbol_for_lang(lang, &root_path, query, kind, timeout)?
     };
     match format {
@@ -41,26 +41,35 @@ pub fn cmd_find_symbol(
     Ok(())
 }
 
-/// daemon に find_symbol を投げて `SymbolInfo` 列に正規化する。
-fn fetch_via_daemon(
-    port: u16,
-    query: &str,
+/// `daemon_port` > `use_daemon` > None の優先順で `DaemonClient` を返す。
+pub(crate) fn open_client<F>(
+    daemon_port: Option<u16>,
+    use_daemon: bool,
     root: &Path,
-    kind: Option<&str>,
-) -> Result<Vec<SymbolInfo>, String> {
-    let mut client = DaemonClient::connect(port)?;
-    let payload = client.find_symbol(query, root, kind, Duration::from_secs(60))?;
-    Ok(payload.into_iter().map(payload_to_info).collect())
+    lang_lazy: &F,
+) -> Result<Option<DaemonClient>, String>
+where
+    F: Fn() -> Result<Lang, String>,
+{
+    if let Some(port) = daemon_port {
+        return Ok(Some(DaemonClient::connect(port)?));
+    }
+    if use_daemon {
+        let lang = lang_lazy()?;
+        return Ok(Some(DaemonClient::connect_or_spawn(
+            lang,
+            root,
+            Duration::from_secs(30),
+        )?));
+    }
+    Ok(None)
 }
 
 fn payload_to_info(p: SymbolPayload) -> SymbolInfo {
     SymbolInfo { name: p.name, kind: p.kind, file: p.file, line: p.line, col: p.col }
 }
 
-/// `--lang` 引数を `Lang` に解決する。
-/// - "auto": qname → root の順で推定。決まらなければエラー。
-/// - "rust" / "ts" / "py" / "go": 明示固定（py は python、ts は typescript alias 受付）。
-/// - その他: エラー。
+/// `--lang` 引数を `Lang` に解決する。"auto" は qname → root の順で推定。
 pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, String> {
     match lang_arg.to_ascii_lowercase().as_str() {
         "rust" => Ok(Lang::Rust),
@@ -74,17 +83,13 @@ pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, St
             if let Some(l) = crate::ckg::lsp::root_lang(root) {
                 return Ok(l);
             }
-            Err(
-                "言語推定に失敗しました。--lang <rust|ts|py|go> を明示してください"
-                    .to_string(),
-            )
+            Err("言語推定に失敗しました。--lang <rust|ts|py|go> を明示してください".to_string())
         }
         other => Err(format!("unknown --lang: {other} (auto|rust|ts|py|go)")),
     }
 }
 
 /// 指定 Lang の LSP server が PATH 上にあるか確認する。無ければ install 案内エラー。
-/// Windows では npm-global の `.cmd` shim が PATH に無いことがあるため npm prefix を再探索する。
 pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
     let (cmd, _args) = lsp_server_cmd(lang);
     if which(&cmd).is_some() {
@@ -102,23 +107,14 @@ pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
         Lang::Py => "`pip install pyright` または `npm i -g pyright`",
         Lang::Go => "`go install golang.org/x/tools/gopls@latest`",
     };
-    Err(format!(
-        "{cmd} が PATH に見つかりません。{hint} でインストールしてください"
-    ))
+    Err(format!("{cmd} が PATH に見つかりません。{hint} でインストールしてください"))
 }
 
-/// Windows のみ: `npm config get prefix` を呼んで PATH 先頭に append する。
-/// 既に append 済み or prefix 取得失敗時は何もしない。成功時 true。
 #[cfg(windows)]
 fn augment_path_from_npm_prefix() -> bool {
-    let out = std::process::Command::new("cmd")
-        .args(["/c", "npm", "config", "get", "prefix"])
-        .output()
-        .ok();
+    let out = std::process::Command::new("cmd").args(["/c", "npm", "config", "get", "prefix"]).output().ok();
     let prefix = match out {
-        Some(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).trim().to_string()
-        }
+        Some(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
         _ => return false,
     };
     if prefix.is_empty() {
@@ -132,15 +128,10 @@ fn augment_path_from_npm_prefix() -> bool {
     true
 }
 
-/// rust-analyzer / typescript-language-server を PATH から探す（粗いが pragmatic）。
 fn which(cmd: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
     let exts: Vec<String> = if cfg!(windows) {
-        std::env::var("PATHEXT")
-            .unwrap_or_else(|_| ".EXE;.CMD;.BAT".to_string())
-            .split(';')
-            .map(|s| s.to_string())
-            .collect()
+        std::env::var("PATHEXT").unwrap_or_else(|_| ".EXE;.CMD;.BAT".to_string()).split(';').map(|s| s.to_string()).collect()
     } else {
         vec![String::new()]
     };
@@ -161,9 +152,7 @@ pub fn resolve_server_cmd() -> Result<String, String> {
     if which(cmd).is_some() {
         Ok(cmd.to_string())
     } else {
-        Err(format!(
-            "{cmd} が PATH に見つかりません。`rustup component add rust-analyzer` でインストールしてください"
-        ))
+        Err(format!("{cmd} が PATH に見つかりません。`rustup component add rust-analyzer` でインストールしてください"))
     }
 }
 
@@ -173,20 +162,13 @@ fn print_text(syms: &[SymbolInfo]) {
     }
 }
 
-/// `function` → `fn` 等、表示用に短縮。
 fn short_kind(k: &str) -> &str {
     match k {
-        "function" => "fn",
-        "method" => "fn",
-        "constructor" => "fn",
-        "struct" => "struct",
-        "enum" => "enum",
+        "function" | "method" | "constructor" => "fn",
         "interface" => "trait",
-        "module" => "mod",
-        "namespace" => "mod",
+        "module" | "namespace" => "mod",
         "constant" => "const",
         "variable" => "static",
-        "field" => "field",
         "enum_member" => "variant",
         other => other,
     }

@@ -3,14 +3,14 @@
 //! `--lang auto|rust|ts|py|go` を受け、対応 LSP server を spawn して
 //! find_impacted_by_for_lang を回し、text/json で stdout 出力。
 //! 内部は find_closure_for_lang(direction=in) の薄いラッパ。
-//! `--daemon-port <port>` 指定時は LSP 直接 spawn を bypass、layer 2.5 daemon に投げる。
+//! `--daemon-port <port>` / `--use-daemon` で layer 2.5 daemon 経由可。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::ckg::lsp::impacted::{find_impacted_by_for_lang, ImpactedNode};
-use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
-use crate::lsp_daemon::{DaemonClient, TestedNodePayload};
+use crate::handlers_find_symbol::{ensure_server_available, open_client, resolve_lang};
+use crate::lsp_daemon::TestedNodePayload;
 
 /// `harness impacted-by` CLI ハンドラ。
 pub fn cmd_impacted_by(
@@ -20,12 +20,15 @@ pub fn cmd_impacted_by(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
+    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
-    let nodes = if let Some(port) = daemon_port {
-        fetch_impacted_via_daemon(port, qname, depth, &root_path)?
+    let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
+    let nodes = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+        let p = c.impacted_by(qname, depth, &root_path, Duration::from_secs(120))?;
+        p.into_iter().map(tested_payload_to_impacted).collect()
     } else {
-        let lang = resolve_lang(lang_arg, qname, &root_path)?;
+        let lang = lang_lazy()?;
         ensure_server_available(lang)?;
         find_impacted_by_for_lang(qname, depth, lang, &root_path)?
     };
@@ -35,17 +38,6 @@ pub fn cmd_impacted_by(
         other => return Err(format!("unknown format: {other} (text|json)")),
     }
     Ok(())
-}
-
-fn fetch_impacted_via_daemon(
-    port: u16,
-    qname: &str,
-    depth: usize,
-    root: &Path,
-) -> Result<Vec<ImpactedNode>, String> {
-    let mut client = DaemonClient::connect(port)?;
-    let payload = client.impacted_by(qname, depth, root, Duration::from_secs(120))?;
-    Ok(payload.into_iter().map(tested_payload_to_impacted).collect())
 }
 
 fn tested_payload_to_impacted(p: TestedNodePayload) -> ImpactedNode {

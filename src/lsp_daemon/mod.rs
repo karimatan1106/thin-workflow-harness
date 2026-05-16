@@ -4,16 +4,18 @@
 //! - payload: response data shapes (SymbolPayload/RefPayload/CallerPayload/...)
 //! - server: run_daemon(lang, root, port) drives 1 LspClient + listener
 //! - dispatch: op -> find_*_for_lang_with_client() routing
-//! - client: DaemonClient::connect(port) opens TCP + shared send/recv
+//! - client: DaemonClient::connect(port) / connect_or_spawn(lang, root, timeout)
 //! - client_ops: per-op convenience methods on DaemonClient
+//! - port_file: ~/.cache/thin-workflow-harness/daemon-<lang>-<hash>.port 規約
 //!
 //! Scope: foreground / 7 ops (find_symbol + refs + callers + outgoing + closure
-//! + impacted_by + tested_by) / single Lang per daemon.
+//! + impacted_by + tested_by) / single Lang per daemon / auto-spawn from client.
 
 pub mod client;
 pub mod client_ops;
 pub mod dispatch;
 pub mod payload;
+pub mod port_file;
 pub mod protocol;
 pub mod server;
 

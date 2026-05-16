@@ -3,15 +3,14 @@
 //! LSP server を spawn して位置解決 → references / callHierarchy を 1 往復させ、
 //! text/json で stdout に出力する。`--lang auto|rust|ts|py|go` で言語を選択。
 //! `--daemon-port <port>` 指定時は LSP 直接 spawn を bypass、layer 2.5 daemon に投げる。
+//! `--use-daemon` 指定時は port_file 経由で auto-spawn する。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::ckg::lsp::{
-    find_callers_for_lang, find_refs_for_lang, CallerInfo, RefLocation,
-};
-use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
-use crate::lsp_daemon::{CallerPayload, DaemonClient, RefPayload};
+use crate::ckg::lsp::{find_callers_for_lang, find_refs_for_lang, CallerInfo, RefLocation};
+use crate::handlers_find_symbol::{ensure_server_available, open_client, resolve_lang};
+use crate::lsp_daemon::{CallerPayload, RefPayload};
 
 /// `harness refs` CLI ハンドラ。
 pub fn cmd_refs(
@@ -20,12 +19,15 @@ pub fn cmd_refs(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
+    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
-    let refs = if let Some(port) = daemon_port {
-        fetch_refs_via_daemon(port, qname, &root_path)?
+    let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
+    let refs = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+        let p = c.refs(qname, &root_path, Duration::from_secs(60))?;
+        p.into_iter().map(ref_payload_to_loc).collect()
     } else {
-        let lang = resolve_lang(lang_arg, qname, &root_path)?;
+        let lang = lang_lazy()?;
         ensure_server_available(lang)?;
         find_refs_for_lang(lang, &root_path, qname, Duration::from_secs(30))?
     };
@@ -44,12 +46,15 @@ pub fn cmd_callers(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
+    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
-    let callers = if let Some(port) = daemon_port {
-        fetch_callers_via_daemon(port, qname, &root_path)?
+    let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
+    let callers = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+        let p = c.callers(qname, &root_path, Duration::from_secs(60))?;
+        p.into_iter().map(caller_payload_to_info).collect()
     } else {
-        let lang = resolve_lang(lang_arg, qname, &root_path)?;
+        let lang = lang_lazy()?;
         ensure_server_available(lang)?;
         find_callers_for_lang(lang, &root_path, qname, Duration::from_secs(30))?
     };
@@ -59,26 +64,6 @@ pub fn cmd_callers(
         other => return Err(format!("unknown format: {other} (text|json)")),
     }
     Ok(())
-}
-
-fn fetch_refs_via_daemon(
-    port: u16,
-    qname: &str,
-    root: &Path,
-) -> Result<Vec<RefLocation>, String> {
-    let mut client = DaemonClient::connect(port)?;
-    let payload = client.refs(qname, root, Duration::from_secs(60))?;
-    Ok(payload.into_iter().map(ref_payload_to_loc).collect())
-}
-
-fn fetch_callers_via_daemon(
-    port: u16,
-    qname: &str,
-    root: &Path,
-) -> Result<Vec<CallerInfo>, String> {
-    let mut client = DaemonClient::connect(port)?;
-    let payload = client.callers(qname, root, Duration::from_secs(60))?;
-    Ok(payload.into_iter().map(caller_payload_to_info).collect())
 }
 
 fn ref_payload_to_loc(p: RefPayload) -> RefLocation {

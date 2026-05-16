@@ -1,16 +1,24 @@
 //! daemon client -- line-based JSON over TCP.
 //!
 //! - `connect(port)` opens 127.0.0.1:port
+//! - `connect_or_spawn(lang, root, timeout)` で既存 daemon 接続 or auto-spawn
 //! - `send_request_recv_response` writes 1 JSON line + reads 1 JSON line
 //! - per-op convenience methods live in `client_ops.rs`
 //! - request id auto-assigned via atomic counter
 //! - PoC: 1 connection processes 1 request at a time (ordering preserved)
+//! - NOTE: 真の detach (Unix setsid / Windows DETACHED_PROCESS) は次バッチ送り。
+//!   現状は Stdio::null() で stdin/stdout/stderr を切るのみ。親が die すると
+//!   子の生存は OS 依存。
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use crate::ckg::lsp::Lang;
+
+use super::port_file;
 use super::protocol::{Op, Request, Response};
 
 /// Connected daemon client. 1 instance = 1 TCP connection.
@@ -31,6 +39,58 @@ impl DaemonClient {
             writer: stream,
             next_id: AtomicU64::new(1),
         })
+    }
+
+    /// 既存 daemon に接続するか、無ければ auto-spawn して接続する。
+    ///
+    /// 1. port file あり → port 読み出し → connect 試行 (OK ならそのまま返す)
+    /// 2. NG (stale) → port file 削除
+    /// 3. self exe を `lsp-daemon serve --lang <lang> --root <root> --port 0` で spawn
+    /// 4. port file 出現を `spawn_timeout` まで 200ms 間隔で poll
+    /// 5. file 出現 → port 読み出し → connect
+    pub fn connect_or_spawn(
+        lang: Lang,
+        root: &Path,
+        spawn_timeout: Duration,
+    ) -> Result<Self, String> {
+        let lang_s = lang_to_str(lang);
+        let pf_path = port_file::port_file_path(lang_s, root)?;
+
+        if let Ok(content) = port_file::read(&pf_path) {
+            if let Ok(client) = Self::connect(content.port) {
+                return Ok(client);
+            }
+            let _ = port_file::delete(&pf_path);
+        }
+
+        let self_exe = std::env::current_exe()
+            .map_err(|e| format!("current_exe: {e}"))?;
+        let _child = std::process::Command::new(&self_exe)
+            .arg("lsp-daemon")
+            .arg("serve")
+            .arg("--lang")
+            .arg(lang_s)
+            .arg("--root")
+            .arg(root)
+            .arg("--port")
+            .arg("0")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("spawn daemon: {e}"))?;
+
+        let deadline = Instant::now() + spawn_timeout;
+        let poll_interval = Duration::from_millis(200);
+        while Instant::now() < deadline {
+            std::thread::sleep(poll_interval);
+            if let Ok(content) = port_file::read(&pf_path) {
+                if let Ok(client) = Self::connect(content.port) {
+                    return Ok(client);
+                }
+            }
+        }
+        Err(format!("daemon spawn timed out ({:?})", spawn_timeout))
     }
 
     /// Optional: set TCP read/write timeout.
@@ -76,5 +136,14 @@ impl DaemonClient {
             return Err(format!("id mismatch: expected {id}, got {}", resp.id));
         }
         Ok(resp)
+    }
+}
+
+pub(crate) fn lang_to_str(lang: Lang) -> &'static str {
+    match lang {
+        Lang::Rust => "rust",
+        Lang::Ts => "ts",
+        Lang::Py => "py",
+        Lang::Go => "go",
     }
 }

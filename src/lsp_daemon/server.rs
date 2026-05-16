@@ -4,6 +4,7 @@
 //! - Arc<Mutex<LspClient>> shares the client across connections
 //! - each connection: BufReader::read_line -> 1 line = 1 request
 //! - per-request dispatch is delegated to `dispatch::handle_request`
+//! - listener bind 後の実 port を port_file に書き出し、Drop で削除する。
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -15,7 +16,19 @@ use serde_json::Value;
 use crate::ckg::lsp::{start_and_warm_up, Lang, LspClient};
 
 use super::dispatch::handle_request;
+use super::port_file::{self, PortFileContent};
 use super::protocol::{Request, Response};
+
+/// daemon shutdown 時に port file を best-effort 削除する RAII guard。
+struct PortFileGuard {
+    path: PathBuf,
+}
+
+impl Drop for PortFileGuard {
+    fn drop(&mut self) {
+        let _ = port_file::delete(&self.path);
+    }
+}
 
 /// Start the foreground daemon. port=0 means OS-assigned.
 pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
@@ -28,12 +41,27 @@ pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
     let bound = listener
         .local_addr()
         .map_err(|e| format!("local_addr: {e}"))?;
+    let lang_s = lang_str(lang);
     eprintln!(
         "[daemon] lang={} root={} port={}",
-        lang_str(lang),
+        lang_s,
         root.display(),
         bound.port()
     );
+
+    // port file 書き出し (best-effort、失敗は warn だけ)
+    let pf_path = port_file::port_file_path(lang_s, &root)?;
+    let content = PortFileContent {
+        pid: std::process::id(),
+        port: bound.port(),
+        started_at_ms: port_file::now_ms(),
+    };
+    if let Err(e) = port_file::write(&pf_path, &content) {
+        eprintln!("[daemon] port_file write failed: {e}");
+    } else {
+        eprintln!("[daemon] port_file={}", pf_path.display());
+    }
+    let _guard = PortFileGuard { path: pf_path };
 
     for stream in listener.incoming() {
         match stream {

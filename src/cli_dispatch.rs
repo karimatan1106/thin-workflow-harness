@@ -49,7 +49,7 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
         Command::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
-        Command::FindSymbol { query, kind, root, format, lang, daemon_port } => {
+        Command::FindSymbol { query, kind, root, format, lang, daemon_port, use_daemon } => {
             handlers_find_symbol::cmd_find_symbol(
                 &query,
                 kind.as_deref(),
@@ -57,16 +57,17 @@ pub fn dispatch(command: Command) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
+                use_daemon,
             )
         }
         Command::LspDaemon { cmd } => cli_daemon::dispatch_lsp_daemon(cmd),
-        Command::Refs { qname, root, format, lang, daemon_port } => {
-            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang, daemon_port)
+        Command::Refs { qname, root, format, lang, daemon_port, use_daemon } => {
+            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang, daemon_port, use_daemon)
         }
-        Command::Callers { qname, root, format, lang, daemon_port } => {
-            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang, daemon_port)
+        Command::Callers { qname, root, format, lang, daemon_port, use_daemon } => {
+            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang, daemon_port, use_daemon)
         }
-        Command::Closure { qname, depth, direction, root, format, lang, daemon_port } => {
+        Command::Closure { qname, depth, direction, root, format, lang, daemon_port, use_daemon } => {
             handlers_closure::cmd_closure(
                 &qname,
                 depth,
@@ -75,9 +76,10 @@ pub fn dispatch(command: Command) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
+                use_daemon,
             )
         }
-        Command::ImpactedBy { qname, depth, root, format, lang, daemon_port } => {
+        Command::ImpactedBy { qname, depth, root, format, lang, daemon_port, use_daemon } => {
             handlers_impacted::cmd_impacted_by(
                 &qname,
                 depth,
@@ -85,9 +87,10 @@ pub fn dispatch(command: Command) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
+                use_daemon,
             )
         }
-        Command::TestedBy { qname, depth, root, format, lang, daemon_port } => {
+        Command::TestedBy { qname, depth, root, format, lang, daemon_port, use_daemon } => {
             handlers_tested::cmd_tested_by(
                 &qname,
                 depth,
@@ -95,6 +98,7 @@ pub fn dispatch(command: Command) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
+                use_daemon,
             )
         }
         Command::Query { cmd } => cli_query::dispatch_query(cmd),

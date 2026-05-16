@@ -1,18 +1,18 @@
 //! `harness closure <qname>` ハンドラ。
 //!
-//! `--lang auto|rust|ts|py|go` を受け、対応 LSP server (rust-analyzer /
-//! typescript-language-server / pyright) を spawn して find_closure_for_lang を回す。
-//! text/json で stdout 出力。auto は qname/root から推定。
-//! `--daemon-port <port>` 指定時は LSP 直接 spawn を bypass、layer 2.5 daemon に投げる。
+//! `--lang auto|rust|ts|py|go` を受け、対応 LSP server を spawn して
+//! find_closure_for_lang を回す。text/json で stdout 出力。
+//! `--daemon-port <port>` / `--use-daemon` で layer 2.5 daemon 経由可。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::ckg::lsp::{find_closure_for_lang, ClosureNode, Direction};
-use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
-use crate::lsp_daemon::{ClosureNodePayload, DaemonClient};
+use crate::handlers_find_symbol::{ensure_server_available, open_client, resolve_lang};
+use crate::lsp_daemon::ClosureNodePayload;
 
 /// `harness closure` CLI ハンドラ。
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_closure(
     qname: &str,
     depth: usize,
@@ -21,13 +21,16 @@ pub fn cmd_closure(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
+    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
     let dir = Direction::parse(direction)?;
-    let nodes = if let Some(port) = daemon_port {
-        fetch_closure_via_daemon(port, qname, depth, direction, &root_path)?
+    let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
+    let nodes = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+        let p = c.closure(qname, depth, direction, &root_path, Duration::from_secs(120))?;
+        p.into_iter().map(closure_payload_to_node).collect()
     } else {
-        let lang = resolve_lang(lang_arg, qname, &root_path)?;
+        let lang = lang_lazy()?;
         ensure_server_available(lang)?;
         find_closure_for_lang(qname, depth, dir, lang, &root_path)?
     };
@@ -37,18 +40,6 @@ pub fn cmd_closure(
         other => return Err(format!("unknown format: {other} (text|json)")),
     }
     Ok(())
-}
-
-fn fetch_closure_via_daemon(
-    port: u16,
-    qname: &str,
-    depth: usize,
-    direction: &str,
-    root: &Path,
-) -> Result<Vec<ClosureNode>, String> {
-    let mut client = DaemonClient::connect(port)?;
-    let payload = client.closure(qname, depth, direction, root, Duration::from_secs(120))?;
-    Ok(payload.into_iter().map(closure_payload_to_node).collect())
 }
 
 fn closure_payload_to_node(p: ClosureNodePayload) -> ClosureNode {
