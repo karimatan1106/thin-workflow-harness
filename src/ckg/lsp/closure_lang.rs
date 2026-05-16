@@ -1,25 +1,35 @@
-//! `find_closure` の Lang 引数版。既存 `closure::*` の多言語ラッパで、
-//! `Lang` から server コマンドを解決して spawn する。
-//!
-//! direction=in は `find_callers_for_lang` を BFS 再帰、out は
-//! `find_outgoing_for_lang` を BFS 再帰（LSP `callHierarchy/outgoingCalls` の transitive 展開）。
-//! visited set + depth clamp(1, MAX_DEPTH) は既存実装と同一。
-//! 200 行制約のため closure.rs から分離。
+//! `find_closure` の Lang 引数版。layer 2.5 PoC で `_with_client` 版を分離。
+//! BFS 全体で 1 LspClient を使い回すことで per-invocation spawn を amortize。
 
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
 
+use super::client::{start_and_warm_up, LspClient};
 use super::closure::{ClosureNode, Direction, MAX_DEPTH};
 use super::lang::Lang;
-use super::refs_lang::{find_callers_for_lang, find_outgoing_for_lang};
+use super::refs_lang::{
+    find_callers_for_lang_with_client, find_outgoing_for_lang_with_client,
+};
 
-/// `find_closure` の Lang 版。
-///
-/// - direction=in: `find_callers_for_lang` の transitive BFS（depth まで）
-/// - direction=out: `find_outgoing_for_lang` の transitive BFS（depth まで）
-/// - direction=both: 両方
+/// `find_closure` の Lang 版 (既存 fire-and-forget API)。
 pub fn find_closure_for_lang(
+    qname: &str,
+    depth: usize,
+    direction: Direction,
+    lang: Lang,
+    root: &Path,
+) -> Result<Vec<ClosureNode>, String> {
+    let mut client = start_and_warm_up(lang, root)?;
+    let result =
+        find_closure_for_lang_with_client(&mut client, qname, depth, direction, lang, root);
+    let _ = client.shutdown();
+    result
+}
+
+/// `find_closure_for_lang` の client 再利用版。
+pub fn find_closure_for_lang_with_client(
+    client: &mut LspClient,
     qname: &str,
     depth: usize,
     direction: Direction,
@@ -30,17 +40,17 @@ pub fn find_closure_for_lang(
     let timeout = Duration::from_secs(60);
     let mut nodes: Vec<ClosureNode> = Vec::new();
     if matches!(direction, Direction::In | Direction::Both) {
-        nodes.extend(closure_in_for_lang(qname, depth, lang, root, timeout)?);
+        nodes.extend(closure_in_for_lang(client, qname, depth, lang, root, timeout)?);
     }
     if matches!(direction, Direction::Out | Direction::Both) {
-        nodes.extend(closure_out_for_lang(qname, depth, lang, root, timeout)?);
+        nodes.extend(closure_out_for_lang(client, qname, depth, lang, root, timeout)?);
     }
     Ok(nodes)
 }
 
-/// direction=in: `find_callers_for_lang` を BFS で transitive 展開。
-/// 各 depth で visited な qname を再追跡しない（uri+line key）。
+/// direction=in: callers の BFS 展開。
 fn closure_in_for_lang(
+    client: &mut LspClient,
     qname: &str,
     depth: usize,
     lang: Lang,
@@ -54,7 +64,7 @@ fn closure_in_for_lang(
         if d >= depth {
             continue;
         }
-        let callers = match find_callers_for_lang(lang, root, &cur, timeout) {
+        let callers = match find_callers_for_lang_with_client(client, lang, root, &cur, timeout) {
             Ok(v) => v,
             Err(_) if d > 0 => continue,
             Err(e) => return Err(e),
@@ -79,10 +89,9 @@ fn closure_in_for_lang(
     Ok(out)
 }
 
-/// direction=out: `find_outgoing_for_lang` を BFS で transitive 展開。
-/// 各 depth で visited な callee を再追跡しない（uri+line+name key）。
-/// LSP `callHierarchy/outgoingCalls` の 2 段で「呼び出し先」を 1 段ずつ辿る。
+/// direction=out: outgoing の BFS 展開。
 fn closure_out_for_lang(
+    client: &mut LspClient,
     qname: &str,
     depth: usize,
     lang: Lang,
@@ -96,7 +105,7 @@ fn closure_out_for_lang(
         if d >= depth {
             continue;
         }
-        let callees = match find_outgoing_for_lang(lang, root, &cur, timeout) {
+        let callees = match find_outgoing_for_lang_with_client(client, lang, root, &cur, timeout) {
             Ok(v) => v,
             Err(_) if d > 0 => continue,
             Err(e) => return Err(e),

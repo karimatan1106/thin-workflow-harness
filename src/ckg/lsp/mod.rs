@@ -32,14 +32,20 @@ pub mod tested_ts;
 pub mod ts_bootstrap;
 pub mod uri;
 
-pub use client::LspClient;
+pub use client::{start_and_warm_up, LspClient};
 pub use closure::{find_closure, ClosureNode, Direction};
-pub use closure_lang::find_closure_for_lang;
-pub use impacted::{find_impacted_by, find_impacted_by_for_lang, ImpactedNode};
+pub use closure_lang::{find_closure_for_lang, find_closure_for_lang_with_client};
+pub use impacted::{
+    find_impacted_by, find_impacted_by_for_lang, find_impacted_by_for_lang_with_client,
+    ImpactedNode,
+};
 pub use lang::{detect_lang, detect_lang_from_qname, lsp_server_cmd, root_lang, Lang};
 pub use query::{find_symbol, SymbolInfo};
-pub use query_lang::find_symbol_for_lang;
+pub use query_lang::{find_symbol_for_lang, find_symbol_for_lang_with_client};
 pub use refs::{find_callers, find_refs, CallerInfo, RefLocation};
-pub use refs_lang::{find_callers_for_lang, find_outgoing_for_lang, find_refs_for_lang};
+pub use refs_lang::{
+    find_callers_for_lang, find_callers_for_lang_with_client, find_outgoing_for_lang,
+    find_outgoing_for_lang_with_client, find_refs_for_lang, find_refs_for_lang_with_client,
+};
 pub use tested::{find_tested_by, TestedNode};
-pub use tested_lang::find_tested_by_for_lang;
+pub use tested_lang::{find_tested_by_for_lang, find_tested_by_for_lang_with_client};

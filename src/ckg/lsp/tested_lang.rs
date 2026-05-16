@@ -9,8 +9,9 @@
 
 use std::path::Path;
 
+use super::client::LspClient;
 use super::closure::{ClosureNode, Direction, MAX_DEPTH};
-use super::closure_lang::find_closure_for_lang;
+use super::closure_lang::{find_closure_for_lang, find_closure_for_lang_with_client};
 use super::lang::Lang;
 use super::tested::TestedNode;
 use super::tested_go::{is_test_node_go, GoTestCache};
@@ -27,6 +28,27 @@ pub fn find_tested_by_for_lang(
 ) -> Result<Vec<TestedNode>, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let nodes = find_closure_for_lang(qname, depth, Direction::In, lang, root)?;
+    let mut caches = TestCaches::default();
+    let filtered: Vec<TestedNode> = nodes
+        .into_iter()
+        .filter(|n| is_test_node_for_lang(n, lang, &mut caches))
+        .map(TestedNode::from)
+        .collect();
+    Ok(filtered)
+}
+
+/// `find_tested_by_for_lang` の client 再利用版 (layer 2.5 PoC)。
+pub fn find_tested_by_for_lang_with_client(
+    client: &mut LspClient,
+    qname: &str,
+    depth: usize,
+    lang: Lang,
+    root: &Path,
+) -> Result<Vec<TestedNode>, String> {
+    let depth = depth.clamp(1, MAX_DEPTH);
+    let nodes = find_closure_for_lang_with_client(
+        client, qname, depth, Direction::In, lang, root,
+    )?;
     let mut caches = TestCaches::default();
     let filtered: Vec<TestedNode> = nodes
         .into_iter()

@@ -164,6 +164,22 @@ impl LspClient {
     }
 }
 
+/// LSP client を spawn -> initialize -> (TS なら) didOpen まで一通り走らせて
+/// 「query を投げ込める状態」にして返す。複数 query を 1 client で連投する
+/// hot path (layer 2.5 PoC) で使う。
+pub fn start_and_warm_up(
+    lang: super::lang::Lang,
+    root: &std::path::Path,
+) -> Result<LspClient, String> {
+    let mut client = LspClient::start_for_lang(lang)?;
+    let root_uri = super::query::path_to_file_uri(root)?;
+    let _ = client.initialize(&root_uri)?;
+    if matches!(lang, super::lang::Lang::Ts) {
+        super::ts_bootstrap::warm_up_ts_workspace(&mut client, root)?;
+    }
+    Ok(client)
+}
+
 fn read_one<R: BufRead>(r: &mut R) -> Result<String, String> {
     match read_message(r)? {
         Some(m) => Ok(m),

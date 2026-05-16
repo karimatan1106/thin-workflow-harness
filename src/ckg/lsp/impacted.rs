@@ -13,7 +13,8 @@ use std::time::Duration;
 use serde::Serialize;
 
 use super::closure::{find_closure, ClosureNode, Direction, MAX_DEPTH};
-use super::closure_lang::find_closure_for_lang;
+use super::client::LspClient;
+use super::closure_lang::{find_closure_for_lang, find_closure_for_lang_with_client};
 use super::lang::Lang;
 
 /// impacted-by 結果の 1 ノード（direction を落とした closure ノードのビュー）。
@@ -61,5 +62,20 @@ pub fn find_impacted_by_for_lang(
 ) -> Result<Vec<ImpactedNode>, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let nodes = find_closure_for_lang(qname, depth, Direction::In, lang, root)?;
+    Ok(nodes.into_iter().map(ImpactedNode::from).collect())
+}
+
+/// `find_impacted_by_for_lang` の client 再利用版 (layer 2.5 PoC)。
+pub fn find_impacted_by_for_lang_with_client(
+    client: &mut LspClient,
+    qname: &str,
+    depth: usize,
+    lang: Lang,
+    root: &Path,
+) -> Result<Vec<ImpactedNode>, String> {
+    let depth = depth.clamp(1, MAX_DEPTH);
+    let nodes = find_closure_for_lang_with_client(
+        client, qname, depth, Direction::In, lang, root,
+    )?;
     Ok(nodes.into_iter().map(ImpactedNode::from).collect())
 }

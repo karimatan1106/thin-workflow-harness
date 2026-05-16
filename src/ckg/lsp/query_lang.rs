@@ -1,6 +1,5 @@
-//! Lang 引数版の `find_symbol`。既存 `query::find_symbol(server_cmd, ...)` の
-//! 多言語ラッパで、`Lang` から server コマンドを解決して spawn する。
-//!
+//! Lang 引数版の `find_symbol`。layer 2.5 PoC で `_with_client` 版を分離。
+//! 既存 API は内部で `_with_client` を呼ぶ薄いラッパに退避。
 //! 200 行制約のため query.rs から分離。
 
 use std::path::Path;
@@ -8,17 +7,11 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
-use super::client::LspClient;
-use super::lang::{lsp_server_cmd, Lang};
-use super::query::{parse_workspace_symbols, path_to_file_uri, SymbolInfo};
-use super::ts_bootstrap::warm_up_ts_workspace;
+use super::client::{start_and_warm_up, LspClient};
+use super::lang::Lang;
+use super::query::{parse_workspace_symbols, SymbolInfo};
 
-/// `find_symbol` の Lang 版。
-///
-/// - Rust → rust-analyzer
-/// - Ts   → typescript-language-server --stdio
-///
-/// LSP request は `workspace/symbol` で同じ。各 server が文法差を吸収する。
+/// `find_symbol` の Lang 版 (既存 fire-and-forget API)。
 pub fn find_symbol_for_lang(
     lang: Lang,
     root: &Path,
@@ -26,17 +19,24 @@ pub fn find_symbol_for_lang(
     kind_filter: Option<&str>,
     timeout: Duration,
 ) -> Result<Vec<SymbolInfo>, String> {
-    let (cmd, _args) = lsp_server_cmd(lang);
-    let mut client = LspClient::start_for_lang(lang)
-        .map_err(|e| format!("spawn {cmd}: {e}"))?;
-    let root_uri = path_to_file_uri(root)?;
-    let _ = client.initialize(&root_uri)?;
-    // tsserver は document-driven。`workspace/symbol` 単独だと "No Project" を返すので、
-    // 最初に 1 件 didOpen を流して project をロードさせる。
-    if matches!(lang, Lang::Ts) {
-        warm_up_ts_workspace(&mut client, root)?;
-    }
+    let mut client = start_and_warm_up(lang, root)?;
+    let result = find_symbol_for_lang_with_client(
+        &mut client, lang, root, query, kind_filter, timeout,
+    );
+    let _ = client.shutdown();
+    result
+}
 
+/// `find_symbol_for_lang` の client 再利用版。呼び出し側は warm-up 済み
+/// `LspClient` を渡す前提。複数 query 連投の hot path で使う。
+pub fn find_symbol_for_lang_with_client(
+    client: &mut LspClient,
+    _lang: Lang,
+    _root: &Path,
+    query: &str,
+    kind_filter: Option<&str>,
+    timeout: Duration,
+) -> Result<Vec<SymbolInfo>, String> {
     let started = Instant::now();
     let mut symbols: Vec<SymbolInfo>;
     loop {
@@ -59,7 +59,5 @@ pub fn find_symbol_for_lang(
             .collect(),
         None => symbols,
     };
-
-    let _ = client.shutdown();
     Ok(filtered)
 }
