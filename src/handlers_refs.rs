@@ -2,16 +2,16 @@
 //!
 //! LSP server を spawn して位置解決 → references / callHierarchy を 1 往復させ、
 //! text/json で stdout に出力する。`--lang auto|rust|ts|py|go` で言語を選択。
-//! auto は `detect_lang_from_qname(qname).or(root_lang(root))` で推定し（`.` は TS/Py 曖昧、root_lang で解決）、
-//! 決まらなければエラー（"--lang を明示してください"）。
+//! `--daemon-port <port>` 指定時は LSP 直接 spawn を bypass、layer 2.5 daemon に投げる。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::ckg::lsp::{
     find_callers_for_lang, find_refs_for_lang, CallerInfo, RefLocation,
 };
 use crate::handlers_find_symbol::{ensure_server_available, resolve_lang};
+use crate::lsp_daemon::{CallerPayload, DaemonClient, RefPayload};
 
 /// `harness refs` CLI ハンドラ。
 pub fn cmd_refs(
@@ -19,12 +19,16 @@ pub fn cmd_refs(
     root: Option<&str>,
     format: &str,
     lang_arg: &str,
+    daemon_port: Option<u16>,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
-    let lang = resolve_lang(lang_arg, qname, &root_path)?;
-    ensure_server_available(lang)?;
-    let timeout = Duration::from_secs(30);
-    let refs = find_refs_for_lang(lang, &root_path, qname, timeout)?;
+    let refs = if let Some(port) = daemon_port {
+        fetch_refs_via_daemon(port, qname, &root_path)?
+    } else {
+        let lang = resolve_lang(lang_arg, qname, &root_path)?;
+        ensure_server_available(lang)?;
+        find_refs_for_lang(lang, &root_path, qname, Duration::from_secs(30))?
+    };
     match format {
         "json" => print_refs_json(qname, &refs)?,
         "text" => print_refs_text(qname, &refs),
@@ -39,18 +43,50 @@ pub fn cmd_callers(
     root: Option<&str>,
     format: &str,
     lang_arg: &str,
+    daemon_port: Option<u16>,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
-    let lang = resolve_lang(lang_arg, qname, &root_path)?;
-    ensure_server_available(lang)?;
-    let timeout = Duration::from_secs(30);
-    let callers = find_callers_for_lang(lang, &root_path, qname, timeout)?;
+    let callers = if let Some(port) = daemon_port {
+        fetch_callers_via_daemon(port, qname, &root_path)?
+    } else {
+        let lang = resolve_lang(lang_arg, qname, &root_path)?;
+        ensure_server_available(lang)?;
+        find_callers_for_lang(lang, &root_path, qname, Duration::from_secs(30))?
+    };
     match format {
         "json" => print_callers_json(qname, &callers)?,
         "text" => print_callers_text(qname, &callers),
         other => return Err(format!("unknown format: {other} (text|json)")),
     }
     Ok(())
+}
+
+fn fetch_refs_via_daemon(
+    port: u16,
+    qname: &str,
+    root: &Path,
+) -> Result<Vec<RefLocation>, String> {
+    let mut client = DaemonClient::connect(port)?;
+    let payload = client.refs(qname, root, Duration::from_secs(60))?;
+    Ok(payload.into_iter().map(ref_payload_to_loc).collect())
+}
+
+fn fetch_callers_via_daemon(
+    port: u16,
+    qname: &str,
+    root: &Path,
+) -> Result<Vec<CallerInfo>, String> {
+    let mut client = DaemonClient::connect(port)?;
+    let payload = client.callers(qname, root, Duration::from_secs(60))?;
+    Ok(payload.into_iter().map(caller_payload_to_info).collect())
+}
+
+fn ref_payload_to_loc(p: RefPayload) -> RefLocation {
+    RefLocation { file: p.file, line: p.line, col: p.col }
+}
+
+fn caller_payload_to_info(p: CallerPayload) -> CallerInfo {
+    CallerInfo { name: p.name, file: p.file, line: p.line }
 }
 
 fn resolve_root(root: Option<&str>) -> Result<PathBuf, String> {

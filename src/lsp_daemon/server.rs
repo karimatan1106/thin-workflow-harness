@@ -1,30 +1,26 @@
 //! foreground LSP daemon -- TCP localhost + line-based JSON.
 //!
-//! run_daemon(lang, root, port) is blocking. Ctrl-C / kill terminates.
-//! (graceful shutdown is next batch.)
-//!
-//! - one-time start_and_warm_up(lang, root) spawns LspClient
+//! - one-time start_and_warm_up(lang, root) spawns the LspClient
 //! - Arc<Mutex<LspClient>> shares the client across connections
 //! - each connection: BufReader::read_line -> 1 line = 1 request
+//! - per-request dispatch is delegated to `dispatch::handle_request`
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::ckg::lsp::{
-    find_symbol_for_lang_with_client, start_and_warm_up, Lang, LspClient,
-};
+use crate::ckg::lsp::{start_and_warm_up, Lang, LspClient};
 
-use super::protocol::{Op, Request, Response, SymbolPayload};
+use super::dispatch::handle_request;
+use super::protocol::{Request, Response};
 
 /// Start the foreground daemon. port=0 means OS-assigned.
 pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
-    let client = start_and_warm_up(lang, &root)
-        .map_err(|e| format!("warm-up failed: {e}"))?;
+    let client =
+        start_and_warm_up(lang, &root).map_err(|e| format!("warm-up failed: {e}"))?;
     let client = Arc::new(Mutex::new(client));
 
     let listener = TcpListener::bind(("127.0.0.1", port))
@@ -96,51 +92,6 @@ fn handle_connection(
             .write_all(b"\n")
             .map_err(|e| format!("write nl: {e}"))?;
         writer.flush().map_err(|e| format!("flush: {e}"))?;
-    }
-}
-
-fn handle_request(
-    client: &Arc<Mutex<LspClient>>,
-    lang: Lang,
-    _root: &Path,
-    req: Request,
-) -> Response {
-    let id = req.id;
-    match req.op {
-        Op::FindSymbol(p) => {
-            let root_path = PathBuf::from(&p.root);
-            let timeout = Duration::from_millis(p.timeout_ms);
-            let mut guard = match client.lock() {
-                Ok(g) => g,
-                Err(poison) => poison.into_inner(),
-            };
-            let res = find_symbol_for_lang_with_client(
-                &mut guard,
-                lang,
-                &root_path,
-                &p.qname,
-                p.kind.as_deref(),
-                timeout,
-            );
-            match res {
-                Ok(syms) => {
-                    let payload: Vec<SymbolPayload> =
-                        syms.into_iter().map(SymbolPayload::from).collect();
-                    Response {
-                        id,
-                        ok: true,
-                        data: serde_json::to_value(&payload).unwrap_or(Value::Null),
-                        error: None,
-                    }
-                }
-                Err(e) => Response {
-                    id,
-                    ok: false,
-                    data: Value::Null,
-                    error: Some(e),
-                },
-            }
-        }
     }
 }
 

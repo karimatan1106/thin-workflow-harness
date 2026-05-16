@@ -141,15 +141,15 @@ pub enum Command {
     /// CKG layer 2.5 ── 永続 LSP daemon (foreground PoC)。
     LspDaemon { #[command(subcommand)] cmd: crate::cli_daemon::LspDaemonCmd },
     /// 指定 symbol への参照箇所一覧。CKG layer 2 (多言語 LSP)。
-    Refs { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    Refs { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String, #[arg(long)] daemon_port: Option<u16> },
     /// 指定 function の呼び出し元一覧。CKG layer 2 (多言語 LSP)。
-    Callers { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    Callers { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String, #[arg(long)] daemon_port: Option<u16> },
     /// refs/callers の transitive 閉包。CKG layer 2 (多言語 LSP)。
-    Closure { qname: String, #[arg(long, default_value_t = 2)] depth: usize, #[arg(long, default_value = "in")] direction: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    Closure { qname: String, #[arg(long, default_value_t = 2)] depth: usize, #[arg(long, default_value = "in")] direction: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String, #[arg(long)] daemon_port: Option<u16> },
     /// 変更影響範囲評価。closure direction=in の薄いラッパ。CKG layer 2 (多言語 LSP)。
-    ImpactedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    ImpactedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String, #[arg(long)] daemon_port: Option<u16> },
     /// 指定 symbol をテストしている test 関数一覧。CKG layer 2 (多言語 LSP)。
-    TestedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    TestedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String, #[arg(long)] daemon_port: Option<u16> },
     /// CKG layer 2 の query primitive ファサード。
     Query { #[command(subcommand)] cmd: crate::cli_query::QueryCmd },
 }

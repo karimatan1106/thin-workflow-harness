@@ -60,20 +60,42 @@ pub fn dispatch(command: Command) -> Result<(), String> {
             )
         }
         Command::LspDaemon { cmd } => cli_daemon::dispatch_lsp_daemon(cmd),
-        Command::Refs { qname, root, format, lang } => {
-            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang)
+        Command::Refs { qname, root, format, lang, daemon_port } => {
+            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang, daemon_port)
         }
-        Command::Callers { qname, root, format, lang } => {
-            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang)
+        Command::Callers { qname, root, format, lang, daemon_port } => {
+            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang, daemon_port)
         }
-        Command::Closure { qname, depth, direction, root, format, lang } => {
-            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format, &lang)
+        Command::Closure { qname, depth, direction, root, format, lang, daemon_port } => {
+            handlers_closure::cmd_closure(
+                &qname,
+                depth,
+                &direction,
+                root.as_deref(),
+                &format,
+                &lang,
+                daemon_port,
+            )
         }
-        Command::ImpactedBy { qname, depth, root, format, lang } => {
-            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format, &lang)
+        Command::ImpactedBy { qname, depth, root, format, lang, daemon_port } => {
+            handlers_impacted::cmd_impacted_by(
+                &qname,
+                depth,
+                root.as_deref(),
+                &format,
+                &lang,
+                daemon_port,
+            )
         }
-        Command::TestedBy { qname, depth, root, format, lang } => {
-            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format, &lang)
+        Command::TestedBy { qname, depth, root, format, lang, daemon_port } => {
+            handlers_tested::cmd_tested_by(
+                &qname,
+                depth,
+                root.as_deref(),
+                &format,
+                &lang,
+                daemon_port,
+            )
         }
         Command::Query { cmd } => cli_query::dispatch_query(cmd),
     }

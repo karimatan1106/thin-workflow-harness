@@ -106,19 +106,27 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
             &query, kind.as_deref(), root.as_deref(), &format, &lang, None,
         ),
         QueryCmd::Refs { qname, root, format, lang } => {
-            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang)
+            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang, None)
         }
         QueryCmd::Callers { qname, root, format, lang } => {
-            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang)
+            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang, None)
         }
         QueryCmd::Closure { qname, depth, direction, root, format, lang } => {
-            handlers_closure::cmd_closure(&qname, depth, &direction, root.as_deref(), &format, &lang)
+            handlers_closure::cmd_closure(
+                &qname,
+                depth,
+                &direction,
+                root.as_deref(),
+                &format,
+                &lang,
+                None,
+            )
         }
         QueryCmd::ImpactedBy { qname, depth, root, format, lang } => {
-            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format, &lang)
+            handlers_impacted::cmd_impacted_by(&qname, depth, root.as_deref(), &format, &lang, None)
         }
         QueryCmd::TestedBy { qname, depth, root, format, lang } => {
-            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format, &lang)
+            handlers_tested::cmd_tested_by(&qname, depth, root.as_deref(), &format, &lang, None)
         }
     }
 }
