@@ -12,6 +12,11 @@ use serde_json::{json, Value};
 
 use super::client::LspClient;
 
+/// `workspace/symbol` が空配列を返した時にリトライする回数の上限。
+/// rust-analyzer の indexing 中の一時空応答だけ吸収すれば十分なので 3 回 (~1.5s) に絞る。
+/// no-hit symbol が timeout (例 60s) を食い潰す旧挙動を防ぐためのガード。
+const EMPTY_RETRY_ATTEMPTS: usize = 3;
+
 /// `find_symbol` が返す 1 件分。最小限のフィールドだけ。
 #[derive(Debug, Clone, Serialize)]
 pub struct SymbolInfo {
@@ -40,15 +45,21 @@ pub fn find_symbol(
     let root_uri = path_to_file_uri(root)?;
     let _ = client.initialize(&root_uri)?;
 
+    // empty 結果 = symbol が無い (LSP の正常応答) なので即返す。
+    // ただし rust-analyzer の indexing 中は一時的に空が返るケースがあるため
+    // 上限つきで short retry する (timeout 60s 全部使う旧挙動は no-hit で張り付く)。
     let started = Instant::now();
-    let mut symbols: Vec<SymbolInfo>;
-    loop {
+    let mut symbols: Vec<SymbolInfo> = Vec::new();
+    for attempt in 0..EMPTY_RETRY_ATTEMPTS {
         let resp: Value = client.request(
             "workspace/symbol",
             json!({ "query": query }),
         )?;
         symbols = parse_workspace_symbols(&resp);
         if !symbols.is_empty() {
+            break;
+        }
+        if attempt + 1 == EMPTY_RETRY_ATTEMPTS {
             break;
         }
         if started.elapsed() >= timeout {

@@ -25,6 +25,10 @@ use super::lang::Lang;
 use super::refs_lang::{find_callers_for_lang, find_refs_for_lang};
 use super::refs_parse::pick_best_match;
 
+/// `workspace/symbol` empty 応答時のリトライ上限。indexing 中の一時空のみ吸収する。
+/// no-hit qname で timeout (60s) を食い潰す旧挙動を防ぐ (layer 2.5 bench で発覚)。
+const EMPTY_RETRY_ATTEMPTS: usize = 3;
+
 /// `find_refs` が返す 1 件分。
 #[derive(Debug, Clone, Serialize)]
 pub struct RefLocation {
@@ -76,14 +80,18 @@ pub fn find_callers(
     find_callers_for_lang(Lang::Rust, root, qname, timeout)
 }
 
-/// `qname` を workspace/symbol で解決する（空 or content modified ならリトライ）。
+/// `qname` を workspace/symbol で解決する（empty/content modified を short retry で吸収）。
+///
+/// 旧実装は timeout (60s) に達するまで empty を retry し続けていたため、
+/// no-hit qname で 60s 張り付く問題があった (layer 2.5 bench 発覚)。
+/// 現在は indexing 中の一時空のみ `EMPTY_RETRY_ATTEMPTS` 回まで許容する。
 pub(super) fn resolve_position(
     client: &mut LspClient,
     qname: &str,
     timeout: Duration,
 ) -> Result<ResolvedPos, String> {
     let started = Instant::now();
-    loop {
+    for attempt in 0..EMPTY_RETRY_ATTEMPTS {
         let resp = match client
             .request::<Value>("workspace/symbol", serde_json::json!({ "query": qname }))
         {
@@ -94,11 +102,15 @@ pub(super) fn resolve_position(
         if let Some(p) = pick_best_match(&resp, qname) {
             return Ok(p);
         }
+        if attempt + 1 == EMPTY_RETRY_ATTEMPTS {
+            break;
+        }
         if started.elapsed() >= timeout {
-            return Err(format!("symbol not found: {qname}"));
+            break;
         }
         std::thread::sleep(Duration::from_millis(500));
     }
+    Err(format!("symbol not found: {qname}"))
 }
 
 /// rust-analyzer の `content modified` (-32801) を short retry で吸収する request。

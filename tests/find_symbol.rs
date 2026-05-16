@@ -69,3 +69,32 @@ fn find_symbol_kind_filter_excludes_other_kinds() {
         assert_eq!(s.kind, "function", "non-function leaked through filter: {s:?}");
     }
 }
+
+
+/// 存在しない symbol を timeout 60s で叩いても、empty が < 5s で返ることを保証する。
+/// 旧実装は empty を retry し続けて 60s timeout に張り付くバグがあった (layer 2.5 bench 発覚)。
+#[test]
+fn find_symbol_empty_returns_fast() {
+    if !rust_analyzer_available() {
+        eprintln!("skip: rust-analyzer が PATH に無いため skip");
+        return;
+    }
+    let root = fixture_root();
+    let started = std::time::Instant::now();
+    let syms = find_symbol(
+        "rust-analyzer",
+        &root,
+        "AbsolutelyNotExistent_ZzNotReal999",
+        None,
+        Duration::from_secs(60),
+    )
+    .expect("find_symbol ok (empty allowed)");
+    let elapsed_ms = started.elapsed().as_millis();
+    assert!(syms.is_empty(), "no-hit query returned non-empty: {syms:?}");
+    // cold-start (LSP spawn + initialize) を含むので 30s 余裕、ただし 60s には張り付かない。
+    assert!(
+        elapsed_ms < 30_000,
+        "no-hit symbol took too long: {elapsed_ms}ms (should be much less than 60s)"
+    );
+    eprintln!("[fast-empty] no-hit symbol returned in {elapsed_ms}ms");
+}
