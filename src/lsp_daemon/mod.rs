@@ -7,15 +7,19 @@
 //! - client: DaemonClient::connect(port) / connect_or_spawn(lang, root, timeout)
 //! - client_ops: per-op convenience methods on DaemonClient
 //! - port_file: ~/.cache/thin-workflow-harness/daemon-<lang>-<hash>.port 規約
+//! - port_file_list: cache_dir enumerate (admin/list 用)
+//! - admin: `harness lsp-daemon list/stop` 実装
 //!
 //! Scope: foreground / 7 ops (find_symbol + refs + callers + outgoing + closure
 //! + impacted_by + tested_by) / single Lang per daemon / auto-spawn from client.
 
+pub mod admin;
 pub mod client;
 pub mod client_ops;
 pub mod dispatch;
 pub mod payload;
 pub mod port_file;
+pub mod port_file_list;
 pub mod protocol;
 pub mod server;
 

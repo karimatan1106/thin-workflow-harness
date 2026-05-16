@@ -6,9 +6,10 @@
 //! - per-op convenience methods live in `client_ops.rs`
 //! - request id auto-assigned via atomic counter
 //! - PoC: 1 connection processes 1 request at a time (ordering preserved)
-//! - NOTE: 真の detach (Unix setsid / Windows DETACHED_PROCESS) は次バッチ送り。
-//!   現状は Stdio::null() で stdin/stdout/stderr を切るのみ。親が die すると
-//!   子の生存は OS 依存。
+//! - Windows: DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP で子を完全 detach。
+//!   msys2 pipeline で head した時の子孫 handle inherit ブロックが解消。
+//! - Unix: 現状 Stdio::null() のみ。setsid 経由の真 detach は libc 依存追加が
+//!   必要なので次バッチ送り (TODO)。
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
@@ -65,8 +66,8 @@ impl DaemonClient {
 
         let self_exe = std::env::current_exe()
             .map_err(|e| format!("current_exe: {e}"))?;
-        let _child = std::process::Command::new(&self_exe)
-            .arg("lsp-daemon")
+        let mut cmd = std::process::Command::new(&self_exe);
+        cmd.arg("lsp-daemon")
             .arg("serve")
             .arg("--lang")
             .arg(lang_s)
@@ -76,9 +77,19 @@ impl DaemonClient {
             .arg("0")
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("spawn daemon: {e}"))?;
+            .stderr(std::process::Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // DETACHED_PROCESS = 0x00000008, CREATE_NEW_PROCESS_GROUP = 0x00000200
+            // 親プロセスから完全に切り離す。msys2 pipeline の head ブロックも解消。
+            const DETACHED_PROCESS: u32 = 0x0000_0008;
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+            cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        }
+        // TODO(unix): libc::setsid() で真 detach。今は std::process::Stdio::null
+        // 経由の弱い切り離しのみ。
+        let _child = cmd.spawn().map_err(|e| format!("spawn daemon: {e}"))?;
 
         let deadline = Instant::now() + spawn_timeout;
         let poll_interval = Duration::from_millis(200);
