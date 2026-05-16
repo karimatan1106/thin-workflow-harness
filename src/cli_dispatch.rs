@@ -4,7 +4,7 @@
 
 use crate::cli::Command;
 use crate::{
-    cli_query, handlers, handlers2, handlers3, handlers_advance, handlers_closure,
+    cli_daemon, cli_query, handlers, handlers2, handlers3, handlers_advance, handlers_closure,
     handlers_find_symbol, handlers_impacted, handlers_init, handlers_outline, handlers_refs,
     handlers_stats, handlers_tested, runtime,
 };
@@ -49,9 +49,17 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
         Command::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
-        Command::FindSymbol { query, kind, root, format, lang } => handlers_find_symbol::cmd_find_symbol(
-            &query, kind.as_deref(), root.as_deref(), &format, &lang,
-        ),
+        Command::FindSymbol { query, kind, root, format, lang, daemon_port } => {
+            handlers_find_symbol::cmd_find_symbol(
+                &query,
+                kind.as_deref(),
+                root.as_deref(),
+                &format,
+                &lang,
+                daemon_port,
+            )
+        }
+        Command::LspDaemon { cmd } => cli_daemon::dispatch_lsp_daemon(cmd),
         Command::Refs { qname, root, format, lang } => {
             handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang)
         }

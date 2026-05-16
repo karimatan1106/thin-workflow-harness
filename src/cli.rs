@@ -137,7 +137,9 @@ pub enum Command {
     /// 指定ファイルの outline（トップレベル/主要シンボル）を表示する。CKG layer 1。
     Outline { path: String, #[arg(long, default_value = "text")] format: String },
     /// workspace のシンボル検索。CKG layer 2 (多言語 LSP)。
-    FindSymbol { query: String, #[arg(long)] kind: Option<String>, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
+    FindSymbol { query: String, #[arg(long)] kind: Option<String>, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String, #[arg(long)] daemon_port: Option<u16> },
+    /// CKG layer 2.5 ── 永続 LSP daemon (foreground PoC)。
+    LspDaemon { #[command(subcommand)] cmd: crate::cli_daemon::LspDaemonCmd },
     /// 指定 symbol への参照箇所一覧。CKG layer 2 (多言語 LSP)。
     Refs { qname: String, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
     /// 指定 function の呼び出し元一覧。CKG layer 2 (多言語 LSP)。

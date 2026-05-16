@@ -5,8 +5,10 @@
 
 pub mod ckg;
 pub mod cli;
+pub mod cli_daemon;
 pub mod cli_dispatch;
 pub mod cli_query;
+pub mod lsp_daemon;
 pub mod detect;
 pub mod event;
 pub mod gate;

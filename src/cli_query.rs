@@ -103,7 +103,7 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
     match cmd {
         QueryCmd::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
         QueryCmd::Symbol { query, kind, root, format, lang } => handlers_find_symbol::cmd_find_symbol(
-            &query, kind.as_deref(), root.as_deref(), &format, &lang,
+            &query, kind.as_deref(), root.as_deref(), &format, &lang, None,
         ),
         QueryCmd::Refs { qname, root, format, lang } => {
             handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang)

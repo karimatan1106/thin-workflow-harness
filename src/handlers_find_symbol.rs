@@ -1,18 +1,13 @@
-//! `harness find-symbol <query> [--lang auto|rust|ts|py|go]` ハンドラ。
+//! `harness find-symbol <query> [--lang ...] [--daemon-port <port>]` ハンドラ。
 //!
-//! - `--lang auto` 既定: `detect_lang_from_qname(query).or(root_lang(root))`
-//! - `--lang rust|ts|py|go` 明示: その Lang で固定（`python` は `py`、`typescript` は `ts` の alias）
-//! - 推定不能なら「--lang を明示してください」エラー
-//!
-//! LSP server が PATH に無い時は「インストールしてください」エラー。
-//! TypeScript の場合 `typescript-language-server --stdio` を spawn する。
-//!
-//! 200 行制約のため lang 解決と server 確認は別関数に分ける。
+//! `--lang auto`: `detect_lang_from_qname(query).or(root_lang(root))`。
+//! `--daemon-port <port>` 指定時は LSP 直接 spawn を bypass、layer 2.5 daemon に投げる。
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::ckg::lsp::{find_symbol_for_lang, lsp_server_cmd, Lang, SymbolInfo};
+use crate::lsp_daemon::{DaemonClient, SymbolPayload};
 
 /// CLI ハンドラ本体。
 pub fn cmd_find_symbol(
@@ -21,26 +16,45 @@ pub fn cmd_find_symbol(
     root: Option<&str>,
     format: &str,
     lang_arg: &str,
+    daemon_port: Option<u16>,
 ) -> Result<(), String> {
     let root_path: PathBuf = match root {
         Some(r) => PathBuf::from(r),
         None => std::env::current_dir().map_err(|e| format!("cwd: {e}"))?,
     };
-    let lang = resolve_lang(lang_arg, query, &root_path)?;
-    ensure_server_available(lang)?;
-    // TS は tsserver の project ロードが遅い workspace（FundingRate/frontend 等）で
-    // 30s では足りない場合がある。lang 毎に既定 timeout を変える。
-    let timeout = match lang {
-        Lang::Ts => Duration::from_secs(60),
-        _ => Duration::from_secs(30),
+    let syms = if let Some(port) = daemon_port {
+        fetch_via_daemon(port, query, &root_path, kind)?
+    } else {
+        let lang = resolve_lang(lang_arg, query, &root_path)?;
+        ensure_server_available(lang)?;
+        let timeout = match lang {
+            Lang::Ts => Duration::from_secs(60),
+            _ => Duration::from_secs(30),
+        };
+        find_symbol_for_lang(lang, &root_path, query, kind, timeout)?
     };
-    let syms = find_symbol_for_lang(lang, &root_path, query, kind, timeout)?;
     match format {
         "json" => print_json(&syms)?,
         "text" => print_text(&syms),
         other => return Err(format!("unknown format: {other} (text|json)")),
     }
     Ok(())
+}
+
+/// daemon に find_symbol を投げて `SymbolInfo` 列に正規化する。
+fn fetch_via_daemon(
+    port: u16,
+    query: &str,
+    root: &Path,
+    kind: Option<&str>,
+) -> Result<Vec<SymbolInfo>, String> {
+    let mut client = DaemonClient::connect(port)?;
+    let payload = client.find_symbol(query, root, kind, Duration::from_secs(60))?;
+    Ok(payload.into_iter().map(payload_to_info).collect())
+}
+
+fn payload_to_info(p: SymbolPayload) -> SymbolInfo {
+    SymbolInfo { name: p.name, kind: p.kind, file: p.file, line: p.line, col: p.col }
 }
 
 /// `--lang` 引数を `Lang` に解決する。
@@ -70,11 +84,7 @@ pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, St
 }
 
 /// 指定 Lang の LSP server が PATH 上にあるか確認する。無ければ install 案内エラー。
-///
-/// Windows では npm global install の `.cmd` shim が `npm config get prefix` の直下に
-/// 置かれることが多く、その prefix が %PATH% に入っていない環境がある。
-/// TS/Py（typescript-language-server / pyright）が直接見つからない場合、npm prefix を
-/// 拾って一時的に PATH 先頭に append し、再探索する。
+/// Windows では npm-global の `.cmd` shim が PATH に無いことがあるため npm prefix を再探索する。
 pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
     let (cmd, _args) = lsp_server_cmd(lang);
     if which(&cmd).is_some() {
