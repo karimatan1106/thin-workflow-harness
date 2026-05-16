@@ -148,8 +148,6 @@ pub enum Command {
     ImpactedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
     /// 指定 symbol をテストしている test 関数一覧。CKG layer 2 (多言語 LSP)。
     TestedBy { qname: String, #[arg(long, default_value_t = 3)] depth: usize, #[arg(long)] root: Option<String>, #[arg(long, default_value = "text")] format: String, #[arg(long, default_value = "auto")] lang: String },
-    /// CKG layer 3 (SCIP + SQLite) 操作。Phase A1 では init のみ。
-    Index { #[command(subcommand)] cmd: crate::cli_index::IndexCmd },
     /// CKG layer 2 の query primitive ファサード。
     Query { #[command(subcommand)] cmd: crate::cli_query::QueryCmd },
 }
