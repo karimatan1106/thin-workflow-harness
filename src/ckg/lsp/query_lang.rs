@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use super::client::LspClient;
 use super::lang::{lsp_server_cmd, Lang};
 use super::query::{parse_workspace_symbols, path_to_file_uri, SymbolInfo};
+use super::ts_bootstrap::warm_up_ts_workspace;
 
 /// `find_symbol` の Lang 版。
 ///
@@ -30,6 +31,11 @@ pub fn find_symbol_for_lang(
         .map_err(|e| format!("spawn {cmd}: {e}"))?;
     let root_uri = path_to_file_uri(root)?;
     let _ = client.initialize(&root_uri)?;
+    // tsserver は document-driven。`workspace/symbol` 単独だと "No Project" を返すので、
+    // 最初に 1 件 didOpen を流して project をロードさせる。
+    if matches!(lang, Lang::Ts) {
+        warm_up_ts_workspace(&mut client, root)?;
+    }
 
     let started = Instant::now();
     let mut symbols: Vec<SymbolInfo>;

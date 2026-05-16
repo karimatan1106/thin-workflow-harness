@@ -18,6 +18,16 @@ use super::refs::{
     request_with_retry, resolve_position, CallerInfo, RefLocation,
 };
 use super::refs_parse::{parse_incoming_calls, parse_outgoing_calls, parse_references};
+use super::ts_bootstrap::warm_up_ts_workspace;
+
+/// Lang::Ts のときだけ tsserver の project ロードを発火させる。
+/// `LspClient::initialize` 直後に呼ぶ。
+fn maybe_warm_up_ts(lang: Lang, client: &mut LspClient, root: &Path) -> Result<(), String> {
+    if matches!(lang, Lang::Ts) {
+        warm_up_ts_workspace(client, root)?;
+    }
+    Ok(())
+}
 
 /// `find_refs` の Lang 版。
 ///
@@ -32,6 +42,7 @@ pub fn find_refs_for_lang(
     let mut client = LspClient::start_for_lang(lang)?;
     let root_uri = path_to_file_uri(root)?;
     let _ = client.initialize(&root_uri)?;
+    maybe_warm_up_ts(lang, &mut client, root)?;
 
     let started = Instant::now();
     let pos = resolve_position(&mut client, qname, timeout)?;
@@ -63,6 +74,7 @@ pub fn find_callers_for_lang(
     let mut client = LspClient::start_for_lang(lang)?;
     let root_uri = path_to_file_uri(root)?;
     let _ = client.initialize(&root_uri)?;
+    maybe_warm_up_ts(lang, &mut client, root)?;
 
     let started = Instant::now();
     let pos = resolve_position(&mut client, qname, timeout)?;
@@ -112,6 +124,7 @@ pub fn find_outgoing_for_lang(
     let mut client = LspClient::start_for_lang(lang)?;
     let root_uri = path_to_file_uri(root)?;
     let _ = client.initialize(&root_uri)?;
+    maybe_warm_up_ts(lang, &mut client, root)?;
 
     let started = Instant::now();
     let pos = resolve_position(&mut client, qname, timeout)?;

@@ -12,6 +12,7 @@
 //! `closure_lang` / `tested_lang` を分離配置。各 query primitive が Lang 受付。
 
 pub mod client;
+mod client_spawn;
 pub mod closure;
 pub mod closure_lang;
 pub mod framing;
@@ -28,6 +29,7 @@ pub mod tested_lang;
 pub mod tested_py;
 pub mod tested_rust;
 pub mod tested_ts;
+pub mod ts_bootstrap;
 pub mod uri;
 
 pub use client::LspClient;

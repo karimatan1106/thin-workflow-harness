@@ -6,11 +6,14 @@
 //! - rust-analyzer の progress / log 系通知は黙って捨てる
 
 use std::io::{BufRead, BufReader};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout};
 
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 
+use super::client_spawn::spawn_child;
+#[cfg(windows)]
+use super::client_spawn::spawn_via_cmd;
 use super::framing::{read_message, write_message};
 
 /// spawned な LSP プロセスを保持する同期クライアント。
@@ -28,14 +31,31 @@ impl LspClient {
     }
 
     /// LSP サーバを spawn する。args は typescript-language-server の `--stdio` 等で使う。
+    ///
+    /// Windows では npm-global の `typescript-language-server` が `.cmd` shim として
+    /// 置かれることが多く、`Command::new` は PATHEXT 解決をしないため直 spawn が失敗する。
+    /// 失敗時に `cmd /c <cmd> <args...>` で起動する fallback を持つ。
     pub fn spawn_with_args(cmd: &str, args: &[String]) -> Result<Self, String> {
-        let mut child = Command::new(cmd)
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| format!("spawn {cmd}: {e}"))?;
+        let mut child = match spawn_child(cmd, args) {
+            Ok(c) => c,
+            Err(direct_err) => {
+                #[cfg(windows)]
+                {
+                    match spawn_via_cmd(cmd, args) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Err(format!(
+                                "spawn {cmd}: direct={direct_err}; via cmd: {e}"
+                            ));
+                        }
+                    }
+                }
+                #[cfg(not(windows))]
+                {
+                    return Err(format!("spawn {cmd}: {direct_err}"));
+                }
+            }
+        };
         let stdin = child
             .stdin
             .take()

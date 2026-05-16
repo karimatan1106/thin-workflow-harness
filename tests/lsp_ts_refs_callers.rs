@@ -25,11 +25,49 @@ fn fixture_root() -> PathBuf {
 }
 
 fn ts_lsp_available() -> bool {
-    Command::new("typescript-language-server")
+    if try_ts_version() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(out) = Command::new("cmd")
+            .args(["/c", "npm", "config", "get", "prefix"])
+            .output()
+        {
+            if out.status.success() {
+                let prefix = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !prefix.is_empty() {
+                    let cur = std::env::var("PATH").unwrap_or_default();
+                    let sep = ";";
+                    let new_path = format!("{prefix}{sep}{cur}");
+                    std::env::set_var("PATH", &new_path);
+                    return try_ts_version();
+                }
+            }
+        }
+    }
+    false
+}
+
+fn try_ts_version() -> bool {
+    let direct = Command::new("typescript-language-server")
         .arg("--version")
         .output()
         .map(|o| o.status.success())
-        .unwrap_or(false)
+        .unwrap_or(false);
+    if direct {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        return Command::new("cmd")
+            .args(["/c", "typescript-language-server", "--version"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+    }
+    #[allow(unreachable_code)]
+    false
 }
 
 #[test]

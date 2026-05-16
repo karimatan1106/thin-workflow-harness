@@ -28,7 +28,12 @@ pub fn cmd_find_symbol(
     };
     let lang = resolve_lang(lang_arg, query, &root_path)?;
     ensure_server_available(lang)?;
-    let timeout = Duration::from_secs(30);
+    // TS は tsserver の project ロードが遅い workspace（FundingRate/frontend 等）で
+    // 30s では足りない場合がある。lang 毎に既定 timeout を変える。
+    let timeout = match lang {
+        Lang::Ts => Duration::from_secs(60),
+        _ => Duration::from_secs(30),
+    };
     let syms = find_symbol_for_lang(lang, &root_path, query, kind, timeout)?;
     match format {
         "json" => print_json(&syms)?,
@@ -65,10 +70,21 @@ pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, St
 }
 
 /// 指定 Lang の LSP server が PATH 上にあるか確認する。無ければ install 案内エラー。
+///
+/// Windows では npm global install の `.cmd` shim が `npm config get prefix` の直下に
+/// 置かれることが多く、その prefix が %PATH% に入っていない環境がある。
+/// TS/Py（typescript-language-server / pyright）が直接見つからない場合、npm prefix を
+/// 拾って一時的に PATH 先頭に append し、再探索する。
 pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
     let (cmd, _args) = lsp_server_cmd(lang);
     if which(&cmd).is_some() {
         return Ok(());
+    }
+    #[cfg(windows)]
+    {
+        if matches!(lang, Lang::Ts | Lang::Py) && augment_path_from_npm_prefix() && which(&cmd).is_some() {
+            return Ok(());
+        }
     }
     let hint = match lang {
         Lang::Rust => "`rustup component add rust-analyzer`",
@@ -79,6 +95,31 @@ pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
     Err(format!(
         "{cmd} が PATH に見つかりません。{hint} でインストールしてください"
     ))
+}
+
+/// Windows のみ: `npm config get prefix` を呼んで PATH 先頭に append する。
+/// 既に append 済み or prefix 取得失敗時は何もしない。成功時 true。
+#[cfg(windows)]
+fn augment_path_from_npm_prefix() -> bool {
+    let out = std::process::Command::new("cmd")
+        .args(["/c", "npm", "config", "get", "prefix"])
+        .output()
+        .ok();
+    let prefix = match out {
+        Some(o) if o.status.success() => {
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        }
+        _ => return false,
+    };
+    if prefix.is_empty() {
+        return false;
+    }
+    let cur = std::env::var("PATH").unwrap_or_default();
+    if cur.split(';').any(|p| p.eq_ignore_ascii_case(&prefix)) {
+        return true;
+    }
+    std::env::set_var("PATH", format!("{prefix};{cur}"));
+    true
 }
 
 /// rust-analyzer / typescript-language-server を PATH から探す（粗いが pragmatic）。
