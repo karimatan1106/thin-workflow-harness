@@ -59,3 +59,23 @@ fn query_outline_matches_legacy_outline() {
         "alias と query 配下で stdout が一致しない"
     );
 }
+
+#[test]
+fn query_symbol_help_advertises_daemon_flags() {
+    let o = run(&["query", "symbol", "--help"]);
+    assert!(o.status.success(), "query symbol --help failed: {}", out_str(&o));
+    let s = out_str(&o);
+    assert!(s.contains("--daemon-port"), "query symbol --help missing --daemon-port: {s}");
+    assert!(s.contains("--use-daemon"), "query symbol --help missing --use-daemon: {s}");
+}
+
+#[test]
+fn query_refs_callers_closure_impacted_tested_advertise_daemon_flags() {
+    for sub in ["refs", "callers", "closure", "impacted-by", "tested-by"] {
+        let o = run(&["query", sub, "--help"]);
+        assert!(o.status.success(), "query {sub} --help failed: {}", out_str(&o));
+        let s = out_str(&o);
+        assert!(s.contains("--daemon-port"), "query {sub} --help missing --daemon-port: {s}");
+        assert!(s.contains("--use-daemon"), "query {sub} --help missing --use-daemon: {s}");
+    }
+}
