@@ -36,6 +36,13 @@ fn cmd_stop_stale_smoke_runs_without_panic() {
 }
 
 #[test]
+fn cmd_stop_by_lang_smoke_zero_entries_ok() {
+    // 該当 lang が 0 件でも panic / Err しないこと。
+    let res = admin::cmd_stop_by_lang("nonexistent_lang_marker");
+    assert!(res.is_ok(), "cmd_stop_by_lang returned Err: {:?}", res);
+}
+
+#[test]
 fn auto_spawn_then_list_then_stop_specific() {
     if !rust_analyzer_available() {
         eprintln!("skip: rust-analyzer not in PATH");

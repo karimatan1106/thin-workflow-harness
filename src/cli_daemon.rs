@@ -25,7 +25,7 @@ pub enum LspDaemonCmd {
     },
     /// 起動中の daemon 一覧を表示する (cache_dir 配下の port file 経由)。
     List,
-    /// daemon を停止する。--lang + --root or --all or --stale のいずれか必須。
+    /// daemon を停止する。--lang (+ optional --root) or --all or --stale のいずれか必須。
     Stop {
         #[arg(long)]
         lang: Option<String>,
@@ -65,7 +65,12 @@ pub fn dispatch_lsp_daemon(cmd: LspDaemonCmd) -> Result<(), String> {
                     let lang_s = lang_to_str(lang_enum);
                     admin::cmd_stop_specific(lang_s, std::path::Path::new(&r))
                 }
-                _ => Err("--lang + --root or --all or --stale required".to_string()),
+                (Some(l), None) => {
+                    let lang_enum = parse_lang(&l)?;
+                    let lang_s = lang_to_str(lang_enum);
+                    admin::cmd_stop_by_lang(lang_s)
+                }
+                _ => Err("--lang, --all, or --stale required".to_string()),
             }
         }
     }

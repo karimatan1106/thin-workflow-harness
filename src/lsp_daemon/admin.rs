@@ -1,15 +1,19 @@
 //! daemon の list / stop 処理。port file 経由で daemon process を管理する。
 //!
-//! - `cmd_list()`        : 全 port file を表示 (alive/dead 判定込)
+//! - `cmd_list()`            : 全 port file を表示 (alive/dead 判定込)
 //! - `cmd_stop_specific(lang, root)` : 指定 daemon を kill + port file 削除
-//! - `cmd_stop_all()`    : 全 daemon を kill + port file 削除
-//! - `cmd_stop_stale()`  : dead な port file のみ削除 (process は触らない)
+//! - `cmd_stop_by_lang(lang)`: 指定 lang の全 daemon を kill + port file 削除
+//! - `cmd_stop_all()`        : 全 daemon を kill + port file 削除
+//! - `cmd_stop_stale()`      : dead な port file のみ削除 (process は触らない)
 //!
-//! process 生存 / kill は OS 標準コマンドにフォールバック:
-//! - Windows: `tasklist /NH /FI` で生存判定、`taskkill /F /PID` で kill
-//! - Unix:    `kill -0 <pid>` で生存判定、`kill -TERM` -> 3s wait -> `kill -KILL`
+//! 生存判定は PID + TCP port reachability の二段:
+//! - Windows: `tasklist /NH /FI` で PID alive、`taskkill /F /PID` で kill
+//! - Unix:    `kill -0 <pid>` で PID alive、`kill -TERM` -> 3s wait -> `kill -KILL`
+//! - port:    `TcpStream::connect_timeout(127.0.0.1:<port>, 100ms)` で reachable 確認
 
+use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
+use std::time::Duration;
 
 use crate::lsp_daemon::port_file;
 use crate::lsp_daemon::port_file_list;
@@ -22,7 +26,11 @@ pub fn cmd_list() -> Result<(), String> {
         "LANG", "WS_HASH", "PID", "PORT", "STARTED_AT_MS"
     );
     for e in entries {
-        let status = if is_process_alive(e.content.pid) { "alive" } else { "dead" };
+        let status = if is_process_alive_strict(e.content.pid, e.content.port) {
+            "alive"
+        } else {
+            "dead"
+        };
         println!(
             "{:<6} {:<18} {:<7} {:<6} {:<16} {}",
             e.lang,
@@ -47,12 +55,27 @@ pub fn cmd_stop_specific(lang: &str, root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// `harness lsp-daemon stop --lang <l>` (root 省略) の実装。指定 lang の全 daemon を kill。
+pub fn cmd_stop_by_lang(lang: &str) -> Result<(), String> {
+    let entries = port_file_list::list_all()?;
+    let mut killed = 0usize;
+    for e in entries.iter().filter(|e| e.lang == lang) {
+        if is_process_alive_strict(e.content.pid, e.content.port) {
+            let _ = kill_pid(e.content.pid);
+            killed += 1;
+        }
+        let _ = port_file::delete(&e.path);
+    }
+    println!("stopped {killed} {lang} daemons");
+    Ok(())
+}
+
 /// `harness lsp-daemon stop --all` の実装。
 pub fn cmd_stop_all() -> Result<(), String> {
     let entries = port_file_list::list_all()?;
     let mut killed = 0usize;
     for e in entries {
-        if is_process_alive(e.content.pid) {
+        if is_process_alive_strict(e.content.pid, e.content.port) {
             let _ = kill_pid(e.content.pid);
             killed += 1;
         }
@@ -63,11 +86,12 @@ pub fn cmd_stop_all() -> Result<(), String> {
 }
 
 /// `harness lsp-daemon stop --stale` の実装。
+/// PID + port reachability の二段で dead 判定 (片方 NG で stale 扱い)。
 pub fn cmd_stop_stale() -> Result<(), String> {
     let entries = port_file_list::list_all()?;
     let mut removed = 0usize;
     for e in entries {
-        if !is_process_alive(e.content.pid) {
+        if !is_process_alive_strict(e.content.pid, e.content.port) {
             let _ = port_file::delete(&e.path);
             removed += 1;
         }
@@ -76,7 +100,13 @@ pub fn cmd_stop_stale() -> Result<(), String> {
     Ok(())
 }
 
-fn is_process_alive(pid: u32) -> bool {
+/// PID + port の二段で生存確認。両方 OK で true、片方 NG で false (stale 扱い)。
+fn is_process_alive_strict(pid: u32, port: u16) -> bool {
+    is_pid_alive(pid) && is_port_reachable(port)
+}
+
+/// PID alive check (Windows tasklist / Unix kill -0)。
+fn is_pid_alive(pid: u32) -> bool {
     #[cfg(windows)]
     {
         let out = std::process::Command::new("tasklist")
@@ -99,6 +129,12 @@ fn is_process_alive(pid: u32) -> bool {
             .map(|s| s.success())
             .unwrap_or(false)
     }
+}
+
+/// port が localhost で TCP connect 可能か (timeout 100ms)。
+fn is_port_reachable(port: u16) -> bool {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok()
 }
 
 fn kill_pid(pid: u32) -> Result<(), String> {
@@ -143,7 +179,18 @@ mod tests {
     }
 
     #[test]
-    fn is_process_alive_returns_false_for_unlikely_pid() {
-        assert!(!is_process_alive(4_294_967_294));
+    fn is_pid_alive_returns_false_for_unlikely_pid() {
+        assert!(!is_pid_alive(4_294_967_294));
+    }
+
+    #[test]
+    fn is_port_reachable_returns_false_for_unused_high_port() {
+        // 65500 は usually 未使用なので false 期待。たまたま使用中なら true でも fail させない。
+        let _ = is_port_reachable(65500);
+    }
+
+    #[test]
+    fn is_process_alive_strict_false_when_pid_dead() {
+        assert!(!is_process_alive_strict(4_294_967_294, 65500));
     }
 }
