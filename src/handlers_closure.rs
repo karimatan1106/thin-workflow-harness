@@ -2,7 +2,8 @@
 //!
 //! `--lang auto|rust|ts|py|go` を受け、対応 LSP server を spawn して
 //! find_closure_for_lang を回す。text/json で stdout 出力。
-//! `--daemon-port <port>` / `--use-daemon` で layer 2.5 daemon 経由可。
+//! 既定動作は daemon 経由（auto-spawn または `--daemon-port` で固定 port）。
+//! 環境変数 `HARNESS_DIRECT_LSP=1` で daemon を bypass し直接 LSP を spawn する（debug 用）。
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -12,7 +13,6 @@ use crate::handlers_find_symbol::{ensure_server_available, open_client, resolve_
 use crate::lsp_daemon::ClosureNodePayload;
 
 /// `harness closure` CLI ハンドラ。
-#[allow(clippy::too_many_arguments)]
 pub fn cmd_closure(
     qname: &str,
     depth: usize,
@@ -21,12 +21,11 @@ pub fn cmd_closure(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
-    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
     let dir = Direction::parse(direction)?;
     let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
-    let nodes = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+    let nodes = if let Some(mut c) = open_client(daemon_port, &root_path, &lang_lazy)? {
         let p = c.closure(qname, depth, direction, &root_path, Duration::from_secs(120))?;
         p.into_iter().map(closure_payload_to_node).collect()
     } else {

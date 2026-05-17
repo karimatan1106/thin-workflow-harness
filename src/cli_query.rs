@@ -20,7 +20,7 @@ pub enum QueryCmd {
         #[arg(long, default_value = "text")]
         format: String,
     },
-    /// workspace のシンボル検索（旧 find-symbol）。多言語 LSP 対応。
+    /// workspace のシンボル検索（旧 find-symbol）。多言語 LSP 対応。daemon 経由が既定。
     Symbol {
         query: String,
         #[arg(long)]
@@ -34,10 +34,8 @@ pub enum QueryCmd {
         lang: String,
         #[arg(long)]
         daemon_port: Option<u16>,
-        #[arg(long)]
-        use_daemon: bool,
     },
-    /// 指定 symbol への参照箇所一覧。多言語 LSP 対応。
+    /// 指定 symbol への参照箇所一覧。多言語 LSP 対応。daemon 経由が既定。
     Refs {
         qname: String,
         #[arg(long)]
@@ -49,10 +47,8 @@ pub enum QueryCmd {
         lang: String,
         #[arg(long)]
         daemon_port: Option<u16>,
-        #[arg(long)]
-        use_daemon: bool,
     },
-    /// 指定 function の呼び出し元一覧。多言語 LSP 対応。
+    /// 指定 function の呼び出し元一覧。多言語 LSP 対応。daemon 経由が既定。
     Callers {
         qname: String,
         #[arg(long)]
@@ -64,10 +60,8 @@ pub enum QueryCmd {
         lang: String,
         #[arg(long)]
         daemon_port: Option<u16>,
-        #[arg(long)]
-        use_daemon: bool,
     },
-    /// refs/callers の transitive 閉包。多言語 LSP 対応。
+    /// refs/callers の transitive 閉包。多言語 LSP 対応。daemon 経由が既定。
     Closure {
         qname: String,
         #[arg(long, default_value_t = 2)]
@@ -83,10 +77,8 @@ pub enum QueryCmd {
         lang: String,
         #[arg(long)]
         daemon_port: Option<u16>,
-        #[arg(long)]
-        use_daemon: bool,
     },
-    /// 変更影響範囲評価。closure direction=in の薄いラッパ。多言語 LSP 対応。
+    /// 変更影響範囲評価。closure direction=in の薄いラッパ。多言語 LSP 対応。daemon 経由が既定。
     ImpactedBy {
         qname: String,
         #[arg(long, default_value_t = 3)]
@@ -100,10 +92,8 @@ pub enum QueryCmd {
         lang: String,
         #[arg(long)]
         daemon_port: Option<u16>,
-        #[arg(long)]
-        use_daemon: bool,
     },
-    /// 指定 symbol をテストしている test 関数一覧。多言語 LSP 対応。
+    /// 指定 symbol をテストしている test 関数一覧。多言語 LSP 対応。daemon 経由が既定。
     TestedBy {
         qname: String,
         #[arg(long, default_value_t = 3)]
@@ -117,8 +107,6 @@ pub enum QueryCmd {
         lang: String,
         #[arg(long)]
         daemon_port: Option<u16>,
-        #[arg(long)]
-        use_daemon: bool,
     },
 }
 
@@ -126,7 +114,7 @@ pub enum QueryCmd {
 pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
     match cmd {
         QueryCmd::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
-        QueryCmd::Symbol { query, kind, root, format, lang, daemon_port, use_daemon } => {
+        QueryCmd::Symbol { query, kind, root, format, lang, daemon_port } => {
             handlers_find_symbol::cmd_find_symbol(
                 &query,
                 kind.as_deref(),
@@ -134,16 +122,15 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
-                use_daemon,
             )
         }
-        QueryCmd::Refs { qname, root, format, lang, daemon_port, use_daemon } => {
-            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang, daemon_port, use_daemon)
+        QueryCmd::Refs { qname, root, format, lang, daemon_port } => {
+            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang, daemon_port)
         }
-        QueryCmd::Callers { qname, root, format, lang, daemon_port, use_daemon } => {
-            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang, daemon_port, use_daemon)
+        QueryCmd::Callers { qname, root, format, lang, daemon_port } => {
+            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang, daemon_port)
         }
-        QueryCmd::Closure { qname, depth, direction, root, format, lang, daemon_port, use_daemon } => {
+        QueryCmd::Closure { qname, depth, direction, root, format, lang, daemon_port } => {
             handlers_closure::cmd_closure(
                 &qname,
                 depth,
@@ -152,10 +139,9 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
-                use_daemon,
             )
         }
-        QueryCmd::ImpactedBy { qname, depth, root, format, lang, daemon_port, use_daemon } => {
+        QueryCmd::ImpactedBy { qname, depth, root, format, lang, daemon_port } => {
             handlers_impacted::cmd_impacted_by(
                 &qname,
                 depth,
@@ -163,10 +149,9 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
-                use_daemon,
             )
         }
-        QueryCmd::TestedBy { qname, depth, root, format, lang, daemon_port, use_daemon } => {
+        QueryCmd::TestedBy { qname, depth, root, format, lang, daemon_port } => {
             handlers_tested::cmd_tested_by(
                 &qname,
                 depth,
@@ -174,7 +159,6 @@ pub fn dispatch_query(cmd: QueryCmd) -> Result<(), String> {
                 &format,
                 &lang,
                 daemon_port,
-                use_daemon,
             )
         }
     }

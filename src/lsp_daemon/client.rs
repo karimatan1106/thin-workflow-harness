@@ -8,11 +8,10 @@
 //! - PoC: 1 connection processes 1 request at a time (ordering preserved)
 //! - Windows: DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP で子を完全 detach。
 //!   msys2 pipeline で head した時の子孫 handle inherit ブロックが解消。
-//! - Unix: 現状 Stdio::null() のみ。setsid 経由の真 detach は libc 依存追加が
-//!   必要なので次バッチ送り (TODO)。
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -43,12 +42,6 @@ impl DaemonClient {
     }
 
     /// 既存 daemon に接続するか、無ければ auto-spawn して接続する。
-    ///
-    /// 1. port file あり → port 読み出し → connect 試行 (OK ならそのまま返す)
-    /// 2. NG (stale) → port file 削除
-    /// 3. self exe を `lsp-daemon serve --lang <lang> --root <root> --port 0` で spawn
-    /// 4. port file 出現を `spawn_timeout` まで 200ms 間隔で poll
-    /// 5. file 出現 → port 読み出し → connect
     pub fn connect_or_spawn(
         lang: Lang,
         root: &Path,
@@ -78,17 +71,11 @@ impl DaemonClient {
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            // DETACHED_PROCESS = 0x00000008, CREATE_NEW_PROCESS_GROUP = 0x00000200
-            // 親プロセスから完全に切り離す。msys2 pipeline の head ブロックも解消。
-            const DETACHED_PROCESS: u32 = 0x0000_0008;
-            const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-            cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-        }
-        // TODO(unix): libc::setsid() で真 detach。今は std::process::Stdio::null
-        // 経由の弱い切り離しのみ。
+        // DETACHED_PROCESS = 0x00000008, CREATE_NEW_PROCESS_GROUP = 0x00000200
+        // 親プロセスから完全に切り離す。msys2 pipeline の head ブロックも解消。
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
         let _child = cmd.spawn().map_err(|e| format!("spawn daemon: {e}"))?;
 
         let deadline = Instant::now() + spawn_timeout;
@@ -129,7 +116,8 @@ impl DaemonClient {
             .write_all(body.as_bytes())
             .map_err(|e| format!("write: {e}"))?;
         self.writer
-            .write_all(b"\n")
+            .write_all(b"
+")
             .map_err(|e| format!("write nl: {e}"))?;
         self.writer.flush().map_err(|e| format!("flush: {e}"))?;
 

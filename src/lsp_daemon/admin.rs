@@ -6,10 +6,9 @@
 //! - `cmd_stop_all()`        : 全 daemon を kill + port file 削除
 //! - `cmd_stop_stale()`      : dead な port file のみ削除 (process は触らない)
 //!
-//! 生存判定は PID + TCP port reachability の二段:
-//! - Windows: `tasklist /NH /FI` で PID alive、`taskkill /F /PID` で kill
-//! - Unix:    `kill -0 <pid>` で PID alive、`kill -TERM` -> 3s wait -> `kill -KILL`
-//! - port:    `TcpStream::connect_timeout(127.0.0.1:<port>, 100ms)` で reachable 確認
+//! Windows-only。生存判定は PID + TCP port reachability の二段:
+//! - `tasklist /NH /FI` で PID alive、`taskkill /F /PID` で kill
+//! - port: `TcpStream::connect_timeout(127.0.0.1:<port>, 100ms)` で reachable 確認
 
 use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
@@ -105,29 +104,18 @@ fn is_process_alive_strict(pid: u32, port: u16) -> bool {
     is_pid_alive(pid) && is_port_reachable(port)
 }
 
-/// PID alive check (Windows tasklist / Unix kill -0)。
+/// PID alive check (Windows tasklist 経由)。
 fn is_pid_alive(pid: u32) -> bool {
-    #[cfg(windows)]
-    {
-        let out = std::process::Command::new("tasklist")
-            .args(["/NH", "/FI", &format!("PID eq {pid}")])
-            .output();
-        match out {
-            Ok(o) => {
-                let s = String::from_utf8_lossy(&o.stdout);
-                // tasklist は該当無しでも "INFO: No tasks ..." を返すので pid 文字列の存在確認。
-                s.contains(&pid.to_string())
-            }
-            Err(_) => false,
+    let out = std::process::Command::new("tasklist")
+        .args(["/NH", "/FI", &format!("PID eq {pid}")])
+        .output();
+    match out {
+        Ok(o) => {
+            let s = String::from_utf8_lossy(&o.stdout);
+            // tasklist は該当無しでも "INFO: No tasks ..." を返すので pid 文字列の存在確認。
+            s.contains(&pid.to_string())
         }
-    }
-    #[cfg(not(windows))]
-    {
-        std::process::Command::new("kill")
-            .args(["-0", &pid.to_string()])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+        Err(_) => false,
     }
 }
 
@@ -138,35 +126,14 @@ fn is_port_reachable(port: u16) -> bool {
 }
 
 fn kill_pid(pid: u32) -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        let status = std::process::Command::new("taskkill")
-            .args(["/F", "/PID", &pid.to_string()])
-            .status()
-            .map_err(|e| format!("taskkill: {e}"))?;
-        if !status.success() {
-            return Err(format!("taskkill failed for pid={pid}"));
-        }
-        Ok(())
+    let status = std::process::Command::new("taskkill")
+        .args(["/F", "/PID", &pid.to_string()])
+        .status()
+        .map_err(|e| format!("taskkill: {e}"))?;
+    if !status.success() {
+        return Err(format!("taskkill failed for pid={pid}"));
     }
-    #[cfg(not(windows))]
-    {
-        let _ = std::process::Command::new("kill")
-            .args(["-TERM", &pid.to_string()])
-            .status();
-        std::thread::sleep(std::time::Duration::from_secs(3));
-        let still = std::process::Command::new("kill")
-            .args(["-0", &pid.to_string()])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if still {
-            let _ = std::process::Command::new("kill")
-                .args(["-KILL", &pid.to_string()])
-                .status();
-        }
-        Ok(())
-    }
+    Ok(())
 }
 
 #[cfg(test)]

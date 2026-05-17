@@ -1,8 +1,6 @@
 //! Port file 規約 -- daemon が listen 中の port を file 経由で client に通知。
 //!
-//! 配置:
-//! - Windows: %LOCALAPPDATA%\thin-workflow-harness\daemon-<lang>-<hash>.port
-//! - Unix:    ~/.cache/thin-workflow-harness/daemon-<lang>-<hash>.port
+//! 配置: `%LOCALAPPDATA%\thin-workflow-harness\daemon-<lang>-<hash>.port`
 //!
 //! Content (3 行):
 //! ```text
@@ -18,19 +16,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Cache directory for port files.
+/// Cache directory for port files (Windows: `%LOCALAPPDATA%\thin-workflow-harness`)。
 pub fn cache_dir() -> Result<PathBuf, String> {
-    #[cfg(windows)]
-    {
-        let local = std::env::var("LOCALAPPDATA")
-            .map_err(|e| format!("LOCALAPPDATA: {e}"))?;
-        Ok(PathBuf::from(local).join("thin-workflow-harness"))
-    }
-    #[cfg(not(windows))]
-    {
-        let home = std::env::var("HOME").map_err(|e| format!("HOME: {e}"))?;
-        Ok(PathBuf::from(home).join(".cache").join("thin-workflow-harness"))
-    }
+    let local = std::env::var("LOCALAPPDATA")
+        .map_err(|e| format!("LOCALAPPDATA: {e}"))?;
+    Ok(PathBuf::from(local).join("thin-workflow-harness"))
 }
 
 /// canonical workspace path → 16-hex DefaultHasher digest.

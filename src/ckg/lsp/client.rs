@@ -4,6 +4,7 @@
 //! - initialize → initialized 通知 → 任意のクエリ → shutdown → exit
 //! - 通知（method ありで id 無し）と response（id あり）を peek 区別、resp に該当する id だけ返す
 //! - rust-analyzer の progress / log 系通知は黙って捨てる
+//! - Windows 専用 ── `.cmd` shim 解決のため `cmd /c <cmd>` フォールバックを持つ
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, ChildStdin, ChildStdout};
@@ -11,9 +12,7 @@ use std::process::{Child, ChildStdin, ChildStdout};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 
-use super::client_spawn::spawn_child;
-#[cfg(windows)]
-use super::client_spawn::spawn_via_cmd;
+use super::client_spawn::{spawn_child, spawn_via_cmd};
 use super::framing::{read_message, write_message};
 use super::init_options::init_options;
 use super::lang::Lang;
@@ -42,23 +41,14 @@ impl LspClient {
     pub fn spawn_with_args(cmd: &str, args: &[String]) -> Result<Self, String> {
         let mut child = match spawn_child(cmd, args) {
             Ok(c) => c,
-            Err(direct_err) => {
-                #[cfg(windows)]
-                {
-                    match spawn_via_cmd(cmd, args) {
-                        Ok(c) => c,
-                        Err(e) => {
-                            return Err(format!(
-                                "spawn {cmd}: direct={direct_err}; via cmd: {e}"
-                            ));
-                        }
-                    }
+            Err(direct_err) => match spawn_via_cmd(cmd, args) {
+                Ok(c) => c,
+                Err(e) => {
+                    return Err(format!(
+                        "spawn {cmd}: direct={direct_err}; via cmd: {e}"
+                    ));
                 }
-                #[cfg(not(windows))]
-                {
-                    return Err(format!("spawn {cmd}: {direct_err}"));
-                }
-            }
+            },
         };
         let stdin = child
             .stdin

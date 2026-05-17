@@ -1,4 +1,5 @@
 //! `harness init` / `doctor` のヘルパ（パス解決・サマリ表示・shell 実行・PATH 探索）。
+//! Windows 専用。
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -59,21 +60,11 @@ pub fn print_summary(d: &DetectedProject) {
     }
 }
 
-/// シェル経由でコマンド実行 (Windows は `cmd /C`、その他は `sh -c`)。タイムアウト未実装
+/// シェル経由でコマンド実行（Windows `cmd /C` 経由）。タイムアウト未実装
 /// (runtime 側で導入予定)。
 pub fn shell_run(cmd: &str, cwd: &Path) -> Result<bool, String> {
-    #[cfg(windows)]
-    let mut c = {
-        let mut c = Command::new("cmd");
-        c.args(["/C", cmd]);
-        c
-    };
-    #[cfg(not(windows))]
-    let mut c = {
-        let mut c = Command::new("sh");
-        c.args(["-c", cmd]);
-        c
-    };
+    let mut c = Command::new("cmd");
+    c.args(["/C", cmd]);
     c.current_dir(cwd);
     let status = c.status().map_err(|e| e.to_string())?;
     Ok(status.success())

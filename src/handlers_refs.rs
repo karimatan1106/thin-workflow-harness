@@ -2,8 +2,8 @@
 //!
 //! LSP server を spawn して位置解決 → references / callHierarchy を 1 往復させ、
 //! text/json で stdout に出力する。`--lang auto|rust|ts|py|go` で言語を選択。
-//! `--daemon-port <port>` 指定時は LSP 直接 spawn を bypass、layer 2.5 daemon に投げる。
-//! `--use-daemon` 指定時は port_file 経由で auto-spawn する。
+//! 既定動作は daemon 経由（auto-spawn または `--daemon-port` で固定 port）。
+//! 環境変数 `HARNESS_DIRECT_LSP=1` で daemon を bypass し直接 LSP を spawn する（debug 用）。
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -19,11 +19,10 @@ pub fn cmd_refs(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
-    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
     let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
-    let refs = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+    let refs = if let Some(mut c) = open_client(daemon_port, &root_path, &lang_lazy)? {
         let p = c.refs(qname, &root_path, Duration::from_secs(60))?;
         p.into_iter().map(ref_payload_to_loc).collect()
     } else {
@@ -46,11 +45,10 @@ pub fn cmd_callers(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
-    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path = resolve_root(root)?;
     let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
-    let callers = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+    let callers = if let Some(mut c) = open_client(daemon_port, &root_path, &lang_lazy)? {
         let p = c.callers(qname, &root_path, Duration::from_secs(60))?;
         p.into_iter().map(caller_payload_to_info).collect()
     } else {

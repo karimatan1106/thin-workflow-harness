@@ -3,6 +3,9 @@
 //! debug CLI（`src/cli.rs` / `src/main.rs`）と将来の runtime 層が共有する。
 //! Phase 0 walking skeleton ── workflow.toml/spec.toml 駆動の決定論的状態機械。
 
+#[cfg(not(windows))]
+compile_error!("thin-workflow-harness is Windows-only");
+
 pub mod ckg;
 pub mod cli;
 pub mod cli_daemon;

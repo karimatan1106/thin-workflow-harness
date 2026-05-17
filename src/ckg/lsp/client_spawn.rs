@@ -1,4 +1,4 @@
-//! LSP subprocess spawn のクロスプラットフォーム実装。
+//! LSP subprocess spawn ── Windows 専用実装。
 //!
 //! Windows では npm global install で `typescript-language-server` が `.cmd` shim と
 //! して prefix 直下に置かれる。Rust の `Command::new` は PATHEXT 解決をしないため、
@@ -10,8 +10,6 @@
 //!   1. `Command::new(cmd).args(args).spawn()`   ── PATH 直接解決
 //!   2. `cmd /c <cmd> <args...>`                 ── PATHEXT 経由で `.cmd` shim を解決
 //!   3. `npm config get prefix` で得た prefix を PATH に append し、もう一度 2 を試す
-//!
-//! 非 Windows では (1) のみで十分。
 
 use std::process::{Child, Command, Stdio};
 
@@ -28,7 +26,6 @@ pub(super) fn spawn_child(cmd: &str, args: &[String]) -> Result<Child, std::io::
 /// Windows fallback: `cmd /c <cmd> <args...>` 経由で起動する。
 /// 直接の `cmd /c` で見つからない場合、`npm config get prefix` の出力を PATH に足して
 /// もう 1 回試す（npm prefix が Windows %PATH% に入っていない環境で有効）。
-#[cfg(windows)]
 pub(super) fn spawn_via_cmd(cmd: &str, args: &[String]) -> Result<Child, String> {
     match spawn_via_cmd_inner(cmd, args) {
         Ok(c) => Ok(c),
@@ -43,7 +40,6 @@ pub(super) fn spawn_via_cmd(cmd: &str, args: &[String]) -> Result<Child, String>
     }
 }
 
-#[cfg(windows)]
 fn spawn_via_cmd_inner(cmd: &str, args: &[String]) -> Result<Child, std::io::Error> {
     let mut full = Vec::with_capacity(args.len() + 2);
     full.push("/c".to_string());
@@ -59,7 +55,6 @@ fn spawn_via_cmd_inner(cmd: &str, args: &[String]) -> Result<Child, std::io::Err
 
 /// `npm config get prefix` を実行して、global install 先のディレクトリを返す。
 /// 失敗・空応答は None。
-#[cfg(windows)]
 fn npm_prefix() -> Option<String> {
     let out = Command::new("cmd")
         .args(["/c", "npm", "config", "get", "prefix"])
@@ -77,7 +72,6 @@ fn npm_prefix() -> Option<String> {
 }
 
 /// 現在の `PATH` に `prefix` を先頭追加する（プロセス内のみ、永続化しない）。
-#[cfg(windows)]
 fn augment_path_with(prefix: &str) {
     let cur = std::env::var("PATH").unwrap_or_default();
     if cur.split(';').any(|p| p.eq_ignore_ascii_case(prefix)) {
@@ -97,19 +91,18 @@ mod tests {
         assert!(r.is_err());
     }
 
-    #[cfg(windows)]
     #[test]
     fn augment_path_with_prepends_once() {
         // 既存 PATH を退避
         let saved = std::env::var("PATH").unwrap_or_default();
-        std::env::set_var("PATH", "C:\\a;C:\\b");
-        augment_path_with("C:\\new");
+        std::env::set_var("PATH", r"C:\a;C:\b");
+        augment_path_with(r"C:\new");
         let now = std::env::var("PATH").unwrap_or_default();
-        assert!(now.starts_with("C:\\new;"), "got {now}");
+        assert!(now.starts_with(r"C:\new;"), "got {now}");
         // 二重追加防止
-        augment_path_with("C:\\new");
+        augment_path_with(r"C:\new");
         let after = std::env::var("PATH").unwrap_or_default();
-        assert_eq!(after.matches("C:\\new").count(), 1);
+        assert_eq!(after.matches(r"C:\new").count(), 1);
         // restore
         std::env::set_var("PATH", saved);
     }

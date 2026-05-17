@@ -25,8 +25,12 @@ fn manifest_dir() -> PathBuf {
 
 /// テスト用に harness binary を test build に向ける。
 /// `CARGO_BIN_EXE_harness` は cargo test が用意してくれる絶対パス。
+/// daemon default 化 (--use-daemon 撤去) 後は subprocess 側で daemon spawn が
+/// 走ると 30s timeout / handle inherit でテストが hang する。テスト経路は
+/// direct LSP 固定 (HARNESS_DIRECT_LSP=1) にして daemon を bypass する。
 fn set_harness_bin_for_tests() {
     std::env::set_var("HARNESS_BIN", env!("CARGO_BIN_EXE_harness"));
+    std::env::set_var("HARNESS_DIRECT_LSP", "1");
 }
 
 #[test]

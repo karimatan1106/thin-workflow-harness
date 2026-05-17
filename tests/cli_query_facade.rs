@@ -61,21 +61,22 @@ fn query_outline_matches_legacy_outline() {
 }
 
 #[test]
-fn query_symbol_help_advertises_daemon_flags() {
+fn query_symbol_help_advertises_daemon_port() {
     let o = run(&["query", "symbol", "--help"]);
     assert!(o.status.success(), "query symbol --help failed: {}", out_str(&o));
     let s = out_str(&o);
     assert!(s.contains("--daemon-port"), "query symbol --help missing --daemon-port: {s}");
-    assert!(s.contains("--use-daemon"), "query symbol --help missing --use-daemon: {s}");
+    // --use-daemon は撤去済み (daemon 経由が default)
+    assert!(!s.contains("--use-daemon"), "query symbol --help should NOT advertise --use-daemon: {s}");
 }
 
 #[test]
-fn query_refs_callers_closure_impacted_tested_advertise_daemon_flags() {
+fn query_refs_callers_closure_impacted_tested_advertise_daemon_port() {
     for sub in ["refs", "callers", "closure", "impacted-by", "tested-by"] {
         let o = run(&["query", sub, "--help"]);
         assert!(o.status.success(), "query {sub} --help failed: {}", out_str(&o));
         let s = out_str(&o);
         assert!(s.contains("--daemon-port"), "query {sub} --help missing --daemon-port: {s}");
-        assert!(s.contains("--use-daemon"), "query {sub} --help missing --use-daemon: {s}");
+        assert!(!s.contains("--use-daemon"), "query {sub} --help should NOT advertise --use-daemon: {s}");
     }
 }

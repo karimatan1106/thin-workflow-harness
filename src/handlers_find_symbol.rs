@@ -1,7 +1,8 @@
-//! `harness find-symbol <query> [--lang ...] [--daemon-port <port>] [--use-daemon]` ハンドラ。
+//! `harness find-symbol <query> [--lang ...] [--daemon-port <port>]` ハンドラ。
 //!
 //! `--lang auto`: `detect_lang_from_qname(query).or(root_lang(root))`。
-//! `--daemon-port <port>` で固定 port、`--use-daemon` で auto-spawn (~/.cache/.../*.port)。
+//! 既定動作は daemon 経由（auto-spawn または `--daemon-port` で固定 port）。
+//! 環境変数 `HARNESS_DIRECT_LSP=1` で daemon を bypass し直接 LSP を spawn する（debug 用）。
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -9,7 +10,10 @@ use std::time::Duration;
 use crate::ckg::lsp::{find_symbol_for_lang, lsp_server_cmd, Lang, SymbolInfo};
 use crate::lsp_daemon::{DaemonClient, SymbolPayload};
 
-/// 優先順: daemon_port > use_daemon > 直接 LSP spawn。
+/// 優先順:
+/// 1. `HARNESS_DIRECT_LSP=1` → 直接 LSP spawn (debug)
+/// 2. `--daemon-port` 指定 → 固定 port 接続
+/// 3. それ以外 → port file 経由で auto-spawn (default)
 pub fn cmd_find_symbol(
     query: &str,
     kind: Option<&str>,
@@ -17,14 +21,13 @@ pub fn cmd_find_symbol(
     format: &str,
     lang_arg: &str,
     daemon_port: Option<u16>,
-    use_daemon: bool,
 ) -> Result<(), String> {
     let root_path: PathBuf = match root {
         Some(r) => PathBuf::from(r),
         None => std::env::current_dir().map_err(|e| format!("cwd: {e}"))?,
     };
     let lang_lazy = || resolve_lang(lang_arg, query, &root_path);
-    let syms = if let Some(mut c) = open_client(daemon_port, use_daemon, &root_path, &lang_lazy)? {
+    let syms = if let Some(mut c) = open_client(daemon_port, &root_path, &lang_lazy)? {
         let p = c.find_symbol(query, &root_path, kind, Duration::from_secs(60))?;
         p.into_iter().map(payload_to_info).collect()
     } else {
@@ -41,28 +44,30 @@ pub fn cmd_find_symbol(
     Ok(())
 }
 
-/// `daemon_port` > `use_daemon` > None の優先順で `DaemonClient` を返す。
+/// daemon client を開く。優先順:
+/// - `HARNESS_DIRECT_LSP=1` → `None` (direct LSP 経路で実行する hint)
+/// - `daemon_port` 指定 → 固定 port connect
+/// - 既定 → port file 経由で auto-spawn
 pub(crate) fn open_client<F>(
     daemon_port: Option<u16>,
-    use_daemon: bool,
     root: &Path,
     lang_lazy: &F,
 ) -> Result<Option<DaemonClient>, String>
 where
     F: Fn() -> Result<Lang, String>,
 {
+    if std::env::var("HARNESS_DIRECT_LSP").is_ok() {
+        return Ok(None);
+    }
     if let Some(port) = daemon_port {
         return Ok(Some(DaemonClient::connect(port)?));
     }
-    if use_daemon {
-        let lang = lang_lazy()?;
-        return Ok(Some(DaemonClient::connect_or_spawn(
-            lang,
-            root,
-            Duration::from_secs(30),
-        )?));
-    }
-    Ok(None)
+    let lang = lang_lazy()?;
+    Ok(Some(DaemonClient::connect_or_spawn(
+        lang,
+        root,
+        Duration::from_secs(30),
+    )?))
 }
 
 fn payload_to_info(p: SymbolPayload) -> SymbolInfo {
@@ -95,11 +100,8 @@ pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
     if which(&cmd).is_some() {
         return Ok(());
     }
-    #[cfg(windows)]
-    {
-        if matches!(lang, Lang::Ts | Lang::Py) && augment_path_from_npm_prefix() && which(&cmd).is_some() {
-            return Ok(());
-        }
+    if matches!(lang, Lang::Ts | Lang::Py) && augment_path_from_npm_prefix() && which(&cmd).is_some() {
+        return Ok(());
     }
     let hint = match lang {
         Lang::Rust => "`rustup component add rust-analyzer`",
@@ -110,7 +112,6 @@ pub fn ensure_server_available(lang: Lang) -> Result<(), String> {
     Err(format!("{cmd} が PATH に見つかりません。{hint} でインストールしてください"))
 }
 
-#[cfg(windows)]
 fn augment_path_from_npm_prefix() -> bool {
     let out = std::process::Command::new("cmd").args(["/c", "npm", "config", "get", "prefix"]).output().ok();
     let prefix = match out {
@@ -130,11 +131,11 @@ fn augment_path_from_npm_prefix() -> bool {
 
 fn which(cmd: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
-    let exts: Vec<String> = if cfg!(windows) {
-        std::env::var("PATHEXT").unwrap_or_else(|_| ".EXE;.CMD;.BAT".to_string()).split(';').map(|s| s.to_string()).collect()
-    } else {
-        vec![String::new()]
-    };
+    let exts: Vec<String> = std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".EXE;.CMD;.BAT".to_string())
+        .split(';')
+        .map(|s| s.to_string())
+        .collect();
     for dir in std::env::split_paths(&path_var) {
         for ext in &exts {
             let candidate = dir.join(format!("{cmd}{ext}"));
