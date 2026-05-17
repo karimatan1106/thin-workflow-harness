@@ -11,11 +11,12 @@ use serde_json::Value;
 
 use super::client::DaemonClient;
 use super::payload::{
-    CallerPayload, ClosureNodePayload, RefPayload, SymbolPayload, TestedNodePayload,
+    CallerPayload, ClosureNodePayload, HealthPayload, RefPayload, SymbolPayload,
+    TestedNodePayload,
 };
 use super::protocol::{
-    CallersParams, ClosureParams, FindSymbolParams, ImpactedByParams, Op, OutgoingParams,
-    RefsParams, Response, TestedByParams,
+    CallersParams, ClosureParams, FindSymbolParams, HealthParams, ImpactedByParams, Op,
+    OutgoingParams, RefsParams, Response, TestedByParams,
 };
 
 fn decode_payload<T: DeserializeOwned>(resp: Response) -> Result<Vec<T>, String> {
@@ -146,5 +147,19 @@ impl DaemonClient {
             timeout_ms: timeout.as_millis() as u64,
         });
         decode_payload(self.send_request_recv_response(op)?)
+    }
+
+    /// Send `health` to daemon. Returns the single HealthPayload (not Vec).
+    pub fn health(&mut self) -> Result<HealthPayload, String> {
+        let op = Op::Health(HealthParams::default());
+        let resp = self.send_request_recv_response(op)?;
+        if !resp.ok {
+            return Err(resp.error.unwrap_or_else(|| "unknown error".to_string()));
+        }
+        match resp.data {
+            Value::Null => Err("health response: data is null".to_string()),
+            other => serde_json::from_value(other)
+                .map_err(|e| format!("decode health payload: {e}")),
+        }
     }
 }

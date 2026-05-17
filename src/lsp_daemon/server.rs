@@ -18,6 +18,7 @@ use crate::ckg::lsp::{start_and_warm_up, Lang, LspClient};
 use super::dispatch::handle_request;
 use super::port_file::{self, PortFileContent};
 use super::protocol::{Request, Response};
+use super::state::DaemonState;
 
 /// daemon shutdown 時に port file を best-effort 削除する RAII guard。
 struct PortFileGuard {
@@ -35,6 +36,7 @@ pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
     let client =
         start_and_warm_up(lang, &root).map_err(|e| format!("warm-up failed: {e}"))?;
     let client = Arc::new(Mutex::new(client));
+    let state = Arc::new(DaemonState::new(lang));
 
     let listener = TcpListener::bind(("127.0.0.1", port))
         .map_err(|e| format!("bind 127.0.0.1:{port}: {e}"))?;
@@ -66,7 +68,7 @@ pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
-                if let Err(e) = handle_connection(&client, lang, &root, s) {
+                if let Err(e) = handle_connection(&client, &state, lang, &root, s) {
                     eprintln!("[daemon] connection error: {e}");
                 }
             }
@@ -80,6 +82,7 @@ pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
 
 fn handle_connection(
     client: &Arc<Mutex<LspClient>>,
+    state: &Arc<DaemonState>,
     lang: Lang,
     root: &Path,
     stream: TcpStream,
@@ -103,7 +106,7 @@ fn handle_connection(
             continue;
         }
         let resp = match serde_json::from_str::<Request>(trimmed) {
-            Ok(req) => handle_request(client, lang, root, req),
+            Ok(req) => handle_request(client, state, lang, root, req),
             Err(e) => Response {
                 id: 0,
                 ok: false,

@@ -1,41 +1,43 @@
-//! daemon request dispatch -- match each Op and call the matching
-//! `find_*_for_lang_with_client` primitive, then serialize the result into
-//! Response.data as JSON.
+//! daemon request dispatch -- match each Op and route to per-op primitive in
+//! `dispatch_ops`. Health は in-place で snapshot を返し、LSP 統計を汚さない。
 //!
-//! Splits a single function per op for readability + future per-op fan-out.
+//! - handle_request: Op match + 時間計測 (health は除外)
+//! - do_health: state.snapshot() → HealthPayload
+//! - lock / ok_response / err_response: helper、`dispatch_ops` から再利用
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::Instant;
 
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::ckg::lsp::{
-    find_callers_for_lang_with_client, find_closure_for_lang_with_client,
-    find_impacted_by_for_lang_with_client, find_outgoing_for_lang_with_client,
-    find_refs_for_lang_with_client, find_symbol_for_lang_with_client,
-    find_tested_by_for_lang_with_client, Direction, Lang, LspClient,
-};
+use crate::ckg::lsp::{Lang, LspClient};
 
-use super::payload::{
-    CallerPayload, ClosureNodePayload, RefPayload, SymbolPayload, TestedNodePayload,
+use super::dispatch_ops::{
+    do_callers, do_closure, do_find_symbol, do_impacted_by, do_outgoing, do_refs,
+    do_tested_by,
 };
-use super::protocol::{
-    CallersParams, ClosureParams, FindSymbolParams, ImpactedByParams, Op, OutgoingParams,
-    RefsParams, Request, Response, TestedByParams,
-};
+use super::payload::HealthPayload;
+use super::protocol::{Op, Request, Response};
+use super::state::DaemonState;
 
 /// Dispatch one parsed request to the matching primitive. The shared LspClient
-/// is locked for the duration of the call.
+/// is locked for the duration of the call. health は計測対象外 (queries_handled
+/// は LSP query 数のみカウント、health 自身を含めると noisy)。
 pub fn handle_request(
     client: &Arc<Mutex<LspClient>>,
+    state: &Arc<DaemonState>,
     lang: Lang,
     _root: &Path,
     req: Request,
 ) -> Response {
     let id = req.id;
-    match req.op {
+    if let Op::Health(_) = &req.op {
+        return do_health(id, state);
+    }
+    let t = Instant::now();
+    let resp = match req.op {
         Op::FindSymbol(p) => do_find_symbol(client, lang, id, p),
         Op::Refs(p) => do_refs(client, lang, id, p),
         Op::Callers(p) => do_callers(client, lang, id, p),
@@ -43,17 +45,34 @@ pub fn handle_request(
         Op::Closure(p) => do_closure(client, lang, id, p),
         Op::ImpactedBy(p) => do_impacted_by(client, lang, id, p),
         Op::TestedBy(p) => do_tested_by(client, lang, id, p),
-    }
+        Op::Health(_) => unreachable!("health handled above"),
+    };
+    state.record_query(t.elapsed().as_millis() as u64);
+    resp
 }
 
-fn lock<'a>(c: &'a Arc<Mutex<LspClient>>) -> std::sync::MutexGuard<'a, LspClient> {
+fn do_health(id: u64, state: &Arc<DaemonState>) -> Response {
+    let snap = state.snapshot();
+    let payload = HealthPayload {
+        status: "ready".to_string(),
+        lang: snap.lang,
+        uptime_ms: snap.uptime_ms,
+        queries_handled: snap.queries_handled,
+        recent_avg_ms: snap.recent_avg_ms,
+    };
+    ok_response(id, payload)
+}
+
+pub(super) fn lock<'a>(
+    c: &'a Arc<Mutex<LspClient>>,
+) -> std::sync::MutexGuard<'a, LspClient> {
     match c.lock() {
         Ok(g) => g,
         Err(poison) => poison.into_inner(),
     }
 }
 
-fn ok_response<T: Serialize>(id: u64, payload: T) -> Response {
+pub(super) fn ok_response<T: Serialize>(id: u64, payload: T) -> Response {
     Response {
         id,
         ok: true,
@@ -62,139 +81,6 @@ fn ok_response<T: Serialize>(id: u64, payload: T) -> Response {
     }
 }
 
-fn err_response(id: u64, e: String) -> Response {
+pub(super) fn err_response(id: u64, e: String) -> Response {
     Response { id, ok: false, data: Value::Null, error: Some(e) }
-}
-
-fn do_find_symbol(
-    client: &Arc<Mutex<LspClient>>,
-    lang: Lang,
-    id: u64,
-    p: FindSymbolParams,
-) -> Response {
-    let root = PathBuf::from(&p.root);
-    let timeout = Duration::from_millis(p.timeout_ms);
-    let mut g = lock(client);
-    match find_symbol_for_lang_with_client(
-        &mut g,
-        lang,
-        &root,
-        &p.qname,
-        p.kind.as_deref(),
-        timeout,
-    ) {
-        Ok(syms) => {
-            let payload: Vec<SymbolPayload> =
-                syms.into_iter().map(SymbolPayload::from).collect();
-            ok_response(id, payload)
-        }
-        Err(e) => err_response(id, e),
-    }
-}
-
-fn do_refs(client: &Arc<Mutex<LspClient>>, lang: Lang, id: u64, p: RefsParams) -> Response {
-    let root = PathBuf::from(&p.root);
-    let timeout = Duration::from_millis(p.timeout_ms);
-    let mut g = lock(client);
-    match find_refs_for_lang_with_client(&mut g, lang, &root, &p.qname, timeout) {
-        Ok(refs) => {
-            let payload: Vec<RefPayload> = refs.into_iter().map(RefPayload::from).collect();
-            ok_response(id, payload)
-        }
-        Err(e) => err_response(id, e),
-    }
-}
-
-fn do_callers(
-    client: &Arc<Mutex<LspClient>>,
-    lang: Lang,
-    id: u64,
-    p: CallersParams,
-) -> Response {
-    let root = PathBuf::from(&p.root);
-    let timeout = Duration::from_millis(p.timeout_ms);
-    let mut g = lock(client);
-    match find_callers_for_lang_with_client(&mut g, lang, &root, &p.qname, timeout) {
-        Ok(v) => {
-            let payload: Vec<CallerPayload> = v.into_iter().map(CallerPayload::from).collect();
-            ok_response(id, payload)
-        }
-        Err(e) => err_response(id, e),
-    }
-}
-
-fn do_outgoing(
-    client: &Arc<Mutex<LspClient>>,
-    lang: Lang,
-    id: u64,
-    p: OutgoingParams,
-) -> Response {
-    let root = PathBuf::from(&p.root);
-    let timeout = Duration::from_millis(p.timeout_ms);
-    let mut g = lock(client);
-    match find_outgoing_for_lang_with_client(&mut g, lang, &root, &p.qname, timeout) {
-        Ok(v) => {
-            let payload: Vec<CallerPayload> = v.into_iter().map(CallerPayload::from).collect();
-            ok_response(id, payload)
-        }
-        Err(e) => err_response(id, e),
-    }
-}
-
-fn do_closure(
-    client: &Arc<Mutex<LspClient>>,
-    lang: Lang,
-    id: u64,
-    p: ClosureParams,
-) -> Response {
-    let root = PathBuf::from(&p.root);
-    let dir = match Direction::parse(&p.direction) {
-        Ok(d) => d,
-        Err(e) => return err_response(id, e),
-    };
-    let mut g = lock(client);
-    match find_closure_for_lang_with_client(&mut g, &p.qname, p.depth, dir, lang, &root) {
-        Ok(v) => {
-            let payload: Vec<ClosureNodePayload> =
-                v.into_iter().map(ClosureNodePayload::from).collect();
-            ok_response(id, payload)
-        }
-        Err(e) => err_response(id, e),
-    }
-}
-
-fn do_impacted_by(
-    client: &Arc<Mutex<LspClient>>,
-    lang: Lang,
-    id: u64,
-    p: ImpactedByParams,
-) -> Response {
-    let root = PathBuf::from(&p.root);
-    let mut g = lock(client);
-    match find_impacted_by_for_lang_with_client(&mut g, &p.qname, p.depth, lang, &root) {
-        Ok(v) => {
-            let payload: Vec<TestedNodePayload> =
-                v.into_iter().map(TestedNodePayload::from).collect();
-            ok_response(id, payload)
-        }
-        Err(e) => err_response(id, e),
-    }
-}
-
-fn do_tested_by(
-    client: &Arc<Mutex<LspClient>>,
-    lang: Lang,
-    id: u64,
-    p: TestedByParams,
-) -> Response {
-    let root = PathBuf::from(&p.root);
-    let mut g = lock(client);
-    match find_tested_by_for_lang_with_client(&mut g, &p.qname, p.depth, lang, &root) {
-        Ok(v) => {
-            let payload: Vec<TestedNodePayload> =
-                v.into_iter().map(TestedNodePayload::from).collect();
-            ok_response(id, payload)
-        }
-        Err(e) => err_response(id, e),
-    }
 }

@@ -105,6 +105,22 @@ impl From<ImpactedNode> for TestedNodePayload {
     }
 }
 
+/// `health` op の response payload。
+///
+/// - `status`: "ready" 固定 (warm-up 完了後の foreground daemon は ready 扱い)
+/// - `lang`: "rust" | "ts" | "py" | "go"
+/// - `uptime_ms`: daemon 起動からの経過時間
+/// - `queries_handled`: 累計 query 数 (health op は除外)
+/// - `recent_avg_ms`: 直近 N=10 件の wall time 平均 (0 = 未実行)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthPayload {
+    pub status: String,
+    pub lang: String,
+    pub uptime_ms: u64,
+    pub queries_handled: u64,
+    pub recent_avg_ms: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -17,21 +17,24 @@ pub mod admin;
 pub mod client;
 pub mod client_ops;
 pub mod dispatch;
+pub mod dispatch_ops;
 pub mod payload;
 pub mod port_file;
 pub mod port_file_list;
 pub mod protocol;
 pub mod server;
+pub mod state;
 
 #[cfg(test)]
 mod protocol_tests;
 
 pub use client::DaemonClient;
 pub use payload::{
-    CallerPayload, ClosureNodePayload, RefPayload, SymbolPayload, TestedNodePayload,
+    CallerPayload, ClosureNodePayload, HealthPayload, RefPayload, SymbolPayload,
+    TestedNodePayload,
 };
 pub use protocol::{
-    CallersParams, ClosureParams, FindSymbolParams, ImpactedByParams, Op, OutgoingParams,
-    RefsParams, Request, Response, TestedByParams,
+    CallersParams, ClosureParams, FindSymbolParams, HealthParams, ImpactedByParams, Op,
+    OutgoingParams, RefsParams, Request, Response, TestedByParams,
 };
 pub use server::run_daemon;

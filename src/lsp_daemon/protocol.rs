@@ -38,7 +38,12 @@ pub enum Op {
     Closure(ClosureParams),
     ImpactedBy(ImpactedByParams),
     TestedBy(TestedByParams),
+    Health(HealthParams),
 }
+
+/// Params for `health`. 現状 empty struct (将来拡張用に予約)。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HealthParams {}
 
 /// Params for `find_symbol`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
