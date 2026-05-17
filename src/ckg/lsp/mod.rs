@@ -17,6 +17,7 @@ pub mod closure;
 pub mod closure_lang;
 pub mod framing;
 pub mod impacted;
+pub mod init_options;
 pub mod lang;
 pub mod query;
 pub mod query_lang;

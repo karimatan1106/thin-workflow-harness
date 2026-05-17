@@ -15,6 +15,8 @@ use super::client_spawn::spawn_child;
 #[cfg(windows)]
 use super::client_spawn::spawn_via_cmd;
 use super::framing::{read_message, write_message};
+use super::init_options::init_options;
+use super::lang::Lang;
 
 /// spawned な LSP プロセスを保持する同期クライアント。
 pub struct LspClient {
@@ -22,6 +24,8 @@ pub struct LspClient {
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: i64,
+    /// `start_for_lang` 経由のみ Some。legacy `spawn` 経路は None で init_options を送らない。
+    lang: Option<Lang>,
 }
 
 impl LspClient {
@@ -69,19 +73,23 @@ impl LspClient {
             stdin,
             stdout: BufReader::new(stdout),
             next_id: 1,
+            lang: None,
         })
     }
 
     /// `Lang` から server コマンドを解決して spawn する薄いラッパ。
     pub fn start_for_lang(lang: super::lang::Lang) -> Result<Self, String> {
         let (cmd, args) = super::lang::lsp_server_cmd(lang);
-        Self::spawn_with_args(&cmd, &args)
+        let mut c = Self::spawn_with_args(&cmd, &args)?;
+        c.lang = Some(lang);
+        Ok(c)
     }
 
     /// `initialize` リクエスト + `initialized` 通知。`root_uri` は file:// URI。
+    /// `start_for_lang` 経由なら Lang 別 init_options（TS は tsserver preferences）を同梱。
     pub fn initialize(&mut self, root_uri: &str) -> Result<Value, String> {
         // capabilities は最小限。workspace symbol を確実に有効化。
-        let params = json!({
+        let mut params = json!({
             "processId": std::process::id(),
             "rootUri": root_uri,
             "capabilities": {
@@ -93,6 +101,10 @@ impl LspClient {
                 { "uri": root_uri, "name": "root" }
             ],
         });
+        let opts = self.lang.map(init_options).unwrap_or(Value::Null);
+        if !opts.is_null() {
+            params["initializationOptions"] = opts;
+        }
         let result = self.request("initialize", params)?;
         self.notify("initialized", json!({}))?;
         Ok(result)
