@@ -33,6 +33,8 @@ pub fn handle_request(
     req: Request,
 ) -> Response {
     let id = req.id;
+    // idle watcher の reset 用。health も含めて「使用中」と扱う。
+    state.touch();
     if let Op::Health(_) = &req.op {
         return do_health(id, state);
     }

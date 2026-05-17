@@ -5,11 +5,14 @@
 //! - each connection: BufReader::read_line -> 1 line = 1 request
 //! - per-request dispatch is delegated to `dispatch::handle_request`
 //! - listener bind 後の実 port を port_file に書き出し、Drop で削除する。
+//! - idle watcher thread: idle_timeout 経過で process::exit(0)。
+//!   client の drop で LSP は自然 shutdown、port file は PortFileGuard で削除。
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -31,8 +34,17 @@ impl Drop for PortFileGuard {
     }
 }
 
+/// idle watcher の周期 (= 何秒ごとに idle_duration を check するか)。
+const IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
+
 /// Start the foreground daemon. port=0 means OS-assigned.
-pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
+/// `idle_timeout = Duration::ZERO` で idle watcher を無効化する。
+pub fn run_daemon(
+    lang: Lang,
+    root: PathBuf,
+    port: u16,
+    idle_timeout: Duration,
+) -> Result<(), String> {
     let client =
         start_and_warm_up(lang, &root).map_err(|e| format!("warm-up failed: {e}"))?;
     let client = Arc::new(Mutex::new(client));
@@ -44,11 +56,13 @@ pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
         .local_addr()
         .map_err(|e| format!("local_addr: {e}"))?;
     let lang_s = lang_str(lang);
+    let idle_min = idle_timeout.as_secs() / 60;
     eprintln!(
-        "[daemon] lang={} root={} port={}",
+        "[daemon] lang={} root={} port={} idle_timeout={}min",
         lang_s,
         root.display(),
-        bound.port()
+        bound.port(),
+        idle_min,
     );
 
     // port file 書き出し (best-effort、失敗は warn だけ)
@@ -65,6 +79,8 @@ pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
     }
     let _guard = PortFileGuard { path: pf_path };
 
+    spawn_idle_watcher(Arc::clone(&state), idle_timeout);
+
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
@@ -78,6 +94,26 @@ pub fn run_daemon(lang: Lang, root: PathBuf, port: u16) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// idle_timeout > 0 のときだけ background watcher を spawn する。
+/// `process::exit(0)` で OS に shutdown を委ねる:
+///   - LspClient drop で rust-analyzer は自然 shutdown
+///   - PortFileGuard drop で port file 削除
+fn spawn_idle_watcher(state: Arc<DaemonState>, idle_timeout: Duration) {
+    if idle_timeout.is_zero() {
+        return;
+    }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(IDLE_CHECK_INTERVAL);
+        if state.idle_duration() >= idle_timeout {
+            eprintln!(
+                "[daemon] idle timeout ({}s) reached, shutting down",
+                idle_timeout.as_secs()
+            );
+            std::process::exit(0);
+        }
+    });
 }
 
 fn handle_connection(

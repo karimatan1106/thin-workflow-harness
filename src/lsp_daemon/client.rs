@@ -60,6 +60,11 @@ impl DaemonClient {
         let self_exe = std::env::current_exe()
             .map_err(|e| format!("current_exe: {e}"))?;
         let mut cmd = std::process::Command::new(&self_exe);
+        let idle_min: u64 = std::env::var("HARNESS_DAEMON_IDLE_MIN")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(30);
+        let idle_min_s = idle_min.to_string();
         cmd.arg("lsp-daemon")
             .arg("serve")
             .arg("--lang")
@@ -68,6 +73,8 @@ impl DaemonClient {
             .arg(root)
             .arg("--port")
             .arg("0")
+            .arg("--idle-timeout-min")
+            .arg(&idle_min_s)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());

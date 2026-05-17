@@ -58,7 +58,7 @@ fn daemon_find_symbol_reuse_bench() {
     }
     let root2 = root.clone();
     let _daemon = std::thread::spawn(move || {
-        let _ = run_daemon(Lang::Rust, root2, port);
+        let _ = run_daemon(Lang::Rust, root2, port, std::time::Duration::ZERO);
     });
     // daemon 起動 + warm-up を待つ。connect retry でカバー。
     let connect_deadline = Instant::now() + Duration::from_secs(60);
@@ -108,7 +108,7 @@ fn daemon_unknown_symbol_returns_empty() {
     }
     let root2 = root.clone();
     let _daemon = std::thread::spawn(move || {
-        let _ = run_daemon(Lang::Rust, root2, port);
+        let _ = run_daemon(Lang::Rust, root2, port, std::time::Duration::ZERO);
     });
     let connect_deadline = Instant::now() + Duration::from_secs(60);
     let mut client = loop {

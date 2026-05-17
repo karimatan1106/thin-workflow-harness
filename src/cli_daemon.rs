@@ -23,6 +23,9 @@ pub enum LspDaemonCmd {
         /// TCP port (0 = OS-assigned)
         #[arg(long, default_value_t = 0)]
         port: u16,
+        /// idle timeout in minutes (0 = disable, default 30)
+        #[arg(long, default_value_t = 30)]
+        idle_timeout_min: u64,
     },
     /// 起動中の daemon 一覧を表示する (cache_dir 配下の port file 経由)。
     List,
@@ -53,13 +56,14 @@ pub enum LspDaemonCmd {
 /// `harness lsp-daemon <subcmd>` dispatcher.
 pub fn dispatch_lsp_daemon(cmd: LspDaemonCmd) -> Result<(), String> {
     match cmd {
-        LspDaemonCmd::Serve { lang, root, port } => {
+        LspDaemonCmd::Serve { lang, root, port, idle_timeout_min } => {
             let lang = parse_lang(&lang)?;
             let root_path = match root {
                 Some(r) => PathBuf::from(r),
                 None => std::env::current_dir().map_err(|e| format!("cwd: {e}"))?,
             };
-            run_daemon(lang, root_path, port)
+            let idle_timeout = Duration::from_secs(idle_timeout_min * 60);
+            run_daemon(lang, root_path, port, idle_timeout)
         }
         LspDaemonCmd::List => admin::cmd_list(),
         LspDaemonCmd::Stop { lang, root, all, stale } => {
