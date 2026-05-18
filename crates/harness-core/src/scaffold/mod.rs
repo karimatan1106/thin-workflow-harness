@@ -77,17 +77,17 @@ notes = ""
 
 const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\ntranscripts/\n!state/.gitkeep\n";
 
-/// skill ファイル。research / plan / test の 3 つは `skill_templates/*.md` から
-/// `include_str!` で同梱（fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携
-/// を含む operational template）。残り 5 つ（characterize / implement / security /
-/// review / join）は docs/skill-templates.md への参照スタブ（次バッチで充実予定）。
+/// skill ファイル。全 8 つを `skill_templates/*.md` から `include_str!` で同梱
+/// （fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携を含む operational
+/// template）。harness init で展開された時点で各 skill が実行可能な指示を持つ
+/// default workflow が完成する状態。
 const SKILL_STUBS: &[(&str, &str)] = &[
     ("01-research.md", include_str!("skill_templates/01-research.md")),
     ("02-plan.md", include_str!("skill_templates/02-plan.md")),
-    ("03-characterize.md", "# characterize skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: characterize` を参照（プロジェクトに合わせて調整）。\n"),
-    ("04-implement.md", "# implement skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: implement` を参照（プロジェクトに合わせて調整）。\n"),
+    ("03-characterize.md", include_str!("skill_templates/03-characterize.md")),
+    ("04-implement.md", include_str!("skill_templates/04-implement.md")),
     ("05-test.md", include_str!("skill_templates/05-test.md")),
-    ("06-security.md", "# security skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: security` を参照（プロジェクトに合わせて調整）。\n"),
-    ("07-review.md", "# review skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: review` を参照（プロジェクトに合わせて調整）。\n"),
-    ("08-join.md", "# join skill\n\n並列ブランチをマージし再検証するノード。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: join` を参照（プロジェクトに合わせて調整）。\n"),
+    ("06-security.md", include_str!("skill_templates/06-security.md")),
+    ("07-review.md", include_str!("skill_templates/07-review.md")),
+    ("08-join.md", include_str!("skill_templates/08-join.md")),
 ];
