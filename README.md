@@ -43,6 +43,24 @@ harness start "..."
 harness run
 ```
 
+## Claude Code skill として登録する
+
+`harness` を Claude Code (Anthropic CLI) から `/thin-workflow-harness` で起動できるようにするには:
+
+```bash
+# Linux/macOS:
+mkdir -p ~/.claude/skills
+cp -r skills/thin-workflow-harness ~/.claude/skills/
+
+# Windows (PowerShell):
+mkdir -p $HOME/.claude/skills
+cp -r skills/thin-workflow-harness $HOME/.claude/skills/
+```
+
+これで Claude Code session 内で `/thin-workflow-harness "<intent>"` で起動できます。
+
+skill の中身: `skills/thin-workflow-harness/SKILL.md` を参照 (description / 使い方 / common patterns)。
+
 ## Skill 作者向け
 
 skill repo を作る場合:
