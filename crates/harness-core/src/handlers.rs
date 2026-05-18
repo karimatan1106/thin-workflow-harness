@@ -73,6 +73,14 @@ pub fn cmd_start(intent: &str, worktree: Option<&str>) -> Result<(), String> {
 
 pub fn cmd_status(run: Option<&str>) -> Result<(), String> {
     let run_id = paths::resolve_run_id(run)?;
+    // explicit に指定された run_id がイベントログとして存在しない場合は
+    // 偽の status を組み立てて見せず、明示的に error にする（silent fabrication 防止）。
+    if run.is_some() {
+        let log = paths::event_log_path(&run_id)?;
+        if !log.exists() {
+            return Err(format!("run '{run_id}' のイベントログが存在しない: {}", log.display()));
+        }
+    }
     let wf = load_wf()?;
     show(&wf, &run_id)
 }
