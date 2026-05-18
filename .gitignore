@@ -4,4 +4,6 @@
 !/state/.gitkeep
 tests/fixtures/**/target/
 crates/harness/tests/fixtures/**/target/
-crates/harness-lspd/tests/fixtures/**/target/
+crates/skill-tools/lsp-daemon/tests/fixtures/**/target/
+crates/skill-tools/**/target/
+crates/skill-tools/**/Cargo.lock

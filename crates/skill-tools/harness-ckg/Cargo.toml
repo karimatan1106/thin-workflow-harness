@@ -1,0 +1,26 @@
+[package]
+name = "thin-workflow-harness-ckg"
+version = "0.1.0"
+edition = "2021"
+description = "thin-workflow-harness CKG (tree-sitter outline + LSP wrapper + daemon protocol) library"
+
+[lib]
+name = "thin_workflow_harness_ckg"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tree-sitter = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-typescript = "0.23"
+tree-sitter-python = "0.25"
+tree-sitter-go = "0.25"
+lsp-types = "0.97"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+strip = true

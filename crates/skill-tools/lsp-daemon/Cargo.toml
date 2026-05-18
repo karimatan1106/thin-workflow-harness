@@ -1,7 +1,7 @@
 [package]
 name = "thin-workflow-harness-lspd"
-version.workspace = true
-edition.workspace = true
+version = "0.1.0"
+edition = "2021"
 description = "thin-workflow-harness LSP daemon + CKG primitive CLI binary (harness-lspd)"
 
 [lib]
@@ -14,9 +14,13 @@ path = "src/main.rs"
 
 [dependencies]
 thin-workflow-harness-ckg = { path = "../harness-ckg" }
-clap.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [dev-dependencies]
 tempfile = "3"
+
+[profile.release]
+lto = true
+strip = true

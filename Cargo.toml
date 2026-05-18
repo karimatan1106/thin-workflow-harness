@@ -1,19 +1,19 @@
 [workspace]
 members = [
     "crates/harness-core",
-    "crates/harness-ckg",
     "crates/harness",
-    "crates/harness-lspd",
 ]
 exclude = [
     "crates/harness/tests/fixtures/repo_rust",
     "crates/harness/tests/fixtures/repo_node",
     "crates/harness/tests/fixtures/repo_ci",
-    "crates/harness-lspd/tests/fixtures/sample_workspace_rust",
-    "crates/harness-lspd/tests/fixtures/sample_workspace_go",
-    "crates/harness-lspd/tests/fixtures/sample_workspace_py",
-    "crates/harness-lspd/tests/fixtures/sample_workspace_ts",
-    "crates/harness-lspd/tests/fixtures/sample_rust",
+    "crates/skill-tools/harness-ckg",
+    "crates/skill-tools/lsp-daemon",
+    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_rust",
+    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_go",
+    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_py",
+    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_ts",
+    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_rust",
 ]
 resolver = "2"
 
@@ -28,12 +28,6 @@ serde_json = "1"
 toml = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 ureq = { version = "2", features = ["json"] }
-tree-sitter = "0.25"
-tree-sitter-rust = "0.24"
-tree-sitter-typescript = "0.23"
-tree-sitter-python = "0.25"
-tree-sitter-go = "0.25"
-lsp-types = "0.97"
 
 [profile.release]
 lto = true
