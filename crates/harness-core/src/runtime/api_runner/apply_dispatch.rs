@@ -46,29 +46,6 @@ pub(super) fn apply_one(
                 },
             }
         }
-        ToolCall::Query(spec) => {
-            // query は budget の tool_calls にカウントする（API 呼び出しと同等の 1 単位）。
-            *tool_calls_for_budget += 1;
-            match crate::runtime::tools_query::run_query(&spec, intc.cwd()) {
-                Ok(out) => {
-                    let body = if out.success { out.stdout } else {
-                        format!("{}
---- stderr ---
-{}", out.stdout, out.stderr)
-                    };
-                    let content = if body.len() > 8000 {
-                        format!("{}
-…（{} 文字、頭 8000 のみ表示）", &body[..8000], body.len())
-                    } else { body };
-                    ApplyResult { content, is_error: !out.success, terminal: None }
-                }
-                Err(e) => ApplyResult {
-                    content: format!("harness query 起動失敗: {e}"),
-                    is_error: true,
-                    terminal: None,
-                },
-            }
-        }
         ToolCall::Action(action) => {
             if counts_as_tool_call(&action) {
                 *tool_calls_for_budget += 1;

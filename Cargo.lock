@@ -945,7 +945,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thin-workflow-harness-ckg",
- "thin-workflow-harness-core",
 ]
 
 [[package]]

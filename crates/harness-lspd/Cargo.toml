@@ -20,4 +20,3 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
-thin-workflow-harness-core = { path = "../harness-core" }
