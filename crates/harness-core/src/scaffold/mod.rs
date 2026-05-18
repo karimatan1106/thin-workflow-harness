@@ -77,14 +77,16 @@ notes = ""
 
 const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\ntranscripts/\n!state/.gitkeep\n";
 
-/// skill ファイルのプレースホルダ。`docs/skill-templates.md` に文面の正典がある。
-/// 同梱方法は将来確定する ── 今は参照案内のみ。
+/// skill ファイル。research / plan / test の 3 つは `skill_templates/*.md` から
+/// `include_str!` で同梱（fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携
+/// を含む operational template）。残り 5 つ（characterize / implement / security /
+/// review / join）は docs/skill-templates.md への参照スタブ（次バッチで充実予定）。
 const SKILL_STUBS: &[(&str, &str)] = &[
-    ("01-research.md", "# research skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: research` を参照（プロジェクトに合わせて調整）。\n"),
-    ("02-plan.md", "# plan skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: plan` を参照（プロジェクトに合わせて調整）。\n"),
+    ("01-research.md", include_str!("skill_templates/01-research.md")),
+    ("02-plan.md", include_str!("skill_templates/02-plan.md")),
     ("03-characterize.md", "# characterize skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: characterize` を参照（プロジェクトに合わせて調整）。\n"),
     ("04-implement.md", "# implement skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: implement` を参照（プロジェクトに合わせて調整）。\n"),
-    ("05-test.md", "# test skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: test` を参照（プロジェクトに合わせて調整）。\n"),
+    ("05-test.md", include_str!("skill_templates/05-test.md")),
     ("06-security.md", "# security skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: security` を参照（プロジェクトに合わせて調整）。\n"),
     ("07-review.md", "# review skill\n\nこのノードの skill を記述する。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: review` を参照（プロジェクトに合わせて調整）。\n"),
     ("08-join.md", "# join skill\n\n並列ブランチをマージし再検証するノード。標準文面は thin-workflow-harness の docs/skill-templates.md の `## skill: join` を参照（プロジェクトに合わせて調整）。\n"),
