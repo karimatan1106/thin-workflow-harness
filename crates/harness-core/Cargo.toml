@@ -2,7 +2,13 @@
 name = "thin-workflow-harness-core"
 version.workspace = true
 edition.workspace = true
-description = "thin-workflow-harness ── workflow runner core (event log + gate + runtime)"
+description = "Thin workflow runner core for LLM agent loops. Event-log driven state derivation + deterministic gate evaluation."
+license = "MIT"
+repository = "https://github.com/USER/thin-workflow-harness"
+readme = "../../README.md"
+keywords = ["llm", "workflow", "claude", "agent", "harness"]
+categories = ["command-line-utilities", "development-tools"]
+authors = ["thin-workflow-harness contributors"]
 
 [lib]
 name = "thin_workflow_harness_core"

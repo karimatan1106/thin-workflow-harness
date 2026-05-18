@@ -1,5 +1,9 @@
 # thin-workflow-harness
 
+> **Platform**: Windows only. `compile_error!(not(windows))` で他プラットフォーム build を block しています。Unix 対応は scope 外 (詳細は内部設計判断、`memory/project_thin_workflow_harness.md` 参照)。
+
+> **License**: MIT (see `LICENSE`)
+
 軽量ワークフローハーネス（thin harness / fat skills / fat code / fat data）。
 巨大な既存コードベースへの改修を、十分な上流壁打ちの後、指示通り一発で実装させることを狙う。
 状態は append-only イベントログが唯一の真実（LLM の context には持たせない）。

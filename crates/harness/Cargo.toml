@@ -2,7 +2,13 @@
 name = "thin-workflow-harness"
 version.workspace = true
 edition.workspace = true
-description = "thin-workflow-harness workflow runner binary (harness.exe)"
+description = "Thin workflow runner binary (harness.exe) for LLM agent loops. Drives workflow.toml via deterministic gates + append-only event log."
+license = "MIT"
+repository = "https://github.com/USER/thin-workflow-harness"
+readme = "../../README.md"
+keywords = ["llm", "workflow", "claude", "agent", "harness"]
+categories = ["command-line-utilities", "development-tools"]
+authors = ["thin-workflow-harness contributors"]
 
 [lib]
 name = "thin_workflow_harness"
@@ -13,7 +19,7 @@ name = "harness"
 path = "src/main.rs"
 
 [dependencies]
-thin-workflow-harness-core = { path = "../harness-core" }
+thin-workflow-harness-core = { path = "../harness-core", version = "0.1.0" }
 clap.workspace = true
 
 [dev-dependencies]
