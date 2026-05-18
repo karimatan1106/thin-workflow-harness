@@ -906,12 +906,26 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thin-workflow-harness-core",
  "toml",
  "tree-sitter",
  "tree-sitter-go",
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-typescript",
+ "ureq",
+]
+
+[[package]]
+name = "thin-workflow-harness-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
  "ureq",
 ]
 

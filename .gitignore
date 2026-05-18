@@ -3,3 +3,4 @@
 /state/*.jsonl
 !/state/.gitkeep
 tests/fixtures/**/target/
+crates/harness/tests/fixtures/**/target/

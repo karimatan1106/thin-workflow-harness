@@ -4,9 +4,11 @@
 
 use crate::cli::Command;
 use crate::{
-    cli_daemon, cli_query, handlers, handlers2, handlers3, handlers_advance, handlers_closure,
-    handlers_find_symbol, handlers_impacted, handlers_init, handlers_outline, handlers_refs,
-    handlers_stats, handlers_tested, runtime,
+    cli_daemon, cli_query, handlers_closure, handlers_find_symbol, handlers_impacted,
+    handlers_outline, handlers_refs, handlers_tested,
+};
+use thin_workflow_harness_core::{
+    handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_stats, runtime,
 };
 
 /// `Cli::parse()` 後の Command を実行する。

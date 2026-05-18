@@ -1,3 +1,5 @@
+[workspace]
+
 [package]
 name = "fixture-repo-rust"
 version = "0.0.1"

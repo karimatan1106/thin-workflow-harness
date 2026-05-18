@@ -7,8 +7,8 @@
 
 use serde_json::Value;
 
-use thin_workflow_harness::runtime::anthropic::{ContentBlock, MessagesRequest};
-use thin_workflow_harness::runtime::auth::AuthMode;
+use thin_workflow_harness_core::runtime::anthropic::{ContentBlock, MessagesRequest};
+use thin_workflow_harness_core::runtime::auth::AuthMode;
 
 /// `ApiWorker::drive` 経路で組み立てられる system 配列を JSON 経由で取り出すヘルパ
 /// （`build_system_blocks` は pub でないため、`MessagesRequest` を直接組み立てて確認する）。
@@ -28,8 +28,8 @@ fn make_request(system: Vec<ContentBlock>) -> String {
 fn system_block_is_byte_identical_across_spawn_with_same_inputs() {
     // 同じ system_prompt / skill_body / spec_slice なら 2 回構築しても byte 同一 ──
     // これが崩れると cache prefix が変動して常に cold start になる。
-    use thin_workflow_harness::runtime::api_worker::testing::build_system_blocks_for_test;
-    use thin_workflow_harness::runtime::worker::WorkerContext;
+    use thin_workflow_harness_core::runtime::api_worker::testing::build_system_blocks_for_test;
+    use thin_workflow_harness_core::runtime::worker::WorkerContext;
 
     let ctx = WorkerContext {
         system_prompt: "static system body".into(),
@@ -52,8 +52,8 @@ fn system_block_is_byte_identical_across_spawn_with_same_inputs() {
 
 #[test]
 fn cache_control_marks_last_text_block_in_system() {
-    use thin_workflow_harness::runtime::api_worker::testing::build_system_blocks_for_test;
-    use thin_workflow_harness::runtime::worker::WorkerContext;
+    use thin_workflow_harness_core::runtime::api_worker::testing::build_system_blocks_for_test;
+    use thin_workflow_harness_core::runtime::worker::WorkerContext;
 
     let ctx = WorkerContext {
         system_prompt: "system".into(),
@@ -110,8 +110,8 @@ fn system_prompt_is_substantial_via_context_build() {
     // 直接 context::build_context は private 引数（State 等）が要るので、
     // ここでは公開済みの build_system_blocks_for_test 経路で system_prompt が
     // 十分大きい場合に正しく block 化されることを確かめる。
-    use thin_workflow_harness::runtime::api_worker::testing::build_system_blocks_for_test;
-    use thin_workflow_harness::runtime::worker::WorkerContext;
+    use thin_workflow_harness_core::runtime::api_worker::testing::build_system_blocks_for_test;
+    use thin_workflow_harness_core::runtime::worker::WorkerContext;
 
     // 実際の SYSTEM_PROMPT 並みの長さ（4000 char）を流す。
     let big = "あ".repeat(4000);
@@ -138,8 +138,8 @@ fn system_prompt_is_substantial_via_context_build() {
 /// system + tools の合計が 1024 token 閾値に届くための必須マーカー。
 #[test]
 fn tools_array_marks_cache_boundary_at_last_tool() {
-    use thin_workflow_harness::runtime::anthropic::MessagesRequest;
-    use thin_workflow_harness::runtime::tools::tool_defs;
+    use thin_workflow_harness_core::runtime::anthropic::MessagesRequest;
+    use thin_workflow_harness_core::runtime::tools::tool_defs;
 
     let defs = tool_defs();
     let req = MessagesRequest {

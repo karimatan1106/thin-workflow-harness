@@ -1,9 +1,9 @@
 //! tool-call インターセプタの単体テスト ── blast radius / cmd_allowlist / network 判定。
 
-use thin_workflow_harness::runtime::interceptor::{Interceptor, Verdict};
-use thin_workflow_harness::workflow::Workflow;
+use thin_workflow_harness_core::runtime::interceptor::{Interceptor, Verdict};
+use thin_workflow_harness_core::workflow::Workflow;
 
-fn node_from(toml_text: &str) -> thin_workflow_harness::workflow::Node {
+fn node_from(toml_text: &str) -> thin_workflow_harness_core::workflow::Node {
     let wf: Workflow = toml::from_str(toml_text).expect("workflow parse");
     wf.node.into_iter().next().expect("one node")
 }

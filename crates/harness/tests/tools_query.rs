@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use thin_workflow_harness::runtime::tools::{tool_use_to_call, ToolCall};
-use thin_workflow_harness::runtime::tools_query::{build_query_spec, run_query, QuerySpec};
+use thin_workflow_harness_core::runtime::tools::{tool_use_to_call, ToolCall};
+use thin_workflow_harness_core::runtime::tools_query::{build_query_spec, run_query, QuerySpec};
 
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use thin_workflow_harness::event::{Event, EventKind, FailedGate};
-use thin_workflow_harness::state::derive_state;
+use thin_workflow_harness_core::event::{Event, EventKind, FailedGate};
+use thin_workflow_harness_core::state::derive_state;
 
 fn ev(kind: EventKind) -> Event {
     Event { ts: "2026-01-01T00:00:00Z".to_string(), kind }
@@ -80,13 +80,13 @@ fn advance_rejected_recorded_in_history_only() {
 #[test]
 fn load_workflow_and_spec_fixture() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let wf = thin_workflow_harness::workflow::load_workflow(&base.join("workflow.toml")).unwrap();
+    let wf = thin_workflow_harness_core::workflow::load_workflow(&base.join("workflow.toml")).unwrap();
     assert_eq!(wf.meta.entry, "node1");
     assert_eq!(wf.nodes().len(), 2);
-    let errs = thin_workflow_harness::workflow::validate(&wf, None);
+    let errs = thin_workflow_harness_core::workflow::validate(&wf, None);
     assert!(errs.is_empty(), "{errs:?}");
 
-    let spec = thin_workflow_harness::spec::load_spec(&base.join("spec.toml")).unwrap();
+    let spec = thin_workflow_harness_core::spec::load_spec(&base.join("spec.toml")).unwrap();
     assert_eq!(spec.requirement.len(), 1);
     assert_eq!(spec.acceptance.len(), 1);
 }
@@ -104,8 +104,8 @@ skill = "n1.md"
 exit_gates = [ { gate = "no_such_gate", args = {} } ]
 next = ["nowhere"]
 "#;
-    let wf: thin_workflow_harness::workflow::Workflow = toml::from_str(toml_src).unwrap();
-    let errs = thin_workflow_harness::workflow::validate(&wf, None);
+    let wf: thin_workflow_harness_core::workflow::Workflow = toml::from_str(toml_src).unwrap();
+    let errs = thin_workflow_harness_core::workflow::validate(&wf, None);
     assert!(errs.iter().any(|e| e.contains("entry")));
     assert!(errs.iter().any(|e| e.contains("未知の gate")));
     assert!(errs.iter().any(|e| e.contains("nowhere")));

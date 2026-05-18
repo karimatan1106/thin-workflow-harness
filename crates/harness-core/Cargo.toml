@@ -1,0 +1,20 @@
+[package]
+name = "thin-workflow-harness-core"
+version.workspace = true
+edition.workspace = true
+description = "thin-workflow-harness ── workflow runner core (event log + gate + runtime)"
+
+[lib]
+name = "thin_workflow_harness_core"
+path = "src/lib.rs"
+
+[dependencies]
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+chrono.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

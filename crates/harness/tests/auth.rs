@@ -5,8 +5,8 @@
 
 use std::env::VarError;
 
-use thin_workflow_harness::runtime::auth::{resolve_auth_with, AuthMode};
-use thin_workflow_harness::runtime::auth_credentials::extract_token;
+use thin_workflow_harness_core::runtime::auth::{resolve_auth_with, AuthMode};
+use thin_workflow_harness_core::runtime::auth_credentials::extract_token;
 
 fn env_with<'a>(
     pairs: &'a [(&'a str, &'a str)],

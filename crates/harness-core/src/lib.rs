@@ -1,17 +1,11 @@
-//! thin-workflow-harness core library。
+//! thin-workflow-harness-core ── workflow runner core
 //!
-//! debug CLI（`src/cli.rs` / `src/main.rs`）と将来の runtime 層が共有する。
-//! Phase 0 walking skeleton ── workflow.toml/spec.toml 駆動の決定論的状態機械。
+//! workflow.toml + spec.toml driven、event log + gate + runtime のみ。
+//! CKG / daemon は harness binary 側で実装 (Phase 2 step 2 で harness-ckg crate 分離予定)。
 
 #[cfg(not(windows))]
-compile_error!("thin-workflow-harness is Windows-only");
+compile_error!("thin-workflow-harness-core is Windows-only");
 
-pub mod ckg;
-pub mod cli;
-pub mod cli_daemon;
-pub mod cli_dispatch;
-pub mod cli_query;
-pub mod lsp_daemon;
 pub mod detect;
 pub mod event;
 pub mod gate;
@@ -19,14 +13,8 @@ pub mod handlers;
 pub mod handlers2;
 pub mod handlers3;
 pub mod handlers_advance;
-pub mod handlers_closure;
-pub mod handlers_find_symbol;
-pub mod handlers_impacted;
 pub mod handlers_init;
-pub mod handlers_outline;
-pub mod handlers_refs;
 pub mod handlers_stats;
-pub mod handlers_tested;
 pub mod metrics;
 pub mod paths;
 pub mod questions;

@@ -1,8 +1,8 @@
 //! gate プリミティブ 6 個の単体テスト。
 
-use thin_workflow_harness::event::{Event, EventKind};
-use thin_workflow_harness::gate::{eval_gate, GateCtx};
-use thin_workflow_harness::state::{derive_state, State};
+use thin_workflow_harness_core::event::{Event, EventKind};
+use thin_workflow_harness_core::gate::{eval_gate, GateCtx};
+use thin_workflow_harness_core::state::{derive_state, State};
 
 fn ev(kind: EventKind) -> Event {
     Event { ts: "2026-01-01T00:00:00Z".to_string(), kind }

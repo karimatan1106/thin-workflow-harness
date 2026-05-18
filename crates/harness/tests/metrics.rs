@@ -1,7 +1,7 @@
 //! metrics サイドカー（`state/<run-id>.metrics.jsonl`）の単体テスト ──
 //! NodeMetrics の serde 往復と、append→read のラウンドトリップ（一時 HARNESS_HOME）。
 
-use thin_workflow_harness::metrics::{append_metrics, read_metrics, NodeMetrics};
+use thin_workflow_harness_core::metrics::{append_metrics, read_metrics, NodeMetrics};
 
 #[test]
 fn scripted_metrics_has_no_cost_or_tokens() {

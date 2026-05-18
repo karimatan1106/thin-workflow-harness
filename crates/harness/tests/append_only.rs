@@ -1,8 +1,8 @@
 //! `workflow_append_only` gate の単体テスト（run-start スナップショット vs 現 workflow.toml の diff）。
 
-use thin_workflow_harness::gate::{eval_gate, GateCtx};
-use thin_workflow_harness::state::derive_state;
-use thin_workflow_harness::workflow::Workflow;
+use thin_workflow_harness_core::gate::{eval_gate, GateCtx};
+use thin_workflow_harness_core::state::derive_state;
+use thin_workflow_harness_core::workflow::Workflow;
 
 /// `[meta]` ＋ node1 ＋ node2（任意で node3）の workflow.toml テキストを組み立てる。
 fn wf(entry: &str, node1: &str, node2: &str, node3: Option<&str>) -> String {
