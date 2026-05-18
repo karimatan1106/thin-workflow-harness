@@ -1,0 +1,27 @@
+# investigate skill repo ── 2 phase × CKG tool 使用例
+# repository の symbol を `harness-lspd` で引き、 結果を artifact 登録して終了。
+
+[meta]
+name = "investigate"
+entry = "explore"
+host = "runtime"
+default_budget = { max_tool_calls = 12, max_tokens = 8000, max_wall_seconds = 180 }
+mandatory_gates = []
+
+[[node]]
+id = "explore"
+skill = "01-explore.md"
+exit_gates = [
+  { gate = "artifact_registered", args = { name_or_prefix = "exploration" } },
+]
+next = ["report"]
+on_reject = { after = 2, goto = "__human__" }
+
+[[node]]
+id = "report"
+skill = "02-report.md"
+exit_gates = [
+  { gate = "evidence_recorded", args = { key = "completed" } },
+]
+next = []
+on_reject = { after = 1, goto = "__human__" }

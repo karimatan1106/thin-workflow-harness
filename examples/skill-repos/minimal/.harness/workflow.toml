@@ -1,0 +1,22 @@
+# minimal skill repo ── 1 phase × report-evidence
+# Step 1 dogfood (2026-05-18) で haiku-4-5 / tool_calls=2 / cost $0.0079 で完走確認済。
+# `harness init` で生成されるテンプレートではなく、 「最小動作 example」 として手書き。
+
+[meta]
+name = "minimal"
+entry = "done"
+# host = "runtime" は harness ランタイム自身が ApiWorker をホストする。
+# claude-code をホストにする場合は "claude-code" を指定し、 docs/host-capabilities.md を参照。
+host = "runtime"
+default_budget = { max_tool_calls = 4, max_tokens = 4000, max_wall_seconds = 60 }
+mandatory_gates = []
+
+[[node]]
+id = "done"
+skill = "01-done.md"
+# `evidence_recorded` gate ── `report_evidence(gate="completed", json=...)` を 1 回呼べば pass。
+exit_gates = [
+  { gate = "evidence_recorded", args = { key = "completed" } },
+]
+next = []
+on_reject = { after = 1, goto = "__human__" }
