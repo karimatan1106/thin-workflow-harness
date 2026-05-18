@@ -7,13 +7,7 @@ exclude = [
     "crates/harness/tests/fixtures/repo_rust",
     "crates/harness/tests/fixtures/repo_node",
     "crates/harness/tests/fixtures/repo_ci",
-    "crates/skill-tools/harness-ckg",
-    "crates/skill-tools/lsp-daemon",
-    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_rust",
-    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_go",
-    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_py",
-    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_workspace_ts",
-    "crates/skill-tools/lsp-daemon/tests/fixtures/sample_rust",
+    "examples",
 ]
 resolver = "2"
 
