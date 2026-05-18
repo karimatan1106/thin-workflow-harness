@@ -25,8 +25,8 @@ Skip if: one-shot edit, simple Q&A, exploratory questions.
 ## Usage flow
 
 1. cd to workspace
-2. If `.harness/` missing: `Bash: harness init`
-3. `Bash: harness start "<user intent>"`
+2. If `.harness/` missing: `Bash: harness init`（CWD 直下に `.harness/` をスキャフォールド）
+3. `Bash: harness start "<user intent>"` ── CWD/.harness/workflow.toml を auto-detect する。別 workspace を指したい場合だけ `HARNESS_HOME=/path/to/.harness` を明示する。
 4. `Bash: harness run --model claude-sonnet-4-6`
 5. Monitor stdout/stderr. If questions arise:
    - `Bash: harness questions`

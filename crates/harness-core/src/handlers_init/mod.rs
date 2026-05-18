@@ -59,7 +59,8 @@ pub fn cmd_init(dir: Option<&str>, force: bool) -> Result<(), String> {
     }
 
     println!(
-        "\n次の手順: .harness/workflow.toml を確認・編集 / HARNESS_HOME={} を設定",
+        "\n次の手順: .harness/workflow.toml を確認・編集 → `harness start \"...\"`（CWD={} から auto-detect）\n  workspace 切替や explicit 指定は HARNESS_HOME={} を設定",
+        harness_dir.parent().map(|p| p.display().to_string()).unwrap_or_else(|| ".".to_string()),
         harness_dir.display()
     );
     Ok(())

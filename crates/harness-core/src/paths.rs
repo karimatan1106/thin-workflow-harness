@@ -2,13 +2,35 @@
 
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-/// HARNESS_HOME があればそれ、無ければ CWD。相対パス解決の基準でもある。
+/// HARNESS_HOME があれば最優先、無ければ CWD/.harness/ を auto-detect、
+/// それも無ければ legacy として CWD を返す。相対パス解決の基準でもある。
+///
+/// 優先順:
+/// 1. `HARNESS_HOME` 環境変数（明示指定 / workspace 切替・debug 用）
+/// 2. `CWD/.harness/workflow.toml` が存在 → `CWD/.harness/`（`harness init` 直後の標準レイアウト）
+/// 3. `CWD`（legacy。`workflow.toml` を直下に置く運用との互換）
 pub fn harness_home() -> PathBuf {
-    match env::var_os("HARNESS_HOME") {
-        Some(v) => PathBuf::from(v),
-        None => env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+    if let Some(v) = env::var_os("HARNESS_HOME") {
+        return PathBuf::from(v);
+    }
+    let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let dotted = cwd.join(".harness");
+    if dotted.join("workflow.toml").exists() {
+        return dotted;
+    }
+    cwd
+}
+
+/// 指定 dir から `.harness/workflow.toml` を検索する（テスト用ヘルパ）。
+#[doc(hidden)]
+pub fn detect_harness_dir(base: &Path) -> Option<PathBuf> {
+    let cand = base.join(".harness");
+    if cand.join("workflow.toml").exists() {
+        Some(cand)
+    } else {
+        None
     }
 }
 

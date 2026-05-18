@@ -113,3 +113,30 @@ fn doctor_runs_on_initialized_harness() {
     assert!(s.contains("[OK]") || s.contains("[WARN]"), "doctor produced no markers: {s}");
     assert!(s.contains("validate"), "doctor missing validate line: {s}");
 }
+
+#[test]
+fn start_auto_detects_dot_harness_when_harness_home_unset() {
+    // CWD/.harness/workflow.toml を harness が自動検出して start できることを確認する。
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    copy_dir(&fixtures().join("repo_rust"), &repo);
+
+    let dir_str = repo.to_string_lossy().to_string();
+    let o = run(tmp.path(), &["init", &dir_str, "--force"]);
+    assert!(o.status.success(), "init failed: {}", out_str(&o));
+
+    // HARNESS_HOME を外したまま repo 直下から harness start を叩く。
+    let o = run(&repo, &["start", "auto-detect smoke"]);
+    let s = out_str(&o);
+    assert!(o.status.success(), "start failed: {s}");
+    assert!(s.contains("run "), "missing run id line: {s}");
+
+    // event log が .harness/state/ 配下に作られていること。
+    let state = repo.join(".harness").join("state");
+    let entries: Vec<_> = std::fs::read_dir(&state)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("jsonl"))
+        .collect();
+    assert!(!entries.is_empty(), "no jsonl event log in {}", state.display());
+}
