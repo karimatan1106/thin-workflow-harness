@@ -7,8 +7,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use thin_workflow_harness::ckg::lsp::Lang;
-use thin_workflow_harness::lsp_daemon::{port_file, DaemonClient};
+use thin_workflow_harness_ckg::ckg::lsp::Lang;
+use thin_workflow_harness_ckg::lsp_daemon::{port_file, DaemonClient};
 
 fn rust_analyzer_available() -> bool {
     std::process::Command::new("rust-analyzer")

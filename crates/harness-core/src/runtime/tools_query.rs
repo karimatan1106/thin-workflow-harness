@@ -2,8 +2,9 @@
 //!
 //! ToolCall::Query が保持する `QuerySpec` 定義と、`tool_use_to_call` 用ビルダ、
 //! および `apply_dispatch` から呼ばれる subprocess 実行関数 `run_query` を含む。
-//! subprocess は `HARNESS_BIN` 環境変数があればそれ、無ければ PATH の `harness` を使う
-//! （test では `CARGO_BIN_EXE_harness` を `HARNESS_BIN` に渡して隔離する）。
+//! subprocess は `HARNESS_LSPD_BIN` 環境変数があればそれ、無ければ PATH の
+//! `harness-lspd` を使う（test では `CARGO_BIN_EXE_harness-lspd` を `HARNESS_LSPD_BIN`
+//! に渡して隔離する）。CKG / LSP daemon は harness-lspd binary に分離済。
 
 use std::path::Path;
 use std::process::Command;
@@ -48,10 +49,10 @@ pub fn build_query_spec(tool_name: &str, input: &Value) -> Result<QuerySpec, Str
     Ok(QuerySpec { subcommand: sub, positional: qname, depth, direction, root, format, lang })
 }
 
-/// `harness` バイナリのパスを決める。`HARNESS_BIN` 環境変数が立っていればそれ、
-/// 無ければ PATH 経由の `harness` を返す（cargo install 済みを前提）。
+/// `harness-lspd` バイナリのパスを決める。`HARNESS_LSPD_BIN` 環境変数が立っていればそれ、
+/// 無ければ PATH 経由の `harness-lspd` を返す（cargo install 済みを前提）。
 pub fn harness_bin() -> String {
-    std::env::var("HARNESS_BIN").unwrap_or_else(|_| "harness".to_string())
+    std::env::var("HARNESS_LSPD_BIN").unwrap_or_else(|_| "harness-lspd".to_string())
 }
 
 /// `QuerySpec` を実行する。stdout を返す（is_error は呼び出し側で status を見て判定）。
@@ -62,7 +63,7 @@ pub struct QueryOutput {
     pub success: bool,
 }
 
-/// `harness query <sub> <positional> [--depth N] [--direction D] [--root R] [--format F] [--lang L]` を実行。
+/// `harness-lspd query <sub> <positional> [--depth N] [--direction D] [--root R] [--format F] [--lang L]` を実行。
 pub fn run_query(spec: &QuerySpec, cwd: &Path) -> Result<QueryOutput, String> {
     let bin = harness_bin();
     let mut cmd = Command::new(&bin);
@@ -125,9 +126,9 @@ mod tests {
 
     #[test]
     fn harness_bin_respects_env_override() {
-        std::env::set_var("HARNESS_BIN", "C:/tmp/fake-harness.exe");
-        assert_eq!(harness_bin(), "C:/tmp/fake-harness.exe");
-        std::env::remove_var("HARNESS_BIN");
-        assert_eq!(harness_bin(), "harness");
+        std::env::set_var("HARNESS_LSPD_BIN", "C:/tmp/fake-harness-lspd.exe");
+        assert_eq!(harness_bin(), "C:/tmp/fake-harness-lspd.exe");
+        std::env::remove_var("HARNESS_LSPD_BIN");
+        assert_eq!(harness_bin(), "harness-lspd");
     }
 }

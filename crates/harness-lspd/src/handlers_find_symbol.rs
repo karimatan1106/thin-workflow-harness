@@ -7,8 +7,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::ckg::lsp::{find_symbol_for_lang, lsp_server_cmd, Lang, SymbolInfo};
-use crate::lsp_daemon::{DaemonClient, SymbolPayload};
+use thin_workflow_harness_ckg::ckg::lsp::{find_symbol_for_lang, lsp_server_cmd, Lang, SymbolInfo};
+use thin_workflow_harness_ckg::lsp_daemon::{DaemonClient, SymbolPayload};
 
 /// 優先順:
 /// 1. `HARNESS_DIRECT_LSP=1` → 直接 LSP spawn (debug)
@@ -82,10 +82,10 @@ pub fn resolve_lang(lang_arg: &str, qname: &str, root: &Path) -> Result<Lang, St
         "py" | "python" => Ok(Lang::Py),
         "go" => Ok(Lang::Go),
         "auto" => {
-            if let Some(l) = crate::ckg::lsp::detect_lang_from_qname(qname) {
+            if let Some(l) = thin_workflow_harness_ckg::ckg::lsp::detect_lang_from_qname(qname) {
                 return Ok(l);
             }
-            if let Some(l) = crate::ckg::lsp::root_lang(root) {
+            if let Some(l) = thin_workflow_harness_ckg::ckg::lsp::root_lang(root) {
                 return Ok(l);
             }
             Err("言語推定に失敗しました。--lang <rust|ts|py|go> を明示してください".to_string())

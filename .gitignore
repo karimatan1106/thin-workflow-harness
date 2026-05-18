@@ -4,3 +4,4 @@
 !/state/.gitkeep
 tests/fixtures/**/target/
 crates/harness/tests/fixtures/**/target/
+crates/harness-lspd/tests/fixtures/**/target/

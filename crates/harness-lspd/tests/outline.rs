@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use thin_workflow_harness::ckg::{outline_file, SymbolKind};
+use thin_workflow_harness_ckg::ckg::{outline_file, SymbolKind};
 
 fn fixture_path() -> PathBuf {
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

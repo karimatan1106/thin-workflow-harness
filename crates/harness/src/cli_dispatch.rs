@@ -1,12 +1,9 @@
 //! `cli::run` の match dispatch ── 200 行制約のため cli.rs から切り出し。
 //!
-//! 各 Command バリアントを対応する handler 関数に振り分けるだけ。
+//! workflow runner 系の Command バリアントを対応する core handler に振り分ける。
+//! CKG / LSP daemon 系の dispatch は harness-lspd binary 側に移動済。
 
 use crate::cli::Command;
-use crate::{
-    cli_daemon, cli_query, handlers_closure, handlers_find_symbol, handlers_impacted,
-    handlers_outline, handlers_refs, handlers_tested,
-};
 use thin_workflow_harness_core::{
     handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_stats, runtime,
 };
@@ -50,55 +47,5 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
-        Command::Outline { path, format } => handlers_outline::cmd_outline(&path, &format),
-        Command::FindSymbol { query, kind, root, format, lang, daemon_port } => {
-            handlers_find_symbol::cmd_find_symbol(
-                &query,
-                kind.as_deref(),
-                root.as_deref(),
-                &format,
-                &lang,
-                daemon_port,
-            )
-        }
-        Command::LspDaemon { cmd } => cli_daemon::dispatch_lsp_daemon(cmd),
-        Command::Refs { qname, root, format, lang, daemon_port } => {
-            handlers_refs::cmd_refs(&qname, root.as_deref(), &format, &lang, daemon_port)
-        }
-        Command::Callers { qname, root, format, lang, daemon_port } => {
-            handlers_refs::cmd_callers(&qname, root.as_deref(), &format, &lang, daemon_port)
-        }
-        Command::Closure { qname, depth, direction, root, format, lang, daemon_port } => {
-            handlers_closure::cmd_closure(
-                &qname,
-                depth,
-                &direction,
-                root.as_deref(),
-                &format,
-                &lang,
-                daemon_port,
-            )
-        }
-        Command::ImpactedBy { qname, depth, root, format, lang, daemon_port } => {
-            handlers_impacted::cmd_impacted_by(
-                &qname,
-                depth,
-                root.as_deref(),
-                &format,
-                &lang,
-                daemon_port,
-            )
-        }
-        Command::TestedBy { qname, depth, root, format, lang, daemon_port } => {
-            handlers_tested::cmd_tested_by(
-                &qname,
-                depth,
-                root.as_deref(),
-                &format,
-                &lang,
-                daemon_port,
-            )
-        }
-        Command::Query { cmd } => cli_query::dispatch_query(cmd),
     }
 }

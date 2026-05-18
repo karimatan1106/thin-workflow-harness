@@ -1,20 +1,11 @@
-//! thin-workflow-harness binary crate ── CLI + CKG + LSP daemon
+//! thin-workflow-harness binary crate ── workflow runner CLI のみ。
 //!
 //! workflow runner core は thin-workflow-harness-core crate に分離済。
-//! CKG / LSP daemon は次バッチ (Phase 2 step 2) で harness-ckg crate に切り出し予定。
+//! CKG / LSP daemon は thin-workflow-harness-ckg (library) +
+//! thin-workflow-harness-lspd (binary `harness-lspd`) に分離済。
 
 #[cfg(not(windows))]
 compile_error!("thin-workflow-harness is Windows-only");
 
-pub mod ckg;
 pub mod cli;
-pub mod cli_daemon;
 pub mod cli_dispatch;
-pub mod cli_query;
-pub mod handlers_closure;
-pub mod handlers_find_symbol;
-pub mod handlers_impacted;
-pub mod handlers_outline;
-pub mod handlers_refs;
-pub mod handlers_tested;
-pub mod lsp_daemon;

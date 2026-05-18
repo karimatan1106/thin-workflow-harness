@@ -1,9 +1,9 @@
-//! `query_*` 系 tool の round-trip 検証 ── subprocess は実 harness.exe を呼ぶが
-//! Anthropic API は呼ばない（HARNESS_BIN env で test binary を指定）。
+//! `query_*` 系 tool の round-trip 検証 ── subprocess は実 harness-lspd.exe を呼ぶが
+//! Anthropic API は呼ばない（HARNESS_LSPD_BIN env で test binary を指定）。
 //!
 //! 検証範囲:
 //! 1. `tool_use_to_call("query_outline", ...)` が `ToolCall::Query` を返す。
-//! 2. `tools_query::run_query` が `HARNESS_BIN` で指定された subprocess を起動し、
+//! 2. `tools_query::run_query` が `HARNESS_LSPD_BIN` で指定された subprocess を起動し、
 //!    `outline` の stdout を取得できる（rust-analyzer 不在でも動く）。
 //! 3. mock 経路: 1 ターンの assistant 応答に `query_outline` の tool_use が乗っていれば
 //!    `apply_loop::run_tool_uses` 風の経路で subprocess を呼んで結果が tool_result に
@@ -23,13 +23,13 @@ fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// テスト用に harness binary を test build に向ける。
-/// `CARGO_BIN_EXE_harness` は cargo test が用意してくれる絶対パス。
+/// テスト用に harness-lspd binary を test build に向ける。
+/// `CARGO_BIN_EXE_harness-lspd` は cargo test が用意してくれる絶対パス。
 /// daemon default 化 (--use-daemon 撤去) 後は subprocess 側で daemon spawn が
 /// 走ると 30s timeout / handle inherit でテストが hang する。テスト経路は
 /// direct LSP 固定 (HARNESS_DIRECT_LSP=1) にして daemon を bypass する。
 fn set_harness_bin_for_tests() {
-    std::env::set_var("HARNESS_BIN", env!("CARGO_BIN_EXE_harness"));
+    std::env::set_var("HARNESS_LSPD_BIN", env!("CARGO_BIN_EXE_harness-lspd"));
     std::env::set_var("HARNESS_DIRECT_LSP", "1");
 }
 

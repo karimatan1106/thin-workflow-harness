@@ -902,18 +902,25 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
- "lsp-types",
- "serde",
  "serde_json",
  "tempfile",
  "thin-workflow-harness-core",
  "toml",
+]
+
+[[package]]
+name = "thin-workflow-harness-ckg"
+version = "0.1.0"
+dependencies = [
+ "lsp-types",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tree-sitter",
  "tree-sitter-go",
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-typescript",
- "ureq",
 ]
 
 [[package]]
@@ -927,6 +934,18 @@ dependencies = [
  "tempfile",
  "toml",
  "ureq",
+]
+
+[[package]]
+name = "thin-workflow-harness-lspd"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thin-workflow-harness-ckg",
+ "thin-workflow-harness-core",
 ]
 
 [[package]]

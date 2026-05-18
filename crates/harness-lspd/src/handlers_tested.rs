@@ -1,20 +1,20 @@
-//! `harness impacted-by <qname>` ハンドラ。
+//! `harness tested-by <qname>` ハンドラ。
 //!
 //! `--lang auto|rust|ts|py|go` を受け、対応 LSP server を spawn して
-//! find_impacted_by_for_lang を回し、text/json で stdout 出力。
-//! 内部は find_closure_for_lang(direction=in) の薄いラッパ。
+//! find_tested_by_for_lang を回し、text/json で stdout 出力。
 //! 既定動作は daemon 経由（auto-spawn または `--daemon-port` で固定 port）。
 //! 環境変数 `HARNESS_DIRECT_LSP=1` で daemon を bypass し直接 LSP を spawn する（debug 用）。
 
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::ckg::lsp::impacted::{find_impacted_by_for_lang, ImpactedNode};
+use thin_workflow_harness_ckg::ckg::lsp::tested::TestedNode;
+use thin_workflow_harness_ckg::ckg::lsp::tested_lang::find_tested_by_for_lang;
 use crate::handlers_find_symbol::{ensure_server_available, open_client, resolve_lang};
-use crate::lsp_daemon::TestedNodePayload;
+use thin_workflow_harness_ckg::lsp_daemon::TestedNodePayload;
 
-/// `harness impacted-by` CLI ハンドラ。
-pub fn cmd_impacted_by(
+/// `harness tested-by` CLI ハンドラ。
+pub fn cmd_tested_by(
     qname: &str,
     depth: usize,
     root: Option<&str>,
@@ -25,12 +25,12 @@ pub fn cmd_impacted_by(
     let root_path = resolve_root(root)?;
     let lang_lazy = || resolve_lang(lang_arg, qname, &root_path);
     let nodes = if let Some(mut c) = open_client(daemon_port, &root_path, &lang_lazy)? {
-        let p = c.impacted_by(qname, depth, &root_path, Duration::from_secs(120))?;
-        p.into_iter().map(tested_payload_to_impacted).collect()
+        let p = c.tested_by(qname, depth, &root_path, Duration::from_secs(120))?;
+        p.into_iter().map(tested_payload_to_node).collect()
     } else {
         let lang = lang_lazy()?;
         ensure_server_available(lang)?;
-        find_impacted_by_for_lang(qname, depth, lang, &root_path)?
+        find_tested_by_for_lang(qname, depth, lang, &root_path)?
     };
     match format {
         "json" => print_json(qname, depth, &nodes)?,
@@ -40,8 +40,8 @@ pub fn cmd_impacted_by(
     Ok(())
 }
 
-fn tested_payload_to_impacted(p: TestedNodePayload) -> ImpactedNode {
-    ImpactedNode { name: p.name, file: p.file, line: p.line, depth: p.depth }
+fn tested_payload_to_node(p: TestedNodePayload) -> TestedNode {
+    TestedNode { name: p.name, file: p.file, line: p.line, depth: p.depth }
 }
 
 fn resolve_root(root: Option<&str>) -> Result<PathBuf, String> {
@@ -51,8 +51,8 @@ fn resolve_root(root: Option<&str>) -> Result<PathBuf, String> {
     }
 }
 
-fn print_text(qname: &str, depth: usize, nodes: &[ImpactedNode]) {
-    println!("impacted-by `{qname}` (depth={depth}):");
+fn print_text(qname: &str, depth: usize, nodes: &[TestedNode]) {
+    println!("tested-by `{qname}` (depth={depth}):");
     for n in nodes {
         if n.name.is_empty() {
             println!("  d{}: {}:{}", n.depth, n.file, n.line);
@@ -62,11 +62,11 @@ fn print_text(qname: &str, depth: usize, nodes: &[ImpactedNode]) {
     }
 }
 
-fn print_json(qname: &str, depth: usize, nodes: &[ImpactedNode]) -> Result<(), String> {
+fn print_json(qname: &str, depth: usize, nodes: &[TestedNode]) -> Result<(), String> {
     let payload = serde_json::json!({
         "qname": qname,
         "depth": depth,
-        "impacted": nodes,
+        "tests": nodes,
     });
     let s = serde_json::to_string_pretty(&payload).map_err(|e| format!("serialize: {e}"))?;
     println!("{s}");

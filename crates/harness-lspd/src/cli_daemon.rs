@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use clap::Subcommand;
 
-use crate::ckg::lsp::Lang;
-use crate::lsp_daemon::{admin, run_daemon, DaemonClient};
+use thin_workflow_harness_ckg::ckg::lsp::Lang;
+use thin_workflow_harness_ckg::lsp_daemon::{admin, run_daemon, DaemonClient};
 
 #[derive(Subcommand)]
 pub enum LspDaemonCmd {

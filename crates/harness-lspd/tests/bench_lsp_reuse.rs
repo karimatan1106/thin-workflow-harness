@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use thin_workflow_harness::ckg::lsp::{
+use thin_workflow_harness_ckg::ckg::lsp::{
     find_refs_for_lang_with_client, find_symbol_for_lang_with_client, start_and_warm_up, Lang,
 };
 

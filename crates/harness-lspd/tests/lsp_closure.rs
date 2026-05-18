@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
-use thin_workflow_harness::ckg::lsp::{find_closure, Direction};
+use thin_workflow_harness_ckg::ckg::lsp::{find_closure, Direction};
 
 fn fixture_root() -> PathBuf {
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

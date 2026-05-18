@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use crate::ckg::{outline_file, Symbol};
+use thin_workflow_harness_ckg::ckg::{outline_file, Symbol};
 
 /// 出力フォーマット。
 pub enum OutlineFormat {

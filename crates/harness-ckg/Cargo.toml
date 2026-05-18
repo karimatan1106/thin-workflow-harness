@@ -1,0 +1,22 @@
+[package]
+name = "thin-workflow-harness-ckg"
+version.workspace = true
+edition.workspace = true
+description = "thin-workflow-harness CKG (tree-sitter outline + LSP wrapper + daemon protocol) library"
+
+[lib]
+name = "thin_workflow_harness_ckg"
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tree-sitter.workspace = true
+tree-sitter-rust.workspace = true
+tree-sitter-typescript.workspace = true
+tree-sitter-python.workspace = true
+tree-sitter-go.workspace = true
+lsp-types.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

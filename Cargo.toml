@@ -1,14 +1,19 @@
 [workspace]
-members = ["crates/harness-core", "crates/harness"]
+members = [
+    "crates/harness-core",
+    "crates/harness-ckg",
+    "crates/harness",
+    "crates/harness-lspd",
+]
 exclude = [
-    "crates/harness/tests/fixtures/sample_workspace_rust",
-    "crates/harness/tests/fixtures/sample_workspace_go",
-    "crates/harness/tests/fixtures/sample_workspace_py",
-    "crates/harness/tests/fixtures/sample_workspace_ts",
-    "crates/harness/tests/fixtures/sample_rust",
     "crates/harness/tests/fixtures/repo_rust",
     "crates/harness/tests/fixtures/repo_node",
     "crates/harness/tests/fixtures/repo_ci",
+    "crates/harness-lspd/tests/fixtures/sample_workspace_rust",
+    "crates/harness-lspd/tests/fixtures/sample_workspace_go",
+    "crates/harness-lspd/tests/fixtures/sample_workspace_py",
+    "crates/harness-lspd/tests/fixtures/sample_workspace_ts",
+    "crates/harness-lspd/tests/fixtures/sample_rust",
 ]
 resolver = "2"
 

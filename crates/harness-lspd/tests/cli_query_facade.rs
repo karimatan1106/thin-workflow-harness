@@ -1,4 +1,4 @@
-//! `harness query <subcommand>` ファサードの結線確認 ── outline ベースのみ（rust-analyzer 不要）。
+//! `harness-lspd query <subcommand>` ファサードの結線確認 ── outline ベースのみ（rust-analyzer 不要）。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -8,7 +8,7 @@ fn manifest_dir() -> PathBuf {
 }
 
 fn run(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_harness"))
+    Command::new(env!("CARGO_BIN_EXE_harness-lspd"))
         .args(args)
         .current_dir(manifest_dir())
         .output()

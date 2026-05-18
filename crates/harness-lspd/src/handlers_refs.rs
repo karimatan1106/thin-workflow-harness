@@ -8,9 +8,9 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::ckg::lsp::{find_callers_for_lang, find_refs_for_lang, CallerInfo, RefLocation};
+use thin_workflow_harness_ckg::ckg::lsp::{find_callers_for_lang, find_refs_for_lang, CallerInfo, RefLocation};
 use crate::handlers_find_symbol::{ensure_server_available, open_client, resolve_lang};
-use crate::lsp_daemon::{CallerPayload, RefPayload};
+use thin_workflow_harness_ckg::lsp_daemon::{CallerPayload, RefPayload};
 
 /// `harness refs` CLI ハンドラ。
 pub fn cmd_refs(

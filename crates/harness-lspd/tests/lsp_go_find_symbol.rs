@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
-use thin_workflow_harness::ckg::lsp::{find_symbol_for_lang, Lang};
+use thin_workflow_harness_ckg::ckg::lsp::{find_symbol_for_lang, Lang};
 
 fn fixture_root() -> PathBuf {
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

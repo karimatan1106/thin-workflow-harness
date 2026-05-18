@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
-use thin_workflow_harness::ckg::lsp::{find_impacted_by, find_tested_by};
-use thin_workflow_harness::ckg::test_attrs::list_test_function_lines;
-use thin_workflow_harness::ckg::test_mod_scan::{
+use thin_workflow_harness_ckg::ckg::lsp::{find_impacted_by, find_tested_by};
+use thin_workflow_harness_ckg::ckg::test_attrs::list_test_function_lines;
+use thin_workflow_harness_ckg::ckg::test_mod_scan::{
     is_inside_cfg_test_mod, list_cfg_test_mod_ranges,
 };
 

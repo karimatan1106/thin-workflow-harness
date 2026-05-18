@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
-use thin_workflow_harness::ckg::lsp::{
+use thin_workflow_harness_ckg::ckg::lsp::{
     find_callers_for_lang, find_closure_for_lang, find_refs_for_lang, find_tested_by_for_lang,
     Direction, Lang,
 };
