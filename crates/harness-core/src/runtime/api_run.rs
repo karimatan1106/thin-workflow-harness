@@ -96,7 +96,7 @@ fn default_model(wf: &Workflow, override_: Option<&str>) -> String {
     wf.meta
         .default_model
         .clone()
-        .unwrap_or_else(|| "claude-opus-4-7".to_string())
+        .unwrap_or_else(|| "claude-sonnet-4-6".to_string())
 }
 
 
