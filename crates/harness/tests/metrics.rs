@@ -28,13 +28,26 @@ fn metrics_with_cost_and_tokens_roundtrips() {
         cost: Some(0.0421),
         tokens: Some(8123),
         tokens_breakdown: None,
+        model: Some("claude-opus-4-8".into()),
         ts: "2026-05-13T00:00:00Z".into(),
     };
     let json = serde_json::to_string(&m).unwrap();
     assert!(json.contains("cost"));
     assert!(json.contains("tokens"));
+    // model フィールドが round-trip で保持される。
+    assert!(json.contains("\"model\":\"claude-opus-4-8\""));
     let back: NodeMetrics = serde_json::from_str(&json).unwrap();
     assert_eq!(back, m);
+}
+
+#[test]
+fn legacy_jsonl_line_without_model_is_compatible() {
+    // model フィールドの無い旧 jsonl 行が serde(default) で読める（後方互換）。
+    let legacy = r#"{"node":"impl","tool_calls":3,"wall_seconds":2.0,"cost":0.03,"tokens":120,"tokens_breakdown":{"input":80,"output":40,"cache_create":0,"cache_read":0},"ts":"2026-01-01T00:00:00Z"}"#;
+    let m: NodeMetrics = serde_json::from_str(legacy).unwrap();
+    assert_eq!(m.node, "impl");
+    assert_eq!(m.tokens, Some(120));
+    assert!(m.model.is_none());
 }
 
 #[test]

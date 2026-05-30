@@ -105,6 +105,8 @@ pub fn run_loop(d: RunnerDeps<'_>) -> Result<(), String> {
             continue;
         }
         let model = node.model.clone().unwrap_or_else(|| model_default.clone());
+        // metrics 行に載せる用にモデル名を控える（model は ApiWorker::new に move される）。
+        let model_for_metrics = model.clone();
         let rc = RunCtx::load(&run_id);
         let events = read_events(&run_id)?;
         let ctx = context::build_context(&wf, &node, &st, &rc, &events);
@@ -158,7 +160,14 @@ pub fn run_loop(d: RunnerDeps<'_>) -> Result<(), String> {
             cache_create: metrics.usage.cache_creation_input_tokens,
             cache_read: metrics.usage.cache_read_input_tokens,
         };
-        let m = NodeMetrics::api(&node.id, metrics.tool_calls, elapsed, breakdown, metrics.cost_usd);
+        let m = NodeMetrics::api(
+            &node.id,
+            metrics.tool_calls,
+            elapsed,
+            breakdown,
+            metrics.cost_usd,
+            Some(model_for_metrics),
+        );
         append_metrics(&run_id, &m)?;
 
         // cache 未作成 → 1 run で 1 度警告（真因: system+tools が 1024 token 閾値未達 等）。
