@@ -128,6 +128,9 @@ pub enum Command {
         /// ApiWorker のモデル override。`workflow.toml` の `[meta].default_model` を上書きする（任意）。
         #[arg(long)]
         model: Option<String>,
+        /// stale な run ロックを強制削除して何もせず終了する（プロセス kill 後の回収用）。
+        #[arg(long)]
+        force_unlock: bool,
     },
     /// ノードごとの metrics（tool_calls / wall_seconds / cost / tokens）を表示する。
     Stats { run_id: String },

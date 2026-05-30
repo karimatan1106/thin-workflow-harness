@@ -35,11 +35,18 @@ pub(crate) fn show(wf: &Workflow, run_id: &str) -> Result<(), String> {
 }
 
 fn new_run_id() -> Result<String, String> {
-    let base = Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    // PID を含めて「別プロセスが同じ秒に start」しても run_id が衝突しないようにする
+    // （複数セッション同時実行対策の第一段。秒精度だけだと TOCTOU で同一 id を取りうる）。
+    let base = format!(
+        "{}_{}",
+        Utc::now().format("%Y%m%d_%H%M%S"),
+        std::process::id()
+    );
     let dir = paths::state_dir()?;
     if !dir.join(format!("{base}.jsonl")).exists() {
         return Ok(base);
     }
+    // 同一プロセスが同秒に複数 start した稀ケースだけ suffix で解消する。
     for suffix in 'b'..='z' {
         let cand = format!("{base}_{suffix}");
         if !dir.join(format!("{cand}.jsonl")).exists() {

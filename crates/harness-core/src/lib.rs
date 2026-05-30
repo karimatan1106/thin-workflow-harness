@@ -19,6 +19,7 @@ pub mod handlers_stats;
 pub mod metrics;
 pub mod paths;
 pub mod questions;
+pub mod run_lock;
 pub mod runtime;
 pub mod scaffold;
 pub mod spec;

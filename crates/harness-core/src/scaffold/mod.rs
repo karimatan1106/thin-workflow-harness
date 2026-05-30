@@ -122,7 +122,7 @@ by = ""
 notes = ""
 "#;
 
-const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\ntranscripts/\n!state/.gitkeep\n";
+const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\nstate/*.lock\ntranscripts/\n!state/.gitkeep\n";
 
 /// skill ファイル。全 8 つを `skill_templates/*.md` から `include_str!` で同梱
 /// （fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携を含む operational

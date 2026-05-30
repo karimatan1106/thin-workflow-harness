@@ -54,6 +54,8 @@ fn counts_as_tool_call(a: &WorkerAction) -> bool {
 /// `harness run --script <path> [--run R] [--worktree P]` ── runtime ループをスクリプト worker で駆動する。
 pub fn cmd_run(script_path: &str, run: Option<&str>, worktree: Option<&str>) -> Result<(), String> {
     let run_id = paths::resolve_run_id(run)?;
+    // 同じ run を別プロセスが同時駆動するのを防ぐ排他ロック（Drop で自動解放）。
+    let _lock = crate::run_lock::RunLock::acquire(&run_id)?;
     let wf = load_wf()?;
     let steps = script::load_script(std::path::Path::new(script_path))?;
     let worker = ScriptedWorker::new(steps.clone());

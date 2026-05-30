@@ -30,6 +30,20 @@ pub fn cmd_run_api(
     cmd_run_api_with(run, worktree, model_override, &http)
 }
 
+/// stale ロックを強制削除する（`harness run --force-unlock`）。プロセスが kill されて
+/// `<run-id>.lock` が残ったときの回収用。run を解決してから対応する lock を消す。
+pub fn force_unlock(run: Option<&str>) -> Result<(), String> {
+    let run_id = paths::resolve_run_id(run)?;
+    let path = crate::run_lock::RunLock::lock_path(&run_id)?;
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| format!("lock 削除失敗 {}: {e}", path.display()))?;
+        println!("run {run_id} の lock を削除した: {}", path.display());
+    } else {
+        println!("run {run_id} に lock は無い（既に解放済み）");
+    }
+    Ok(())
+}
+
 /// `cmd_run_api` の HTTP クライアント注入版 ── テストで `MockClient` を渡すために使う。
 pub fn cmd_run_api_with(
     run: Option<&str>,
@@ -50,6 +64,9 @@ pub fn cmd_run_api_with_auth(
     auth: AuthMode,
 ) -> Result<(), String> {
     let run_id = paths::resolve_run_id(run)?;
+    // 同じ run を別プロセスが同時駆動するのを防ぐ排他ロック（複数セッション対策の第二段）。
+    // _lock は関数末尾まで生存し、Drop で自動解放される。
+    let _lock = crate::run_lock::RunLock::acquire(&run_id)?;
     let wf = load_wf()?;
     let cwd = worktree
         .map(std::path::PathBuf::from)

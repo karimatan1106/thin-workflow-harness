@@ -41,10 +41,18 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         }
         Command::Skill { run } => handlers2::cmd_skill(run.as_deref()),
         Command::Gates { run } => handlers2::cmd_gates(run.as_deref()),
-        Command::Run { script, run, worktree, model } => match script {
-            Some(s) => runtime::cmd_run(&s, run.as_deref(), worktree.as_deref()),
-            None => runtime::cmd_run_api(run.as_deref(), worktree.as_deref(), model.as_deref()),
-        },
+        Command::Run { script, run, worktree, model, force_unlock } => {
+            if force_unlock {
+                runtime::api_run::force_unlock(run.as_deref())
+            } else {
+                match script {
+                    Some(s) => runtime::cmd_run(&s, run.as_deref(), worktree.as_deref()),
+                    None => {
+                        runtime::cmd_run_api(run.as_deref(), worktree.as_deref(), model.as_deref())
+                    }
+                }
+            }
+        }
         Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
         Command::Init { dir, force, template } => {
             handlers_init::cmd_init(dir.as_deref(), force, template.as_deref())
