@@ -73,6 +73,8 @@ pub fn drive_branch_api(
     let ctx = context::build_context(wf, &node, &st, &rc, &events);
 
     let model = node.model.clone().unwrap_or_else(|| model_default.to_string());
+    // metrics 行に載せる用にモデル名を控える（model は ApiWorker::new に move される）。
+    let model_for_metrics = model.clone();
     let budget: Budget = node.budget.clone().unwrap_or_else(|| {
         wf.meta.default_budget.clone().unwrap_or_default()
     });
@@ -105,7 +107,14 @@ pub fn drive_branch_api(
         cache_create: metrics.usage.cache_creation_input_tokens,
         cache_read: metrics.usage.cache_read_input_tokens,
     };
-    let m = NodeMetrics::api(branch_id, metrics.tool_calls, elapsed, breakdown, metrics.cost_usd);
+    let m = NodeMetrics::api(
+        branch_id,
+        metrics.tool_calls,
+        elapsed,
+        breakdown,
+        metrics.cost_usd,
+        Some(model_for_metrics),
+    );
     append_metrics(run_id, &m)?;
 
     match outcome {

@@ -38,6 +38,9 @@ pub struct NodeMetrics {
     /// 内訳（input/output/cache_create/cache_read）── API worker のみ載せる。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tokens_breakdown: Option<TokenBreakdown>,
+    /// 使用モデル名（API worker のみ。旧 jsonl 後方互換のため default あり）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     pub ts: String,
 }
 
@@ -51,17 +54,19 @@ impl NodeMetrics {
             cost: None,
             tokens: None,
             tokens_breakdown: None,
+            model: None,
             ts: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         }
     }
 
-    /// API worker 用 ── tokens 内訳 ＋ cost。
+    /// API worker 用 ── tokens 内訳 ＋ cost ＋ 使用モデル名。
     pub fn api(
         node: &str,
         tool_calls: u64,
         wall_seconds: f64,
         breakdown: TokenBreakdown,
         cost: Option<f64>,
+        model: Option<String>,
     ) -> Self {
         let total = breakdown.input + breakdown.output;
         NodeMetrics {
@@ -71,8 +76,46 @@ impl NodeMetrics {
             cost,
             tokens: Some(total),
             tokens_breakdown: Some(breakdown),
+            model,
             ts: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_carries_model_and_round_trips() {
+        // model フィールドが serialize→deserialize で保持される。
+        let b = TokenBreakdown { input: 10, output: 20, cache_create: 5, cache_read: 3 };
+        let m = NodeMetrics::api("design", 2, 4.0, b, Some(0.05), Some("claude-opus".into()));
+        assert_eq!(m.tokens, Some(30)); // input + output のみ
+        assert_eq!(m.model.as_deref(), Some("claude-opus"));
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(json.contains("\"model\":\"claude-opus\""));
+        let back: NodeMetrics = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, m);
+    }
+
+    #[test]
+    fn scripted_has_no_model_and_is_skipped() {
+        // scripted は model None ── serialize 時に出力されない。
+        let m = NodeMetrics::scripted("impl", 1, 1.0);
+        assert!(m.model.is_none());
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(!json.contains("model"), "json: {json}");
+    }
+
+    #[test]
+    fn legacy_jsonl_without_model_deserializes() {
+        // model フィールドの無い旧 jsonl 行も serde(default) で読める（後方互換）。
+        let legacy = r#"{"node":"design","tool_calls":2,"wall_seconds":4.0,"cost":0.05,"tokens":30,"ts":"2026-01-01T00:00:00Z"}"#;
+        let m: NodeMetrics = serde_json::from_str(legacy).unwrap();
+        assert_eq!(m.node, "design");
+        assert_eq!(m.tokens, Some(30));
+        assert!(m.model.is_none());
     }
 }
 
