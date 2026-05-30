@@ -7,7 +7,7 @@
 //!
 //! 本家 `patterns.py`(25 ルール, regex 主体) から、誤検出を抑えつつ高価値なものを
 //! substring で移植した curated subset。クラス: injection / XSS / 危険デシリアライズ /
-//! 弱い暗号 / TLS 無効化 / hardcoded secret。
+//! 弱い暗号 / TLS 無効化 / hardcoded secret / Rust 固有 UB・command injection。
 
 /// 1 件の検出結果。
 pub struct Finding {
@@ -17,6 +17,7 @@ pub struct Finding {
 
 const JS_EXTS: &[&str] = &[".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".svelte"];
 const PY_EXTS: &[&str] = &[".py", ".pyi"];
+const RUST_EXTS: &[&str] = &[".rs"];
 
 fn has_ext(path: &str, exts: &[&str]) -> bool {
     let p = path.to_ascii_lowercase();
@@ -30,6 +31,12 @@ struct Rule {
     needles: &'static [&'static str],
     message: &'static str,
 }
+
+// Rust 向けで意図的に「入れなかった」ルールと理由（substring 照合では誤検出が多すぎる）:
+//   rust_sql_format(`format!`)     : クエリ以外の正当用途が大半で誤検出多数。
+//   rust_panic_unwrap(`unwrap()`)  : 正当な使用が多すぎて警告が形骸化する。
+//   rust_unsafe_block(`unsafe {`)  : FFI/SIMD 等で正当用途が多く、ブロック単体では無意味。
+//   rust_hardcoded_bind_all(`0.0.0.0`) : config 文字列やコメントでの誤検出が多い。
 
 const RULES: &[Rule] = &[
     // ── injection ──
@@ -66,6 +73,19 @@ const RULES: &[Rule] = &[
         message: "crypto.createCipher は IV なし・MD5 KDF。createCipheriv/createDecipheriv を使え。" },
     Rule { name: "tls_verify_disabled", exts: None, needles: &["verify=False", "rejectUnauthorized: false", "rejectUnauthorized:false", "InsecureSkipVerify: true", "NODE_TLS_REJECT_UNAUTHORIZED", "_create_unverified_context"],
         message: "TLS 検証無効化は MITM を許す。CA を信頼ストアに入れるか正規証明書を使え。" },
+    // ── Rust 固有（UB / command injection / TLS）──
+    Rule { name: "rust_command_shell", exts: Some(RUST_EXTS), needles: &["Command::new(\"sh\")", "Command::new(\"bash\")", "Command::new(\"cmd\")"],
+        message: "shell 経由の実行は command injection。実行ファイルと引数を直接 Command::new(...).args([...]) で渡せ。" },
+    Rule { name: "rust_transmute", exts: Some(RUST_EXTS), needles: &["mem::transmute"],
+        message: "transmute は型・レイアウト不整合で未定義動作の温床。as キャストや安全な変換 API（From/TryFrom/bytemuck）を使え。" },
+    Rule { name: "rust_from_utf8_unchecked", exts: Some(RUST_EXTS), needles: &["from_utf8_unchecked"],
+        message: "不正な UTF-8 が混入すると未定義動作。検証する str::from_utf8 / String::from_utf8 を使え。" },
+    Rule { name: "rust_get_unchecked", exts: Some(RUST_EXTS), needles: &["get_unchecked("],
+        message: "境界チェック無しの get_unchecked は範囲外で未定義動作。get() か添字アクセスで境界検証せよ。" },
+    Rule { name: "rust_env_set_var", exts: Some(RUST_EXTS), needles: &["set_var("],
+        message: "env::set_var はマルチスレッドでデータ競合（将来 unsafe 化）。起動時に一度だけ設定するか Config で引き回せ。" },
+    Rule { name: "rust_tls_danger", exts: Some(RUST_EXTS), needles: &["danger_accept_invalid_certs(true)", "danger_accept_invalid_hostnames(true)", "accept_invalid_hostnames(true)"],
+        message: "reqwest/native-tls の証明書・ホスト名検証無効化は MITM を許す。検証を有効にし正規証明書を使え。" },
     // ── hardcoded secret ──
     Rule { name: "hardcoded_aws_key", exts: None, needles: &["AKIA"],
         message: "AWS アクセスキー(AKIA…)がハードコードされている疑い。env / secret manager に移せ。" },
@@ -142,5 +162,28 @@ mod tests {
         let w = format_warning("a.py", &f).expect("findings あり");
         assert!(w.contains("py_yaml_load"));
         assert!(w.contains("py_os_system"));
+    }
+
+    #[test]
+    fn detects_rust_transmute_and_get_unchecked() {
+        // .rs では Rust UB ルールがヒットする。
+        let f = scan("a.rs", "let x = unsafe { std::mem::transmute(y) };\nlet v = unsafe { s.get_unchecked(0) };");
+        let names: Vec<_> = f.iter().map(|x| x.rule).collect();
+        assert!(names.contains(&"rust_transmute"));
+        assert!(names.contains(&"rust_get_unchecked"));
+    }
+
+    #[test]
+    fn rust_command_shell_detected() {
+        let f = scan("a.rs", "let _ = std::process::Command::new(\"sh\").arg(\"-c\").arg(cmd);");
+        assert!(f.iter().any(|x| x.rule == "rust_command_shell"));
+    }
+
+    #[test]
+    fn rust_rules_gated_by_extension() {
+        // .py では Rust ルール(transmute/get_unchecked)はヒットしない（拡張子ゲート確認）。
+        let f = scan("a.py", "mem::transmute(y); slice.get_unchecked(0)");
+        assert!(!f.iter().any(|x| x.rule == "rust_transmute"));
+        assert!(!f.iter().any(|x| x.rule == "rust_get_unchecked"));
     }
 }
