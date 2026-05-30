@@ -6,9 +6,8 @@
 //! tested-by / outline) と daemon serve/admin を実装する。
 //!
 //! Phase 2 step 2 で `crates/harness/src/{ckg,lsp_daemon}` から切り出した。
-
-#[cfg(not(windows))]
-compile_error!("thin-workflow-harness-ckg is Windows-only");
+//!
+//! プラットフォーム: Windows / Linux / macOS 対応（本体 crate に合わせ Windows-only ガードは撤去）。
 
 pub mod ckg;
 pub mod lsp_daemon;

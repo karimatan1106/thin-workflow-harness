@@ -7,9 +7,8 @@
 //! Phase 2 step 3 で `crates/harness/src/{handlers_*,cli_query,cli_daemon}` から
 //! 切り出した。workflow runner core は thin-workflow-harness-core / debug CLI と
 //! workflow 系コマンドは thin-workflow-harness binary 側に残る。
-
-#[cfg(not(windows))]
-compile_error!("thin-workflow-harness-lspd is Windows-only");
+//!
+//! プラットフォーム: Windows / Linux / macOS 対応（本体 crate に合わせ Windows-only ガードは撤去）。
 
 pub mod cli;
 pub mod cli_daemon;
