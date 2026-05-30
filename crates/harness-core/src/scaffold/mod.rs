@@ -4,6 +4,7 @@
 //! `docs/onboarding.md` §3 ／ `docs/schemas.md` §2.2「デフォルトワークフローの例」準拠。
 //! skill 文面の同梱方法は実装で確定するため、ここではプレースホルダ＋参照案内のみ。
 
+mod docs_tmpl;
 mod workflow_tmpl;
 
 use std::fs;
@@ -12,6 +13,8 @@ use std::path::Path;
 use crate::detect::DetectedProject;
 
 /// `.harness/` を target に丸ごと書き出す（既存なら上書き）。
+/// 加えて、 `.harness/` の親ディレクトリ (repo root) に `docs/architecture/` と
+/// `docs/adr/` の skeleton を生成する (**既存ファイルは skip**、 ユーザー設計書を保護)。
 pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), String> {
     fs::create_dir_all(harness_dir).map_err(|e| io_err(harness_dir, e))?;
     let skills = harness_dir.join("skills");
@@ -29,8 +32,52 @@ pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), Strin
     for (name, body) in SKILL_STUBS {
         write_file(&skills.join(name), body)?;
     }
+
+    // docs/ skeleton (repo root に生成、 既存があれば skip)
+    if let Some(repo_root) = harness_dir.parent() {
+        match docs_tmpl::write_skeleton(repo_root) {
+            Ok(created) if !created.is_empty() => {
+                println!(
+                    "[OK] docs skeleton 生成 {} 件 (既存はスキップ):",
+                    created.len()
+                );
+                for rel in &created {
+                    println!("  + {rel}");
+                }
+            }
+            Ok(_) => {
+                println!("[OK] docs skeleton: 全ファイル既存、 スキップ");
+            }
+            Err(e) => {
+                println!("[WARN] docs skeleton 生成失敗: {e}");
+            }
+        }
+    }
+
     Ok(())
 }
+
+/// security-only テンプレートを書き出す（`harness init --template security`）。
+/// プロジェクト検出に依存しない単一 `security` ノードの workflow + standalone skill。
+/// デフォルトワークフローの security フェーズを「それだけ回す」用途。
+pub fn write_security_layout(harness_dir: &Path) -> Result<(), String> {
+    fs::create_dir_all(harness_dir).map_err(|e| io_err(harness_dir, e))?;
+    let skills = harness_dir.join("skills");
+    let state = harness_dir.join("state");
+    fs::create_dir_all(&skills).map_err(|e| io_err(&skills, e))?;
+    fs::create_dir_all(&state).map_err(|e| io_err(&state, e))?;
+
+    write_file(&harness_dir.join("workflow.toml"), SECURITY_WORKFLOW)?;
+    write_file(&skills.join("security.md"), SECURITY_SKILL)?;
+    write_file(&harness_dir.join("spec.toml"), SPEC_TEMPLATE)?;
+    write_file(&harness_dir.join(".gitignore"), GITIGNORE)?;
+    write_file(&state.join(".gitkeep"), "")?;
+    Ok(())
+}
+
+/// security-only テンプレート（バイナリ同梱 ── 旧 harness-plugin-security の中身）。
+const SECURITY_WORKFLOW: &str = include_str!("templates/security_workflow.toml");
+const SECURITY_SKILL: &str = include_str!("templates/security_skill.md");
 
 fn io_err(p: &Path, e: std::io::Error) -> String {
     format!("{} 操作失敗: {e}", p.display())

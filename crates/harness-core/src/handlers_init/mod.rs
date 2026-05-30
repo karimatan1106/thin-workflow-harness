@@ -13,12 +13,12 @@ use crate::workflow::{load_workflow, validate, GateSpec};
 
 use util::{path_has, print_summary, resolve_dir, resolve_harness_dir, shell_run};
 
-/// `harness init [<dir>] [--force]` の実装。
-pub fn cmd_init(dir: Option<&str>, force: bool) -> Result<(), String> {
+/// `harness init [<dir>] [--force] [--template <name>]` の実装。
+/// template 省略/`default` → 検出ベースの標準ワークフロー。
+/// `security` → security-only ワークフロー（検出不要・単一ノード）。
+pub fn cmd_init(dir: Option<&str>, force: bool, template: Option<&str>) -> Result<(), String> {
     let target = resolve_dir(dir)?;
     println!("検出ディレクトリ: {}", target.display());
-    let d = detect(&target);
-    print_summary(&d);
     let harness_dir = target.join(".harness");
     if harness_dir.exists() && !force {
         return Err(format!(
@@ -26,8 +26,28 @@ pub fn cmd_init(dir: Option<&str>, force: bool) -> Result<(), String> {
             harness_dir.display()
         ));
     }
-    scaffold::write_layout(&harness_dir, &d)?;
-    println!("\n.harness/ をスキャフォールドしました: {}", harness_dir.display());
+
+    // 検出ベースの default のみ smoke check で `detected` を使う。security は None。
+    let detected = match template {
+        Some("security") => {
+            scaffold::write_security_layout(&harness_dir)?;
+            println!(
+                "\nsecurity-only ワークフローをスキャフォールドしました: {}",
+                harness_dir.display()
+            );
+            None
+        }
+        None | Some("default") => {
+            let d = detect(&target);
+            print_summary(&d);
+            scaffold::write_layout(&harness_dir, &d)?;
+            println!("\n.harness/ をスキャフォールドしました: {}", harness_dir.display());
+            Some(d)
+        }
+        Some(other) => {
+            return Err(format!("未知の template '{other}' ── 使えるのは: default, security"));
+        }
+    };
 
     let wf_path = harness_dir.join("workflow.toml");
     match load_workflow(&wf_path) {
@@ -45,17 +65,20 @@ pub fn cmd_init(dir: Option<&str>, force: bool) -> Result<(), String> {
         Err(e) => println!("[WARN] workflow.toml ロード失敗: {e}"),
     }
 
-    if let Some(cmd) = d.check.as_deref().or(d.build.as_deref()) {
-        println!("\nスモーク: {cmd}");
-        match shell_run(cmd, &target) {
-            Ok(true) => println!("[OK] スモーク exit 0"),
-            Ok(false) => println!(
-                "[WARN] スモーク exit≠0 ── clean checkout で {cmd} が通らない。検出を確認してください"
-            ),
-            Err(e) => println!("[WARN] スモーク実行失敗: {e}"),
+    // smoke は検出ベース default のみ（security テンプレートは build/check を持たない）。
+    if let Some(d) = detected.as_ref() {
+        if let Some(cmd) = d.check.as_deref().or(d.build.as_deref()) {
+            println!("\nスモーク: {cmd}");
+            match shell_run(cmd, &target) {
+                Ok(true) => println!("[OK] スモーク exit 0"),
+                Ok(false) => println!(
+                    "[WARN] スモーク exit≠0 ── clean checkout で {cmd} が通らない。検出を確認してください"
+                ),
+                Err(e) => println!("[WARN] スモーク実行失敗: {e}"),
+            }
+        } else {
+            println!("\n[WARN] build / check コマンドが検出できなかった ── workflow.toml の cmd_exit_0 を編集してください");
         }
-    } else {
-        println!("\n[WARN] build / check コマンドが検出できなかった ── workflow.toml の cmd_exit_0 を編集してください");
     }
 
     println!(

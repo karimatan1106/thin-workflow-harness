@@ -83,6 +83,44 @@ fn init_rust_fixture_creates_harness_dir() {
 }
 
 #[test]
+fn init_security_template_creates_single_node_workflow() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    copy_dir(&fixtures().join("repo_rust"), &repo);
+
+    let dir_str = repo.to_string_lossy().to_string();
+    let o = run(tmp.path(), &["init", &dir_str, "--force", "--template", "security"]);
+    assert!(o.status.success(), "security init failed: {}", out_str(&o));
+
+    let harness = repo.join(".harness");
+    let wf_path = harness.join("workflow.toml");
+    assert!(wf_path.exists(), "workflow.toml missing");
+    // security skill が standalone 名で置かれること。
+    assert!(harness.join("skills/security.md").exists(), "security.md missing");
+
+    let wf_text = std::fs::read_to_string(&wf_path).unwrap();
+    assert!(wf_text.contains("security-only"), "not the security template: {wf_text}");
+    assert!(wf_text.contains("security_review"), "evidence gate missing: {wf_text}");
+
+    // validate を通ること。
+    let validate_arg = format!("--workflow={}", wf_path.display());
+    let o = run(tmp.path(), &["validate", &validate_arg]);
+    assert!(o.status.success(), "validate failed: {}", out_str(&o));
+}
+
+#[test]
+fn init_unknown_template_errors() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    copy_dir(&fixtures().join("repo_rust"), &repo);
+
+    let dir_str = repo.to_string_lossy().to_string();
+    let o = run(tmp.path(), &["init", &dir_str, "--force", "--template", "bogus"]);
+    assert!(!o.status.success(), "unknown template should fail: {}", out_str(&o));
+    assert!(out_str(&o).contains("未知の template"), "missing error hint: {}", out_str(&o));
+}
+
+#[test]
 fn init_without_force_on_existing_harness_errors() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = tmp.path().join("repo");
