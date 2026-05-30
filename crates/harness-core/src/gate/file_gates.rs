@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::{arg_i64, arg_str, glob_paths, GateCtx, GateResult};
+use super::{arg_bool, arg_i64, arg_str, glob_paths, GateCtx, GateResult};
 use crate::state::State;
 
 pub(super) fn file_exists(args: &toml::Table, ctx: &GateCtx) -> GateResult {
@@ -53,6 +53,7 @@ pub(super) fn max_lines(args: &toml::Table, ctx: &GateCtx) -> GateResult {
     let Some(n) = arg_i64(args, "n") else {
         return GateResult::fail("引数 n が無い");
     };
+    let allow_empty = arg_bool(args, "allow_empty").unwrap_or(false);
     let n = n.max(0) as usize;
     let hits = glob_paths(ctx.home, p);
     let mut checked = 0;
@@ -67,6 +68,9 @@ pub(super) fn max_lines(args: &toml::Table, ctx: &GateCtx) -> GateResult {
         }
     }
     if checked == 0 {
+        if allow_empty {
+            return GateResult::ok(format!("{p} 該当 0 件 (allow_empty)"));
+        }
         return GateResult::fail(format!("{p} に該当ファイルが無い"));
     }
     GateResult::ok(format!("{p} 全 {checked} 件 ≤ {n} 行 (最大 {worst})"))

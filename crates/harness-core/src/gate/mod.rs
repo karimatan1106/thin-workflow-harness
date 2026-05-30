@@ -105,6 +105,10 @@ pub(crate) fn arg_i64(args: &toml::Table, key: &str) -> Option<i64> {
     args.get(key).and_then(|v| v.as_integer())
 }
 
+pub(crate) fn arg_bool(args: &toml::Table, key: &str) -> Option<bool> {
+    args.get(key).and_then(|v| v.as_bool())
+}
+
 pub(crate) fn resolve(home: &Path, p: &str) -> PathBuf {
     let pb = PathBuf::from(p);
     if pb.is_absolute() { pb } else { home.join(pb) }

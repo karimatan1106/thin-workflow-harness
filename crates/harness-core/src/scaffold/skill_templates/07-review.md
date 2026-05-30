@@ -48,7 +48,85 @@ code quality を確認し、`review` evidence を `approved` で提出する。w
    pnpm lint
    ```
 
-6. **review 結果を evidence で提出** ── exit_gate
+6. **マスター設計書への反映** ── 本変更が「全体図」や「Why の履歴」に影響するなら
+   実コードと整合するように更新する。 ディレクトリ構造は `docs/architecture/` (mutable
+   snapshot) と `docs/adr/` (immutable log) の 2 系統で運用する。
+
+   **6-a. ファイル構造 (初回 review なら scaffold する)**
+   ```
+   docs/
+   ├── architecture/
+   │   ├── README.md            # arc42 全体 ToC (≤200 行)
+   │   ├── 01-context.md        # arc42 §1: scope / actors / 外部 IF
+   │   ├── 02-blocks.md         # arc42 §2: module 構成 (Mermaid C4 container 図 必須)
+   │   ├── 03-runtime.md        # arc42 §3: 主要 scenario のデータフロー
+   │   ├── 04-decisions.md      # arc42 §4: ADR への link 表のみ (本文書かない)
+   │   ├── 05-quality.md        # arc42 §5: 品質目標 / SLO / 不変条件
+   │   ├── 06-risks.md          # arc42 §6: trade-off / 技術的負債
+   │   └── modules/             # 大きい module はサブディレクトリ可
+   │       └── <name>.md
+   └── adr/
+       ├── INDEX.md             # ADR 一覧 + status table (≤200 行 / append-only)
+       └── ADR-NNN-<slug>.md    # 個別 ADR (≤200 行 / immutable)
+   ```
+
+   **6-b. 全 .md は YAML frontmatter 必須**
+   ```yaml
+   ---
+   doc-id: arch-02-blocks
+   status: current             # current | superseded | stale
+   supersedes: []
+   tags: [architecture, modules, c4-container]
+   description: 全モジュールの責務・依存関係・Mermaid C4 container 図
+   last-reviewed: YYYY-MM-DD   # この review で必ず更新
+   ---
+   ```
+
+   **6-c. architecture/ 更新の判断基準** (該当する section のみ touch、 200 行を超えたら分割)
+   - モジュール構成変更 → `02-blocks.md` + 該当 `modules/<name>.md` + Mermaid C4 同期
+   - 実行時データフロー変更 → `03-runtime.md`
+   - 品質目標 / SLO / 不変条件変更 → `05-quality.md`
+   - 新規 ADR を起票したら `04-decisions.md` の link 表に append (本文は ADR 側)
+   - 全 touch ファイルの `last-reviewed` を YYYY-MM-DD に更新
+
+   **6-d. ADR 起票の判断基準** (新しい Why が生じたときのみ)
+   - `docs/adr/ADR-NNN-<slug>.md` を新規作成 (NNN は INDEX 末尾 +1、 slug は kebab-case)
+   - frontmatter で `status: Accepted` / `supersedes: []` / `superseded-by: null`
+   - 本文 5 セクション: Context / Decision / Consequences / Review Trigger / Related
+   - `docs/adr/INDEX.md` に 1 行 append (`| ADR-NNN | title | Accepted | YYYY-MM-DD |`)
+   - 既存 ADR を覆す場合: 新 ADR の `supersedes: [ADR-XXX]` + 旧 ADR の
+     `superseded-by: ADR-NNN` (旧 ADR の `status: Superseded`、 本文は編集しない)
+
+   **6-e. STALE マーカ運用** (drift を可視化)
+   - 古くなった section に inline で `[STALE: see ADR-NNN]` を挿入 (削除しない)
+   - これにより agent が次回読込時に「ここは ADR-NNN を見ろ」と分かる
+   - STALE マーカに記す ADR は INDEX に存在しなければならない (orphan 禁止)
+
+   **6-f. 200 行ルール (harness が gate で強制)**
+   - `docs/architecture/**/*.md`、 `docs/adr/INDEX.md`、 `docs/adr/ADR-*.md` の各
+     ファイルが ≤200 行であること
+   - 超えたら `modules/` 配下にサブディレクトリで分割、 元ファイルからは link
+
+   **6-g. evidence を提出**
+   ```
+   # 更新ありの場合
+   harness report-evidence master_design_update '{
+     "verdict": "updated",
+     "architecture_sections_changed": ["02-blocks", "modules/ws-server-rs"],
+     "adrs_added": ["ADR-024-broadcast-coalesce"],
+     "adrs_superseded": ["ADR-018"],
+     "stale_markers_added": [],
+     "mermaid_diagrams_synced": ["02-blocks.md"]
+   }'
+
+   # no-op の場合 (bug fix / cosmetic 等で構造も Why も変わらない)
+   harness report-evidence master_design_update '{
+     "verdict": "noop",
+     "rationale": "..."
+   }'
+   ```
+
+7. **review 結果を evidence で提出** ── exit_gate
    `json_has review verdict == "approved"` を満たす:
    ```
    harness report-evidence review '{"verdict":"approved","comments":["positive: ..."],"score":"high"}'
@@ -56,7 +134,7 @@ code quality を確認し、`review` evidence を `approved` で提出する。w
    issue があるなら `verdict: "rejected"` ＋ `harness back "review issue: ..."` で
    implement や plan に戻す。
 
-7. **workflow 終端** ── このノードの `next = []`。`request-transition` 不要。
+8. **workflow 終端** ── このノードの `next = []`。`request-transition` 不要。
    完了は harness が `traceability_closed` ＋ `review approved` を検知して自動的に
    出る（または `harness status` で「全 gate met」を確認）。
 
@@ -66,6 +144,12 @@ code quality を確認し、`review` evidence を `approved` で提出する。w
 
 - `traceability_closed { }` ── 全 F-NNN に artifact ≥1 と exit 0 test ≥1、orphan なし
 - `json_has { evidence_key = "review", json_path = "verdict", eq = "approved" }`
+- `evidence_recorded { key = "master_design_update" }` ── architecture/ADR への
+  反映、または no-op 宣言が evidence で記録済み（step 6）
+- `max_lines { path = "docs/architecture/**/*.md", n = 200 }` ── master の各 .md は
+  200 行以下（AI 駆動開発の token-budget 原則）
+- `max_lines { path = "docs/adr/INDEX.md", n = 200, allow_empty = true }`
+- `max_lines { path = "docs/adr/ADR-*.md", n = 200, allow_empty = true }`
 
 ## 詰まったとき
 

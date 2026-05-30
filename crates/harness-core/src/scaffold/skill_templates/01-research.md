@@ -13,7 +13,50 @@
    harness ask "この理解で合ってる?（要約: ...）" --option "合ってる" --option "ずれてる"
    ```
 
-2. **scope（blast radius の発見）** ── CKG (Code Knowledge Graph) tool で候補集合を作る:
+2. **既存マスター設計書との照合** ── token-efficient に pinpoint 読込する:
+
+   **2-a. 索引を読む**（frontmatter で relevance 判定、 本文は読まない）
+   ```
+   harness outline docs/architecture/README.md     # arc42 全体 ToC
+   harness outline docs/adr/INDEX.md               # ADR 一覧 + status
+   ```
+   無ければスキップ（review で初稿を起こす想定として宣言）。
+
+   **2-b. 関連セクションだけ本文を読む**（arc42 6 セクションのうち本変更に効くもの）
+   - F-NNN がモジュール構成に触る → `docs/architecture/02-blocks.md` + `modules/<該当>.md`
+   - 実行時挙動に触る → `docs/architecture/03-runtime.md`
+   - 品質目標 / SLO に触る → `docs/architecture/05-quality.md`
+   - 全体の context に触る → `docs/architecture/01-context.md`
+
+   **2-c. 該当 ADR の Decision/Consequences/Review Trigger を確認**
+   ```
+   harness outline docs/adr/ADR-NNN-<slug>.md
+   ```
+   INDEX.md の link 表から該当 ADR を pinpoint。 関係ない ADR は読まない。
+
+   **2-d. 矛盾候補があれば人間に判断を仰ぐ**:
+   ```
+   harness ask "既存 ADR-NNN の Decision と矛盾する。 どう扱う?" \
+              --option "ADR-NNN supersede 前提で進める (review で新 ADR 起票)" \
+              --option "別解で再設計 (research やり直し)" \
+              --option "矛盾なし、 誤検知"
+   ```
+
+   **2-e. 読了 evidence を残す**:
+   ```
+   harness report-evidence master_design_reviewed '{
+     "verdict": "reviewed",
+     "arc42_sections_read": ["02-blocks", "03-runtime"],
+     "modules_read": ["modules/ws-server-rs"],
+     "adrs_consulted": ["ADR-019", "ADR-022"],
+     "conflicts": [],
+     "supersede_candidates": []
+   }'
+   ```
+   `verdict` は `"reviewed"`（既存 master あり） / `"absent"`（master 未整備、 review で初稿） /
+   `"partial"`（一部のみ存在） のいずれか。
+
+3. **scope（blast radius の発見）** ── CKG (Code Knowledge Graph) tool で候補集合を作る:
    ```
    harness outline <file>                          # アウトライン（本体ではない）
    harness find-symbol <name>                      # シンボル位置
@@ -27,18 +70,18 @@
    harness ask "blast radius はこれで漏れは?" --option "OK" --option "漏れあり"
    ```
 
-3. **不変条件の特定**（何を壊しちゃダメか）── 各々 `[[invariant]]`（INV-N）として
+4. **不変条件の特定**（何を壊しちゃダメか）── 各々 `[[invariant]]`（INV-N）として
    `spec.toml` に書き、それぞれに `test` を紐づける。不確かなら `harness ask` で訊く。
 
-4. **受入基準** ── 各々 `[[acceptance]]`（AC-N、`requirement` に紐づく F-ID＋`test` 1 つ）。
+5. **受入基準** ── 各々 `[[acceptance]]`（AC-N、`requirement` に紐づく F-ID＋`test` 1 つ）。
    「all AC テスト green」≡「意図した変更」になる程度に具体的に書く。曖昧な AC は smell
    （テスト化できない AC は AC でない）。
 
-5. **残った曖昧さ** ── `??` で `spec.toml` 本文に書き、`harness ask` で潰す。
+6. **残った曖昧さ** ── `??` で `spec.toml` 本文に書き、`harness ask` で潰す。
    **決定を訊け、情報を訊くな** ── コードで分かることは自分で見つけよ、人間に訊くのは
    判断だけ。`open_questions_zero` gate は `??` が無くなるまで fail。
 
-6. **最終承認** ── spec 全体を提示して人間 sign-off:
+7. **最終承認** ── spec 全体を提示して人間 sign-off:
    ```
    harness ask "この spec、欲しい変更か?（要約: F-NNN/AC/不変条件/blast radius）" \
               --option "承認" --option "修正が要る"
@@ -48,7 +91,7 @@
    harness report-evidence human_approval '{"verdict":"approved","rationale":"..."}'
    ```
 
-7. 調査メモを artifact 登録（semantic クエリで得た blast radius・依存・判断根拠の蒸留）:
+8. 調査メモを artifact 登録（semantic クエリで得た blast radius・依存・判断根拠の蒸留）:
    ```
    harness record-artifact research_notes <path>
    ```
@@ -60,6 +103,8 @@
 - `open_questions_zero` ── 未解決点ゼロ、`??` なし
 - `no_pending_required_questions` ── 保留中の `harness ask` がない
 - `json_has human_approval verdict == "approved"` ── 上の `report-evidence` で pass
+- `evidence_recorded master_design_reviewed` ── 既存マスター設計書の読了/不在宣言が
+  記録済み（step 2 の `report-evidence`）
 - （あれば）`blast_radius_declared` ── 各 F-NNN に `files` ≥1
 
 満たしたら `harness request-transition plan`。却下 (`advance_rejected`) されたら
