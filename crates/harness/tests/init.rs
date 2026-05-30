@@ -80,6 +80,16 @@ fn init_rust_fixture_creates_harness_dir() {
         wf_text.contains("max_tool_calls = 12"),
         "default_budget.max_tool_calls=12 が無い: {wf_text}",
     );
+
+    // 役割別モデル割り当て ── [meta].default_model と高精度ノードの Opus 4.8 上書き。
+    assert!(
+        wf_text.contains("default_model = \"claude-sonnet-4-6\""),
+        "default_model が workflow.toml に無い: {wf_text}",
+    );
+    assert!(
+        wf_text.contains("model = \"claude-opus-4-8\""),
+        "Opus 4.8 のノード上書きが無い: {wf_text}",
+    );
 }
 
 #[test]
@@ -101,6 +111,11 @@ fn init_security_template_creates_single_node_workflow() {
     let wf_text = std::fs::read_to_string(&wf_path).unwrap();
     assert!(wf_text.contains("security-only"), "not the security template: {wf_text}");
     assert!(wf_text.contains("security_review"), "evidence gate missing: {wf_text}");
+    // security テンプレは最高精度の Opus 4.8 を既定に置く。
+    assert!(
+        wf_text.contains("default_model = \"claude-opus-4-8\""),
+        "security default_model が無い: {wf_text}",
+    );
 
     // validate を通ること。
     let validate_arg = format!("--workflow={}", wf_path.display());
