@@ -20,7 +20,8 @@ pub enum Command {
     /// 新 run を開始する。
     Start {
         intent: String,
-        /// 作業ディレクトリ（worktree モード ── skeleton では scaffold、現状は受け取るだけ）。
+        /// 作業ディレクトリ（呼び出し側が用意した worktree を受け取るだけ。git worktree の
+        /// 作成/後始末は呼び出し側責務。同時実行の干渉は run-lock + PID run_id で防止）。
         #[arg(long)]
         worktree: Option<String>,
     },

@@ -63,8 +63,11 @@ pub fn cmd_start(intent: &str, worktree: Option<&str>) -> Result<(), String> {
         return Err(format!("workflow.toml/spec.toml に問題:\n  - {}", errs.join("\n  - ")));
     }
     if let Some(wt) = worktree {
-        // worktree モードは skeleton では scaffold ── ここでは記録だけ（実体は後フェーズ）。
-        println!("(注) --worktree {wt} は scaffold ── 隔離の実体は未実装");
+        // --worktree は「呼び出し側が用意した作業ディレクトリ」を受け取るだけ。
+        // git worktree の作成・後始末（add/remove/reset）は harness の責務外で、
+        // 呼び出し側（人間 or 上位エージェント）が行う設計（docs 参照）。複数セッション
+        // 同時実行の干渉自体は run-lock + PID 付き run_id で防いでいる。
+        println!("(注) --worktree {wt} を作業ディレクトリに使う（git worktree の用意/後始末は呼び出し側責務）");
     }
     let run_id = new_run_id()?;
     // workflow.toml スナップショットをサイドカーに保存（workflow_append_only 用）
