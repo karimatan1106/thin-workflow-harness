@@ -2,9 +2,9 @@
 //!
 //! workflow.toml + spec.toml driven、event log + gate + runtime のみ。
 //! CKG / daemon は harness binary 側で実装 (Phase 2 step 2 で harness-ckg crate 分離予定)。
-
-#[cfg(not(windows))]
-compile_error!("thin-workflow-harness-core is Windows-only");
+//!
+//! プラットフォーム: Windows / Linux / macOS 対応。OS 依存箇所 (シェル実行等) は
+//! `cfg!(windows)` で分岐し、全テストが Windows・Linux 両方で pass する。
 
 pub mod detect;
 pub mod event;

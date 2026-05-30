@@ -1,6 +1,6 @@
 # thin-workflow-harness
 
-> **Platform**: Windows only. `compile_error!(not(windows))` で他プラットフォーム build を block しています。Unix 対応は scope 外 (詳細は内部設計判断、`memory/project_thin_workflow_harness.md` 参照)。
+> **Platform**: Windows / Linux / macOS 対応。OS 依存箇所 (シェル実行等) は `cfg!(windows)` で分岐し、全テストが Windows・Linux 両方で pass します。
 
 > **License**: MIT (see `LICENSE`)
 
