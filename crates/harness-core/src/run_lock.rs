@@ -44,9 +44,11 @@ impl RunLock {
             }
             Err(e) if e.kind() == ErrorKind::AlreadyExists => {
                 let holder = std::fs::read_to_string(&path).unwrap_or_default();
+                let age = lock_age_hint(&path);
                 Err(format!(
-                    "run '{run_id}' は別プロセスが駆動中（{}）── 同時実行は不可。\
-                     stale（プロセスが既に死んでいる）なら {} を削除してから再実行せよ",
+                    "run '{run_id}' は別プロセスが駆動中（{}{age}）── 同時実行は不可。\
+                     stale（プロセスが既に死んでいる）なら `harness run --run {run_id} --force-unlock` \
+                     で {} を削除してから再実行せよ",
                     holder.trim(),
                     path.display()
                 ))
@@ -58,6 +60,22 @@ impl RunLock {
     /// run の lock ファイルパス（force-unlock 用に公開）。
     pub fn lock_path(run_id: &str) -> Result<PathBuf, String> {
         Ok(paths::state_dir()?.join(format!("{run_id}.lock")))
+    }
+}
+
+/// lock ファイルの経過時間ヒント（`, 経過 N 分` 等）。古いほど stale の可能性が高いので
+/// 人間の判断材料にする。mtime が取れなければ空文字（OS 非依存・PID 生存確認はしない）。
+fn lock_age_hint(path: &std::path::Path) -> String {
+    let Ok(meta) = std::fs::metadata(path) else { return String::new() };
+    let Ok(modified) = meta.modified() else { return String::new() };
+    let Ok(elapsed) = modified.elapsed() else { return String::new() };
+    let secs = elapsed.as_secs();
+    if secs < 60 {
+        format!(", 経過 {secs} 秒")
+    } else if secs < 3600 {
+        format!(", 経過 {} 分", secs / 60)
+    } else {
+        format!(", 経過 {} 時間 ── stale の可能性大", secs / 3600)
     }
 }
 
