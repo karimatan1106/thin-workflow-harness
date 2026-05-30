@@ -29,16 +29,19 @@ pub fn apply_action(
 ) -> Result<Applied, String> {
     match act {
         WorkerAction::CreateFile { path, content } => {
-            // create_file はアウトプット生成（インターセプタ対象外 ── ノードの成果物置き場）。
-            write_file_under(intc.cwd(), path, content)?;
+            // create_file はアウトプット生成（blast radius 対象外 ── ノードの成果物置き場）だが、
+            // cwd 外への書き込みは path traversal なので safe_resolve で拒否する。
+            let full = intc.safe_resolve(path)?;
+            write_at(&full, content)?;
             Ok(Applied::Continued)
         }
         WorkerAction::EditFile { path, content } => {
-            let full = intc.cwd().join(path);
+            // まず cwd 配下へ安全解決（path traversal 拒否）、その後 blast radius 判定。
+            let full = intc.safe_resolve(path)?;
             if let Verdict::Deny(why) = intc.check_write(&full) {
                 return Err(format!("インターセプタが編集を拒否: {path} ── {why}"));
             }
-            write_file_under(intc.cwd(), path, content)?;
+            write_at(&full, content)?;
             println!("[interceptor] edit_file 許可: {path}");
             Ok(Applied::Continued)
         }
@@ -81,14 +84,14 @@ pub fn apply_action(
     }
 }
 
-/// cwd 配下にファイルを書く（親ディレクトリを掘る）。
-fn write_file_under(cwd: &std::path::Path, path: &str, content: &str) -> Result<(), String> {
-    let full = cwd.join(path);
+/// 解決済み絶対パスにファイルを書く（親ディレクトリを掘る）。
+/// 呼び出し側で `safe_resolve` 済みであることが前提 ── ここでは traversal を再チェックしない。
+fn write_at(full: &std::path::Path, content: &str) -> Result<(), String> {
     if let Some(parent) = full.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("ディレクトリ作成失敗 {}: {e}", parent.display()))?;
     }
-    std::fs::write(&full, content).map_err(|e| format!("ファイル書込失敗 {}: {e}", full.display()))
+    std::fs::write(full, content).map_err(|e| format!("ファイル書込失敗 {}: {e}", full.display()))
 }
 
 /// cwd を作業ディレクトリにしてコマンドを実行する（exit code は問わない ── ログのみ）。

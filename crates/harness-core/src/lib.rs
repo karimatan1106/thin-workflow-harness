@@ -14,6 +14,7 @@ pub mod handlers2;
 pub mod handlers3;
 pub mod handlers_advance;
 pub mod handlers_init;
+pub mod handlers_install;
 pub mod handlers_stats;
 pub mod metrics;
 pub mod paths;

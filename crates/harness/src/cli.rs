@@ -133,6 +133,16 @@ pub enum Command {
     Stats { run_id: String },
     /// 既存 repo に `.harness/` をスキャフォールド（プロジェクト検出＋スモークチェック）。
     Init { dir: Option<String>, #[arg(long)] force: bool },
+    /// harness plugin-repo（`.harness/` を持つ）を git clone して導入する。
+    Install {
+        /// plugin-repo の git URL。
+        git_url: String,
+        /// clone 先ディレクトリ（省略時は URL の repo 名を CWD 直下に作る）。
+        dest: Option<String>,
+        /// 宛先が既存なら削除して上書きする。
+        #[arg(long)]
+        force: bool,
+    },
     /// `.harness/` の健全性チェック（validate + gate cmd + skill ファイル）。
     Doctor { dir: Option<String>, #[arg(long)] full: bool },
 }

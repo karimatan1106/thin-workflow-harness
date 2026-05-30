@@ -28,7 +28,16 @@ pub(super) fn apply_one(
 ) -> ApplyResult {
     match call {
         ToolCall::ReadFile(path) => {
-            let full = intc.cwd().join(&path);
+            let full = match intc.safe_resolve(&path) {
+                Ok(p) => p,
+                Err(why) => {
+                    return ApplyResult {
+                        content: format!("read_file 拒否: {why}"),
+                        is_error: true,
+                        terminal: None,
+                    }
+                }
+            };
             match std::fs::read_to_string(&full) {
                 Ok(text) => ApplyResult {
                     content: if text.len() > 4000 {
@@ -56,7 +65,9 @@ pub(super) fn apply_one(
             }
             match apply_action(run_id, &action, intc) {
                 Ok(Applied::Continued) => ApplyResult {
-                    content: action_ok_str(&action),
+                    // edit_file 成功時はコスト0 security scan を回し、warning があれば追記する
+                    // （非ブロッキング ── 書込は済んでいる、worker への注意喚起のみ）。
+                    content: append_security_warning(action_ok_str(&action), &action),
                     is_error: false,
                     terminal: None,
                 },
@@ -91,7 +102,11 @@ pub(super) fn apply_one(
 fn pre_check(intc: &Interceptor, action: &WorkerAction) -> Option<String> {
     match action {
         WorkerAction::EditFile { path, .. } => {
-            let full = intc.cwd().join(path);
+            // まず cwd 配下へ安全解決（path traversal 拒否）、その後 blast radius 判定。
+            let full = match intc.safe_resolve(path) {
+                Ok(p) => p,
+                Err(why) => return Some(format!("edit_file 拒否: {why}")),
+            };
             match intc.check_write(&full) {
                 Verdict::Allow => None,
                 Verdict::Deny(why) => Some(format!("edit_file 拒否: {why}")),
@@ -102,6 +117,21 @@ fn pre_check(intc: &Interceptor, action: &WorkerAction) -> Option<String> {
             Verdict::Deny(why) => Some(format!("run_command 拒否: {why}")),
         },
         _ => None,
+    }
+}
+
+/// edit_file / create_file の content をコスト0 security scan にかけ、
+/// findings があれば成功メッセージに warning を追記する（非ブロッキング）。
+fn append_security_warning(ok: String, action: &WorkerAction) -> String {
+    use crate::runtime::security_scan::{format_warning, scan};
+    let (path, content) = match action {
+        WorkerAction::EditFile { path, content } => (path, content),
+        WorkerAction::CreateFile { path, content } => (path, content),
+        _ => return ok,
+    };
+    match format_warning(path, &scan(path, content)) {
+        Some(w) => format!("{ok}\n{w}"),
+        None => ok,
     }
 }
 

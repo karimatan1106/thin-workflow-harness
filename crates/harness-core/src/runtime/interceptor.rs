@@ -95,10 +95,49 @@ impl Interceptor {
         !self.network
     }
 
+    /// read_file / edit_file 用 ── 入力パスを cwd 配下の安全なパスへ解決する。
+    /// `..` での脱出と cwd 外を指す絶対パス（`/etc/passwd` / `C:\...`）を拒否する。
+    ///
+    /// レキシカル正規化のみ（canonicalize しない）── 理由が 2 つ:
+    /// 1. write 経路では対象が未作成でもよく、canonicalize は存在しないパスで失敗する。
+    /// 2. Windows の canonicalize は `\\?\C:\` verbatim prefix を付け、`check_write` の
+    ///    `relativize`（非 canonical な `self.cwd` を strip）と食い違い、blast radius が
+    ///    全 Deny になる。base も対象も同じレキシカル正規化で揃える。
+    pub fn safe_resolve(&self, path: &str) -> Result<PathBuf, String> {
+        let base = lexical_normalize(&self.cwd);
+        // 絶対パス入力は join で base を置換する ── その場合も下の containment で弾かれる。
+        let normalized = lexical_normalize(&base.join(path));
+        if !normalized.starts_with(&base) {
+            return Err(format!(
+                "パス '{path}' は作業ディレクトリ '{}' の外を指す ── path traversal 拒否",
+                self.cwd.display()
+            ));
+        }
+        Ok(normalized)
+    }
+
     fn relativize(&self, path: &Path) -> String {
         let rel = path.strip_prefix(&self.cwd).unwrap_or(path);
         rel.to_string_lossy().replace('\\', "/")
     }
+}
+
+/// パスを fs に触れずレキシカル正規化する（`.` 除去・`..` で 1 段戻す）。
+/// canonicalize と違い未作成パスでも動く ── write 経路の containment 判定に使う。
+fn lexical_normalize(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            Component::ParentDir => {
+                // ルート直下や prefix（C:\）を越えて戻らない ── pop が無効なら無視。
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// `cmd_allowlist` パターンマッチ ── パターンとコマンドを空白でトークン分割し、

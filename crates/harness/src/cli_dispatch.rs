@@ -5,7 +5,8 @@
 
 use crate::cli::Command;
 use thin_workflow_harness_core::{
-    handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_stats, runtime,
+    handlers, handlers2, handlers3, handlers_advance, handlers_init, handlers_install,
+    handlers_stats, runtime,
 };
 
 /// `Cli::parse()` 後の Command を実行する。
@@ -46,6 +47,9 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         },
         Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
         Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
+        Command::Install { git_url, dest, force } => {
+            handlers_install::cmd_install(&git_url, dest.as_deref(), force)
+        }
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
     }
 }

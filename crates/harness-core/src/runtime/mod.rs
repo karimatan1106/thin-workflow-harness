@@ -21,6 +21,7 @@ pub mod fork_join_branch;
 pub mod http_client;
 pub mod interceptor;
 pub mod script;
+pub mod security_scan;
 pub mod system_prompt;
 pub mod tool_schemas;
 pub mod tools;

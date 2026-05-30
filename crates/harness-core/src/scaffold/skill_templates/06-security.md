@@ -1,61 +1,91 @@
 # skill: security
 
-このノードのゴール: 実装変更がセキュリティ的リスクを持たないか checklist で確認し、
+このノードのゴール: 実装変更がセキュリティリスクを持たないか **3 層** で確認し、
 `security_review` evidence を提出する。secret scan / dep audit を含む。
+
+> 設計思想は Anthropic 公式 security-guidance プラグインの 3 層に対応する。
+> harness は exit_gate で **強制**できるのが本家との差 ── 通らなければ次ノードへ進めない。
 
 ## 前提
 
 - test phase が緑（cmd_exit_0 で test スイート pass 済）
 
-## 順序
+## 3 層レビュー
 
-1. **保留 gate を確認**
-   ```
-   harness status
-   ```
-   配線されている security scan cmd（`gitleaks detect --no-git --redact` 等、detect が
-   見つけたもの。未検出なら `false # configure security-scan ...`）を確認。
+### 層 1 ── 静的パターン（コスト0・既に自動実行済）
 
-2. **diff を抽出** ── 何が変わったか:
-   ```
-   git diff main..HEAD --stat
-   git diff main..HEAD -- 'src/' | head -200
-   ```
+harness は implement 中の `edit_file` / `create_file` のたびに content をローカル
+substring scan し、危険パターンに warning を返している（LLM 呼び出しなし）。検出クラス:
+injection / XSS / 危険デシリアライズ / 弱い暗号 / TLS 無効化 / hardcoded secret。
 
-3. **セキュリティ checklist**
+- このノードでは **層1 warning が出ていた箇所が解消済みか**を最初に確認する。
+- 残っているなら直すか、安全な理由をコード内コメントに残す。
 
-   - [ ] 認証/認可 path の変更が intentional + reviewed か
-   - [ ] secret / credentials / API key の hard-code なし
-   - [ ] SQL / command / path-traversal injection の risk なし
-   - [ ] log に sensitive data（token / PII / 内部 URL）が出ない
-   - [ ] dependency 追加が intentional、license / supply chain 確認済
-   - [ ] file I/O の path validation あり（`../` の guard）
+### 層 2 ── 差分レビュー（このノードの主作業）
 
-4. **secret scan を走らせる** ── workflow.toml の exit_gate で配線済:
-   ```
-   gitleaks detect --no-git --redact
-   ```
-   exit 0 で `cmd_exit_0` gate が pass。検出があれば redact / 削除して再実行。
+diff を抽出し、下の 8 クラスで読む:
 
-5. **dependency audit（任意・推奨）**
-   ```
-   cargo audit                       # Rust
-   pnpm audit --prod                 # Node.js
-   pip-audit                         # Python
-   ```
-   既知 CVE があれば判断（critical/high は基本 reject）。
+```
+git diff main..HEAD --stat
+git diff main..HEAD -- 'src/' | head -200
+```
 
-6. **判定 evidence を提出** ── exit_gate `evidence_recorded { key = "security_review" }`
-   が pass するように:
-   ```
-   harness report-evidence security_review '{"verdict":"approved","risk_items":[],"notes":"..."}'
-   ```
-   risk が残るなら `verdict: "rejected"` で `harness back "security risk: ..."`。
+セキュリティ checklist（8 クラス）:
 
-7. **進める**:
-   ```
-   harness request-transition review
-   ```
+- [ ] **injection** ── SQL / command / path-traversal。文字列連結でクエリ・shell を組んでいない
+- [ ] **XSS** ── innerHTML / dangerouslySetInnerHTML / document.write を untrusted 入力で使っていない
+- [ ] **認可バイパス** ── 認証/認可 path の変更が intentional + reviewed
+- [ ] **IDOR** ── リソース ID を受けて操作する箇所で所有者/権限チェックがある
+- [ ] **SSRF** ── user 制御 URL への fetch/request に allowlist がある
+- [ ] **危険デシリアライズ** ── pickle / yaml.load / torch.load 等を untrusted データに使っていない
+- [ ] **弱い暗号** ── MD5/SHA1 を署名・パスワードに使わない、AES-ECB を使わない、TLS 検証を無効化しない
+- [ ] **secret 露出** ── credentials / API key の hard-code なし、log に token/PII/内部 URL が出ない
+
+加えて:
+- [ ] dependency 追加が intentional、license / supply chain 確認済
+- [ ] file I/O の path validation あり（`../` guard）
+
+### 層 3 ── データフロー深掘り（multi-file 脆弱性）
+
+パターンマッチで漏れる cross-file の問題を、関連ファイルを跨いで追う:
+
+- IDOR / 認可バイパス: 入力が handler → service → DB へ流れる経路で権限チェックが**どこか**にあるか
+- SSRF: user 入力が最終的に外向き request に届くまでに sanitize されるか
+- 必要なら `read_file` / `run_command("grep ...")` で呼び出し元・呼び出し先を辿る
+
+## secret scan を走らせる（exit_gate で配線済）
+
+```
+gitleaks detect --no-git --redact
+```
+
+exit 0 で `cmd_exit_0` gate が pass。検出があれば redact / 削除して再実行。
+
+## dependency audit（任意・推奨）
+
+```
+cargo audit                       # Rust
+pnpm audit --prod                 # Node.js
+pip-audit                         # Python
+```
+
+既知 CVE があれば判断（critical/high は基本 reject）。
+
+## 判定 evidence を提出
+
+exit_gate `evidence_recorded { key = "security_review" }` が pass するように:
+
+```
+harness report-evidence security_review '{"verdict":"approved","layers":{"l1_static":"clear","l2_diff":"clear","l3_dataflow":"clear"},"risk_items":[],"notes":"..."}'
+```
+
+risk が残るなら `verdict: "rejected"` で `harness back "security risk: ..."`。
+
+## 進める
+
+```
+harness request-transition review
+```
 
 ## 完了条件（exit_gates）
 
@@ -74,6 +104,7 @@
 ## 禁止
 
 - 「change は小さいから skip」で checklist を埋めないこと（最低限の確認は必須）
+- 8 クラスのうち未確認のものを確認済として evidence に書くこと（gate 偽装）
 - risk_items を空にしたいだけで rejected を approved に書き換えること（gate 偽装）
 - secret を redact せず log / artifact に残すこと
 - 状態ファイル（イベントログ）の直接編集

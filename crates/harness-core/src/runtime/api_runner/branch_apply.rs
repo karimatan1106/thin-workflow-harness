@@ -45,7 +45,10 @@ pub(super) fn branch_apply_one(
 }
 
 fn read_file_branch(intc: &Interceptor, path: &str) -> ApplyResult {
-    let full = intc.cwd().join(path);
+    let full = match intc.safe_resolve(path) {
+        Ok(p) => p,
+        Err(why) => return err(format!("read_file 拒否: {why}")),
+    };
     match std::fs::read_to_string(&full) {
         Ok(text) if text.len() > 4000 => {
             ok(format!("{}\n…（{} 文字、頭 4000 のみ表示）", &text[..4000], text.len()))
@@ -92,7 +95,10 @@ pub(super) fn apply_branch_action(
 }
 
 fn edit_file_branch(branch_id: &str, intc: &Interceptor, path: &str, content: &str) -> ApplyResult {
-    let full = intc.cwd().join(path);
+    let full = match intc.safe_resolve(path) {
+        Ok(p) => p,
+        Err(why) => return err(format!("edit_file 拒否（branch {branch_id}）: {why}")),
+    };
     if let Verdict::Deny(why) = intc.check_write(&full) {
         return err(format!("edit_file 拒否（branch {branch_id}）: {why}"));
     }
@@ -147,7 +153,11 @@ fn write_file_branch(
     content: &str,
     is_edit: bool,
 ) -> ApplyResult {
-    let full = intc.cwd().join(path);
+    // CreateFile は edit_file_branch を経由しないので、ここでも安全解決する（path traversal 拒否）。
+    let full = match intc.safe_resolve(path) {
+        Ok(p) => p,
+        Err(why) => return err(format!("書込拒否（branch {branch_id}）: {why}")),
+    };
     if let Some(parent) = full.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
             return err(format!("mkdir 失敗 {}: {e}", parent.display()));
@@ -155,7 +165,15 @@ fn write_file_branch(
     }
     let label = if is_edit { "edit_file" } else { "create_file" };
     match std::fs::write(&full, content) {
-        Ok(()) => ok(format!("ファイル '{path}' を書いた（branch {branch_id}, {label}）")),
+        Ok(()) => {
+            // コスト0 security scan（非ブロッキング ── 書込済み、warning のみ追記）。
+            use crate::runtime::security_scan::{format_warning, scan};
+            let base = format!("ファイル '{path}' を書いた（branch {branch_id}, {label}）");
+            match format_warning(path, &scan(path, content)) {
+                Some(w) => ok(format!("{base}\n{w}")),
+                None => ok(base),
+            }
+        }
         Err(e) => err(format!("{label} 失敗 {}: {e}", full.display())),
     }
 }
