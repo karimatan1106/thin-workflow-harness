@@ -36,6 +36,9 @@ name = "default-flow"
 entry = "research"
 # host = "claude-code" でホスト Claude Code、"runtime" は harness ランタイム自身がホスト
 host = "claude-code"
+# 役割別モデル割り当ての既定値 ── 探索・機械的フェーズはバランス型 Sonnet 4.6。
+#   高精度が要る plan/implement/security/review は各ノードで Opus 4.8 に上書きする。
+default_model = "claude-sonnet-4-6"
 # 既定 budget の現実的下限 ──
 #   Haiku でも ApiWorker の system+skill+tools+status で 2000+ input tokens 食うため
 #   max_tokens=2000 は即 budget 超過する。実 dogfood (2026-05-13) を踏まえ 8000 を下限に。
@@ -47,10 +50,13 @@ mandatory_gates = [
 [[node]]
 id = "research"
 skill = "01-research.md"
+# 探索フェーズ ── 広く読むため安価でバランスの取れた Sonnet 4.6 (default 据え置き)。
+model = "claude-sonnet-4-6"
 exit_gates = [
   {{ gate = "open_questions_zero", args = {{}} }},
   {{ gate = "no_pending_required_questions", args = {{}} }},
   {{ gate = "json_has", args = {{ evidence_key = "human_approval", json_path = "verdict", eq = "approved" }} }},
+  {{ gate = "evidence_recorded", args = {{ key = "master_design_reviewed" }} }},
 ]
 next = ["plan"]
 on_reject = {{ after = 3, goto = "__human__" }}
@@ -58,6 +64,8 @@ on_reject = {{ after = 3, goto = "__human__" }}
 [[node]]
 id = "plan"
 skill = "02-plan.md"
+# 計画フェーズ ── 設計判断の質が後続全体を左右するため Opus 4.8。
+model = "claude-opus-4-8"
 can_append = true
 # plan artifact のパスに合わせて max_lines の path を足してください（plan.md 等）。
 exit_gates = [
@@ -71,6 +79,8 @@ on_reject = {{ after = 3, goto = "research" }}
 [[node]]
 id = "characterize"
 skill = "03-characterize.md"
+# 特性化フェーズ ── 既存挙動を広く把握する探索系なので Sonnet 4.6 (default 据え置き)。
+model = "claude-sonnet-4-6"
 # coverage コマンド未検出時は `false # configure coverage ...` で明示的に fail させる
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{coverage}" }} }},
@@ -81,6 +91,8 @@ on_reject = {{ after = 3, goto = "plan" }}
 [[node]]
 id = "implement"
 skill = "04-implement.md"
+# 実装フェーズ ── コード生成の精度が要るため Opus 4.8。
+model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "artifact_registered", args = {{ name_or_prefix = "impl:" }} }},
   {{ gate = "cmd_exit_0", args = {{ cmd = "{test}" }} }},
@@ -91,6 +103,8 @@ on_reject = {{ after = 3, goto = "plan" }}
 [[node]]
 id = "test"
 skill = "05-test.md"
+# テストフェーズ ── 機械的作業が中心なので Sonnet 4.6 (default 据え置き)。
+model = "claude-sonnet-4-6"
 # baseline (test_count_baseline) は最初の run で確立される ── 無い間は count_non_decreasing は実質緩い
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{full}" }} }},
@@ -102,6 +116,8 @@ on_reject = {{ after = 3, goto = "implement" }}
 [[node]]
 id = "security"
 skill = "06-security.md"
+# セキュリティフェーズ ── 脆弱性検出の見落としを避けるため Opus 4.8。
+model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{security}" }} }},
   {{ gate = "evidence_recorded", args = {{ key = "security_review" }} }},
@@ -112,9 +128,16 @@ on_reject = {{ after = 3, goto = "implement" }}
 [[node]]
 id = "review"
 skill = "07-review.md"
+# レビューフェーズ ── 最終品質判断の精度が要るため Opus 4.8。
+model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "traceability_closed", args = {{}} }},
   {{ gate = "json_has", args = {{ evidence_key = "review", json_path = "verdict", eq = "approved" }} }},
+  {{ gate = "evidence_recorded", args = {{ key = "master_design_update" }} }},
+  # マスター設計書 / ADR の 200 行ルール (AI 駆動開発の token-budget 原則)
+  {{ gate = "max_lines", args = {{ path = "docs/architecture/**/*.md", n = 200 }} }},
+  {{ gate = "max_lines", args = {{ path = "docs/adr/INDEX.md", n = 200, allow_empty = true }} }},
+  {{ gate = "max_lines", args = {{ path = "docs/adr/ADR-*.md", n = 200, allow_empty = true }} }},
 ]
 next = []
 on_reject = {{ after = 2, goto = "__human__" }}
