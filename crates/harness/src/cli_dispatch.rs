@@ -46,7 +46,9 @@ pub fn dispatch(command: Command) -> Result<(), String> {
             None => runtime::cmd_run_api(run.as_deref(), worktree.as_deref(), model.as_deref()),
         },
         Command::Stats { run_id } => handlers_stats::cmd_stats(&run_id),
-        Command::Init { dir, force } => handlers_init::cmd_init(dir.as_deref(), force),
+        Command::Init { dir, force, template } => {
+            handlers_init::cmd_init(dir.as_deref(), force, template.as_deref())
+        }
         Command::Install { git_url, dest, force } => {
             handlers_install::cmd_install(&git_url, dest.as_deref(), force)
         }

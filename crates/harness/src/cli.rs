@@ -132,7 +132,14 @@ pub enum Command {
     /// ノードごとの metrics（tool_calls / wall_seconds / cost / tokens）を表示する。
     Stats { run_id: String },
     /// 既存 repo に `.harness/` をスキャフォールド（プロジェクト検出＋スモークチェック）。
-    Init { dir: Option<String>, #[arg(long)] force: bool },
+    Init {
+        dir: Option<String>,
+        #[arg(long)]
+        force: bool,
+        /// ワークフローテンプレート。`default`（既定・検出ベース）か `security`（security-only）。
+        #[arg(long)]
+        template: Option<String>,
+    },
     /// harness plugin-repo（`.harness/` を持つ）を git clone して導入する。
     Install {
         /// plugin-repo の git URL。

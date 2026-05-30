@@ -1,0 +1,26 @@
+# security-only workflow（単一ノード）── `harness init --template security` で生成。
+#
+# 任意の codebase に対し security レビューだけを回す。
+# 設計思想は Anthropic 公式 security-guidance プラグインの 3 層に対応:
+#   層1 静的パターン検知（harness engine がコスト0で自動実行）
+#   層2 差分レビュー（8 脆弱性クラス）
+#   層3 データフロー深掘り（multi-file 脆弱性）
+# harness は exit_gate で「security_review evidence 無しでは done にできない」と強制する。
+
+[meta]
+name = "security-only"
+entry = "security"
+host = "claude-code"
+default_budget = { max_tool_calls = 20, max_tokens = 16000, max_wall_seconds = 240 }
+
+[[node]]
+id = "security"
+skill = "security.md"
+# secret scan を配線するなら exit_gates に
+#   { gate = "cmd_exit_0", args = { cmd = "gitleaks detect --no-git --redact" } }
+# を足す。未設定でも evidence gate は効く。
+exit_gates = [
+  { gate = "evidence_recorded", args = { key = "security_review" } },
+]
+next = []
+on_reject = { after = 3, goto = "__human__" }
