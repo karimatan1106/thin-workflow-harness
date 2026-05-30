@@ -49,8 +49,13 @@ pub fn cmd_questions(run: Option<&str>) -> Result<(), String> {
         let star = if q.required { "[必須]" } else { "[任意]" };
         println!("{} {} ({}) — {}", q.id, star, q.kind, q.header);
         println!("  {}", q.question);
-        for (i, opt) in q.options.iter().enumerate() {
-            println!("    {i}) {opt}");
+        if q.options.is_empty() {
+            println!("    (自由記述)");
+        } else {
+            println!("    選択肢（1 つ選択）:");
+            for (i, opt) in q.options.iter().enumerate() {
+                println!("      {i}) {opt}");
+            }
         }
         if let Some(cr) = &q.context_ref {
             println!("    (関連: {cr})");
@@ -75,6 +80,8 @@ pub fn cmd_answer(question_id: &str, choice: &str, run: Option<&str>) -> Result<
         Ok(i) if i < q.options.len() => q.options[i].clone(),
         _ => choice.to_string(),
     };
+    // options 定義済みの質問は範囲外の回答を弾く（自由記述は無検証）。
+    crate::questions::validate_answer(q, &answer_text)?;
     append_answer(&run_id, question_id, &answer_text)?;
     append_event(
         &run_id,

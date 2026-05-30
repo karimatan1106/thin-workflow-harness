@@ -97,6 +97,52 @@ fn full_cli_flow() {
     assert!(out_str(&o).contains("evidence_recorded"), "{}", out_str(&o));
 }
 
+/// 選択肢付き質問の回答バリデーション（A）と一覧表示（B）の結合テスト。
+///
+/// options を定義した質問に対し:
+/// - 範囲外の回答は失敗し、有効な選択肢を提示する
+/// - 有効な選択肢（本文・index どちらでも）は成功する
+/// - questions 一覧に選択肢ラベルが表示される
+#[test]
+fn ask_with_options_validates_answer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    copy_dir(&fixtures(), home);
+
+    let o = run(home, &["start", "ask options test"]);
+    assert!(o.status.success(), "start failed: {}", out_str(&o));
+
+    // 選択肢付き必須質問を積む
+    let o = run(
+        home,
+        &["ask", "Pick one", "--option", "apple", "--option", "banana", "--required"],
+    );
+    assert!(o.status.success(), "ask failed: {}", out_str(&o));
+
+    // questions 一覧に選択肢ラベルが見えること（表示改善 B）
+    let o = run(home, &["questions"]);
+    let s = out_str(&o);
+    assert!(s.contains("Pick one"), "questions missing prompt: {s}");
+    assert!(s.contains("選択肢"), "questions missing options label: {s}");
+    assert!(s.contains("apple") && s.contains("banana"), "options missing: {s}");
+
+    // 範囲外の回答は弾かれ、有効な選択肢を提示する（バリデーション A）
+    let o = run(home, &["answer", "q1", "cherry"]);
+    assert!(!o.status.success(), "invalid answer should fail: {}", out_str(&o));
+    let e = out_str(&o);
+    assert!(e.contains("無効"), "expected rejection message: {e}");
+    assert!(e.contains("apple") && e.contains("banana"), "expected valid options in error: {e}");
+
+    // 弾かれた後も未回答のまま残る
+    let o = run(home, &["questions"]);
+    assert!(out_str(&o).contains("Pick one"), "question should still be pending");
+
+    // 選択肢 index で有効回答 → 本文に展開され成功する
+    let o = run(home, &["answer", "q1", "1"]);
+    assert!(o.status.success(), "valid index answer failed: {}", out_str(&o));
+    assert!(out_str(&o).contains("banana"), "index should expand to body: {}", out_str(&o));
+}
+
 #[test]
 fn status_without_run_errors() {
     let tmp = tempfile::tempdir().unwrap();

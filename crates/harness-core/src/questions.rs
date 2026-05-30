@@ -128,3 +128,35 @@ pub fn read_questions(run_id: &str) -> Result<Vec<Question>, String> {
     }
     Ok(out)
 }
+
+/// 回答が質問の options 制約を満たすか検証する。
+///
+/// Claude Code の AskUserQuestion は選択肢付き質問で範囲外の回答を許さない。
+/// harness の質問構造をそれに寄せるため、options 定義済みの質問では回答を制約する:
+///
+/// - options が空の質問は自由記述とみなし、常に Ok（既存挙動と後方互換）。
+/// - options 定義済み: 回答（前後空白は trim）が options のいずれかに完全一致する必要がある。
+///   `cmd_answer` は選択肢 index も本文へ展開してから本関数を呼ぶため、index 入力も通る。
+///
+/// Err には有効な選択肢を添えて返し、人間/エージェントが正しく答え直せるようにする。
+pub fn validate_answer(q: &Question, answer: &str) -> Result<(), String> {
+    // options 未定義なら自由記述。検証しない（後方互換）。
+    if q.options.is_empty() {
+        return Ok(());
+    }
+    if q.options.iter().any(|o| o == answer.trim()) {
+        Ok(())
+    } else {
+        Err(format!(
+            "質問 {} に対する回答 '{}' は無効です。有効な選択肢: {}",
+            q.id,
+            answer.trim(),
+            q.options.join(", ")
+        ))
+    }
+}
+
+// 単体テストは行数規約（200 行）順守のため別ファイルへ分離。
+#[cfg(test)]
+#[path = "questions_tests.rs"]
+mod tests;
