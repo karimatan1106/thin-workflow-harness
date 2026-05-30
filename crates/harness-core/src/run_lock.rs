@@ -22,6 +22,7 @@ use chrono::{SecondsFormat, Utc};
 use crate::paths;
 
 /// run 駆動中であることを示す排他ロック。Drop で自動解放（ロックファイル削除）。
+#[derive(Debug)]
 pub struct RunLock {
     path: PathBuf,
 }
