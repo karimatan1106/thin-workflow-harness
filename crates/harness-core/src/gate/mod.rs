@@ -75,7 +75,7 @@ impl<'a> GateCtx<'a> {
     }
 }
 
-/// 実装済みの gate プリミティブ名一覧（18 個）。
+/// 実装済みの gate プリミティブ名一覧（19 個）。
 pub fn known_gates() -> &'static [&'static str] {
     &[
         "file_exists",
@@ -95,6 +95,7 @@ pub fn known_gates() -> &'static [&'static str] {
         "open_questions_zero",
         "blast_radius_declared",
         "blast_radius_disjoint",
+        "spec_refs_exist",
         "no_pending_required_questions",
     ]
 }
@@ -135,6 +136,7 @@ pub fn eval_gate(name: &str, args: &toml::Table, state: &State, ctx: &GateCtx) -
         "workflow_append_only" => workflow_gates::workflow_append_only(ctx),
         "open_questions_zero" => spec_gates::open_questions_zero(ctx),
         "blast_radius_declared" => spec_gates::blast_radius_declared(ctx),
+        "spec_refs_exist" => spec_gates::spec_refs_exist(args, ctx),
         "blast_radius_disjoint" => spec_gates::blast_radius_disjoint(args, ctx),
         "no_pending_required_questions" => spec_gates::no_pending_required_questions(ctx),
         other => GateResult::fail(format!("unknown gate: {other}")),

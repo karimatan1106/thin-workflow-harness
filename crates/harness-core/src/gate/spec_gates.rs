@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::process::Command;
 
-use super::{arg_str, GateCtx, GateResult};
+use super::{arg_str, glob_paths, resolve, GateCtx, GateResult};
 use crate::spec::Spec;
 use crate::state::State;
 
@@ -151,6 +151,60 @@ pub(super) fn blast_radius_disjoint(args: &toml::Table, ctx: &GateCtx) -> GateRe
     } else {
         GateResult::fail(format!("'{a}' と '{b}' が共有: {:?}", overlap))
     }
+}
+
+/// ソースファイル中の `@spec <path>` コメントが参照する仕様書が実在するかを検証する。
+///
+/// プロジェクト規約 (sdd.md) では新規ソースに `@spec docs/specs/...` を付与するが、
+/// harness はこれを検証していなかったため「実在しない仕様書を参照する」逃げが通っていた。
+/// `path` (glob) でスキャン対象ソースを指定し、各ファイルから `@spec <ref>` を抽出、
+/// ref が home 基準で実在しなければ fail。`@spec` が 1 つも無いのは許容 (規約は新規のみ)。
+pub(super) fn spec_refs_exist(args: &toml::Table, ctx: &GateCtx) -> GateResult {
+    let Some(p) = arg_str(args, "path") else {
+        return GateResult::fail("引数 path (glob) が無い");
+    };
+    let hits = glob_paths(ctx.home, p);
+    if hits.is_empty() {
+        return GateResult::ok(format!("{p} 該当ソース 0 件 (@spec 検証対象なし)"));
+    }
+    let mut checked = 0usize;
+    let mut missing: Vec<String> = Vec::new();
+    for f in &hits {
+        let Ok(text) = std::fs::read_to_string(f) else { continue };
+        for refp in extract_spec_refs(&text) {
+            checked += 1;
+            // ref は repo root (home) 基準の相対パスとして解決する。
+            if !resolve(ctx.home, &refp).is_file() {
+                missing.push(format!("{} → {}", f.display(), refp));
+            }
+        }
+    }
+    if !missing.is_empty() {
+        return GateResult::fail(format!(
+            "@spec 参照先が実在しない {} 件: {}",
+            missing.len(),
+            missing.join("; ")
+        ));
+    }
+    GateResult::ok(format!("@spec 参照 {checked} 件すべて実在 ({} ファイル走査)", hits.len()))
+}
+
+/// テキストから `@spec <ref>` の ref 部分を抽出する純関数。
+/// `@spec docs/specs/x.md`、`* @spec docs/...`、`// @spec ...` 等に対応。
+/// ref はホワイトスペース区切りの最初のトークン (末尾の句読点は剥がす)。
+fn extract_spec_refs(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        if let Some(idx) = line.find("@spec") {
+            let rest = line[idx + "@spec".len()..].trim_start();
+            let token = rest.split_whitespace().next().unwrap_or("");
+            let token = token.trim_end_matches([',', '.', ';', ')', ']', '"', '\'']);
+            if !token.is_empty() {
+                out.push(token.to_string());
+            }
+        }
+    }
+    out
 }
 
 pub(super) fn no_pending_required_questions(ctx: &GateCtx) -> GateResult {

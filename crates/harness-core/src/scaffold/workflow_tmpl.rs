@@ -16,6 +16,8 @@ pub fn render(d: &DetectedProject) -> String {
     } else {
         ph_str("security-scan")
     };
+    // @spec 参照を走査する glob (検出言語に応じた拡張子)。未検出は汎用 src 配下。
+    let spec_glob = spec_glob_for(d.lang.as_deref());
 
     let mut mandatory = format!(
         "  {{ gate = \"cmd_exit_0\", args = {{ cmd = \"{}\" }} }},\n",
@@ -144,6 +146,9 @@ exit_gates = [
   {{ gate = "evidence_recorded", args = {{ key = "master_design_update" }} }},
   {{ gate = "json_in", args = {{ evidence_key = "master_design_update", json_path = "verdict", one_of = "updated,noop" }} }},
   {{ gate = "json_nonempty", args = {{ evidence_key = "master_design_update", json_path = "rationale" }} }},
+  # ソース中の @spec 参照先が実在するか (sdd.md 規約の実体検証。存在しない仕様書参照を排除)。
+  # 言語に合わせて path を調整 (例: src/**/*.ts, crates/**/*.rs)。
+  {{ gate = "spec_refs_exist", args = {{ path = "{spec_glob}" }} }},
   # マスター設計書 / ADR の 200 行ルール (AI 駆動開発の token-budget 原則)
   {{ gate = "max_lines", args = {{ path = "docs/architecture/**/*.md", n = 200 }} }},
   {{ gate = "max_lines", args = {{ path = "docs/adr/INDEX.md", n = 200, allow_empty = true }} }},
@@ -160,7 +165,19 @@ on_reject = {{ after = 2, goto = "__human__" }}
         coverage = toml_escape(&coverage),
         full = toml_escape(&full),
         security = toml_escape(&security),
+        spec_glob = spec_glob,
     )
+}
+
+/// 検出言語から `@spec` 走査用の glob を導く。未検出時は汎用 `src/**/*` (全ソース)。
+fn spec_glob_for(lang: Option<&str>) -> &'static str {
+    match lang {
+        Some("rust") => "**/*.rs",
+        Some("typescript") | Some("javascript") | Some("node") => "src/**/*.ts",
+        Some("python") => "**/*.py",
+        Some("go") => "**/*.go",
+        _ => "src/**/*",
+    }
 }
 
 fn ph(cmd: Option<&str>, kind: &str) -> String {
