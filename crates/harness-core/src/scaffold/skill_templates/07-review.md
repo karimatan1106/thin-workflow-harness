@@ -108,10 +108,16 @@ code quality を確認し、`review` evidence を `approved` で提出する。w
    - 超えたら `modules/` 配下にサブディレクトリで分割、 元ファイルからは link
 
    **6-g. evidence を提出**
+
+   verdict は **updated / noop の 2 値のみ**(gate `json_in` が他値を fail)。`rationale` は
+   **どちらでも必須**(gate `json_nonempty` が空を fail) ── 「なぜ更新したか」または
+   「なぜ更新不要と判断したか」を必ず言語化する。no_change 等の逃げ値・空 rationale で
+   gate を通すことはできない。
    ```
-   # 更新ありの場合
+   # 更新ありの場合 (updated でも rationale 必須)
    harness report-evidence master_design_update '{
      "verdict": "updated",
+     "rationale": "WS broadcast の coalesce 方針を変更したため 02-blocks と ADR を同期",
      "architecture_sections_changed": ["02-blocks", "modules/ws-server-rs"],
      "adrs_added": ["ADR-024-broadcast-coalesce"],
      "adrs_superseded": ["ADR-018"],
@@ -122,7 +128,7 @@ code quality を確認し、`review` evidence を `approved` で提出する。w
    # no-op の場合 (bug fix / cosmetic 等で構造も Why も変わらない)
    harness report-evidence master_design_update '{
      "verdict": "noop",
-     "rationale": "..."
+     "rationale": "fundingRate の ms 揺れ吸収のみで、モジュール構成も設計判断も不変のため"
    }'
    ```
 
@@ -146,6 +152,10 @@ code quality を確認し、`review` evidence を `approved` で提出する。w
 - `json_has { evidence_key = "review", json_path = "verdict", eq = "approved" }`
 - `evidence_recorded { key = "master_design_update" }` ── architecture/ADR への
   反映、または no-op 宣言が evidence で記録済み（step 6）
+- `json_in { evidence_key = "master_design_update", json_path = "verdict", one_of = "updated,noop" }`
+  ── verdict は updated/noop のみ（no_change 等の逃げ値を排除）
+- `json_nonempty { evidence_key = "master_design_update", json_path = "rationale" }`
+  ── updated/noop どちらでも rationale 必須（空文字・未記載は fail）
 - `max_lines { path = "docs/architecture/**/*.md", n = 200 }` ── master の各 .md は
   200 行以下（AI 駆動開発の token-budget 原則）
 - `max_lines { path = "docs/adr/INDEX.md", n = 200, allow_empty = true }`

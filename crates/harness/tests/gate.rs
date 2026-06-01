@@ -76,6 +76,69 @@ fn gate_evidence_and_json_has() {
 }
 
 #[test]
+fn gate_json_nonempty_and_json_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = GateCtx::minimal(dir.path());
+    // master_design_update を模した evidence: updated/中身あり と noop/空配列 の両ケース。
+    let events = vec![ev(EventKind::GateEvidence {
+        gate: "master_design_update".into(),
+        data: serde_json::json!({
+            "verdict": "updated",
+            "rationale": "WS coalesce 方針変更を 02-blocks に反映",
+            "architecture_sections_changed": ["02-blocks"],
+            "empty_arr": [],
+            "blank": "  "
+        }),
+    })];
+    let st = derive_state("r", &events).finalize(1);
+
+    // json_nonempty: 実体ある配列/文字列は ok、空配列/空白文字列は fail。
+    let sections = tbl(&[
+        ("evidence_key", "master_design_update".into()),
+        ("json_path", "architecture_sections_changed".into()),
+    ]);
+    assert!(eval_gate("json_nonempty", &sections, &st, &ctx).ok);
+    let rationale = tbl(&[
+        ("evidence_key", "master_design_update".into()),
+        ("json_path", "rationale".into()),
+    ]);
+    assert!(eval_gate("json_nonempty", &rationale, &st, &ctx).ok);
+    let empty_arr = tbl(&[
+        ("evidence_key", "master_design_update".into()),
+        ("json_path", "empty_arr".into()),
+    ]);
+    assert!(!eval_gate("json_nonempty", &empty_arr, &st, &ctx).ok, "空配列は fail");
+    let blank = tbl(&[
+        ("evidence_key", "master_design_update".into()),
+        ("json_path", "blank".into()),
+    ]);
+    assert!(!eval_gate("json_nonempty", &blank, &st, &ctx).ok, "空白のみ文字列は fail");
+    let missing = tbl(&[
+        ("evidence_key", "master_design_update".into()),
+        ("json_path", "nope".into()),
+    ]);
+    assert!(!eval_gate("json_nonempty", &missing, &st, &ctx).ok, "存在しない path は fail");
+
+    // json_in: 許可値内は ok、逃げ値(no_change)は fail。
+    let allowed = tbl(&[
+        ("evidence_key", "master_design_update".into()),
+        ("json_path", "verdict".into()),
+        ("one_of", "updated,noop".into()),
+    ]);
+    assert!(eval_gate("json_in", &allowed, &st, &ctx).ok);
+
+    let no_change_events = vec![ev(EventKind::GateEvidence {
+        gate: "master_design_update".into(),
+        data: serde_json::json!({"verdict": "no_change"}),
+    })];
+    let st2 = derive_state("r", &no_change_events).finalize(1);
+    assert!(
+        !eval_gate("json_in", &allowed, &st2, &ctx).ok,
+        "no_change は許可値外なので fail"
+    );
+}
+
+#[test]
 fn gate_artifact_registered_prefix_and_existence() {
     let dir = tempfile::tempdir().unwrap();
     let f = dir.path().join("impl_a.rs");
