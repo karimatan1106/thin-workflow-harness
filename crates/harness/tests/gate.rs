@@ -139,6 +139,43 @@ fn gate_json_nonempty_and_json_in() {
 }
 
 #[test]
+fn gate_spec_refs_exist() {
+    let dir = tempfile::tempdir().unwrap();
+    // 実在する仕様書
+    std::fs::create_dir_all(dir.path().join("docs/specs")).unwrap();
+    std::fs::write(dir.path().join("docs/specs/feature.md"), b"# spec").unwrap();
+    std::fs::create_dir_all(dir.path().join("src")).unwrap();
+    let ctx = GateCtx::minimal(dir.path());
+    let st = empty_state();
+
+    // @spec が実在 → ok
+    std::fs::write(
+        dir.path().join("src/good.rs"),
+        b"//! @spec docs/specs/feature.md\nfn x() {}\n",
+    )
+    .unwrap();
+    let args = tbl(&[("path", "src/**/*.rs".into())]);
+    assert!(eval_gate("spec_refs_exist", &args, &st, &ctx).ok, "実在 @spec は ok");
+
+    // @spec が実在しない → fail
+    std::fs::write(
+        dir.path().join("src/bad.rs"),
+        b"//! @spec docs/specs/missing.md\nfn y() {}\n",
+    )
+    .unwrap();
+    let r = eval_gate("spec_refs_exist", &args, &st, &ctx);
+    assert!(!r.ok, "存在しない @spec 参照は fail");
+    assert!(r.note.contains("missing.md"), "fail 理由に欠落先: {}", r.note);
+
+    // @spec が 1 つも無いソースのみ → ok (規約は新規ソースのみ)
+    let dir2 = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir2.path().join("src")).unwrap();
+    std::fs::write(dir2.path().join("src/none.rs"), b"fn z() {}\n").unwrap();
+    let ctx2 = GateCtx::minimal(dir2.path());
+    assert!(eval_gate("spec_refs_exist", &args, &st, &ctx2).ok, "@spec 無しは ok");
+}
+
+#[test]
 fn gate_artifact_registered_prefix_and_existence() {
     let dir = tempfile::tempdir().unwrap();
     let f = dir.path().join("impl_a.rs");
