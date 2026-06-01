@@ -56,7 +56,12 @@ exit_gates = [
   {{ gate = "open_questions_zero", args = {{}} }},
   {{ gate = "no_pending_required_questions", args = {{}} }},
   {{ gate = "json_has", args = {{ evidence_key = "human_approval", json_path = "verdict", eq = "approved" }} }},
+  # master_design_reviewed は「記録の有無」だけでなく中身を強制する:
+  # verdict は reviewed/absent/partial のいずれか(勝手な逃げ値を排除)、かつ
+  # 何を読んだか(arc42_sections_read)が実体として記録されていること。
   {{ gate = "evidence_recorded", args = {{ key = "master_design_reviewed" }} }},
+  {{ gate = "json_in", args = {{ evidence_key = "master_design_reviewed", json_path = "verdict", one_of = "reviewed,absent,partial" }} }},
+  {{ gate = "json_nonempty", args = {{ evidence_key = "master_design_reviewed", json_path = "arc42_sections_read" }} }},
 ]
 next = ["plan"]
 on_reject = {{ after = 3, goto = "__human__" }}
@@ -133,7 +138,12 @@ model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "traceability_closed", args = {{}} }},
   {{ gate = "json_has", args = {{ evidence_key = "review", json_path = "verdict", eq = "approved" }} }},
+  # master_design_update は「記録の有無」だけでなく中身を強制する:
+  # - verdict は updated/noop のいずれか(バグ修正の正当な noop は許すが、no_change 等の逃げ値は排除)
+  # - rationale は updated/noop どちらでも必須(なぜ更新したか / なぜ更新不要かを必ず言語化させる)
   {{ gate = "evidence_recorded", args = {{ key = "master_design_update" }} }},
+  {{ gate = "json_in", args = {{ evidence_key = "master_design_update", json_path = "verdict", one_of = "updated,noop" }} }},
+  {{ gate = "json_nonempty", args = {{ evidence_key = "master_design_update", json_path = "rationale" }} }},
   # マスター設計書 / ADR の 200 行ルール (AI 駆動開発の token-budget 原則)
   {{ gate = "max_lines", args = {{ path = "docs/architecture/**/*.md", n = 200 }} }},
   {{ gate = "max_lines", args = {{ path = "docs/adr/INDEX.md", n = 200, allow_empty = true }} }},

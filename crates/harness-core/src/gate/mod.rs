@@ -75,7 +75,7 @@ impl<'a> GateCtx<'a> {
     }
 }
 
-/// Phase 0 で実装済みの gate プリミティブ名一覧（16 個）。
+/// 実装済みの gate プリミティブ名一覧（18 個）。
 pub fn known_gates() -> &'static [&'static str] {
     &[
         "file_exists",
@@ -85,6 +85,8 @@ pub fn known_gates() -> &'static [&'static str] {
         "no_regex",
         "cmd_exit_0",
         "json_has",
+        "json_nonempty",
+        "json_in",
         "artifact_registered",
         "evidence_recorded",
         "traceability_closed",
@@ -124,6 +126,8 @@ pub fn eval_gate(name: &str, args: &toml::Table, state: &State, ctx: &GateCtx) -
         "no_regex" => file_gates::no_regex(args, ctx),
         "cmd_exit_0" => file_gates::cmd_exit_0(args, ctx),
         "json_has" => state_gates::json_has(args, state),
+        "json_nonempty" => state_gates::json_nonempty(args, state),
+        "json_in" => state_gates::json_in(args, state),
         "artifact_registered" => state_gates::artifact_registered(args, state, ctx),
         "evidence_recorded" => state_gates::evidence_recorded(args, state),
         "count_non_decreasing" => state_gates::count_non_decreasing(args, state),

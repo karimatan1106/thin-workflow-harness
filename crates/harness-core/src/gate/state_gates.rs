@@ -52,6 +52,65 @@ pub(super) fn json_has(args: &toml::Table, state: &State) -> GateResult {
     }
 }
 
+/// evidence の json_path が「実体のある値」かを検証する。
+/// 空文字 / 空配列 / 空オブジェクト / null は fail。`evidence_recorded`(記録の有無) や
+/// `json_has`(文字列一致) では塞げない「中身が空の逃げ」を防ぐための gate。
+/// 例: review の master_design_update で `architecture_sections_changed` が空配列なら fail。
+pub(super) fn json_nonempty(args: &toml::Table, state: &State) -> GateResult {
+    let Some(ekey) = arg_str(args, "evidence_key") else {
+        return GateResult::fail("引数 evidence_key が無い");
+    };
+    let Some(jpath) = arg_str(args, "json_path") else {
+        return GateResult::fail("引数 json_path が無い");
+    };
+    let Some(data) = state.gate_evidence.get(ekey) else {
+        return GateResult::fail(format!("evidence '{ekey}' が未記録"));
+    };
+    let Some(found) = json_path_get(data, jpath) else {
+        return GateResult::fail(format!("evidence '{ekey}' に json_path '{jpath}' が無い"));
+    };
+    let empty = match found {
+        serde_json::Value::Null => true,
+        serde_json::Value::String(s) => s.trim().is_empty(),
+        serde_json::Value::Array(a) => a.is_empty(),
+        serde_json::Value::Object(o) => o.is_empty(),
+        _ => false, // 数値 / bool は「実体あり」とみなす
+    };
+    if empty {
+        GateResult::fail(format!("{ekey}.{jpath} が空 (実体のある内容が必要)"))
+    } else {
+        GateResult::ok(format!("{ekey}.{jpath} に実体あり"))
+    }
+}
+
+/// evidence の json_path の値が許可リスト(`one_of`, カンマ区切り)に入っているかを検証する。
+/// verdict の値域を縛り、`no_change` のような skill 未定義の逃げ値を排除する。
+/// 例: master_design_update.verdict が "updated"/"noop" のいずれかであることを強制。
+pub(super) fn json_in(args: &toml::Table, state: &State) -> GateResult {
+    let Some(ekey) = arg_str(args, "evidence_key") else {
+        return GateResult::fail("引数 evidence_key が無い");
+    };
+    let Some(jpath) = arg_str(args, "json_path") else {
+        return GateResult::fail("引数 json_path が無い");
+    };
+    let Some(allowed) = arg_str(args, "one_of") else {
+        return GateResult::fail("引数 one_of (カンマ区切り) が無い");
+    };
+    let Some(data) = state.gate_evidence.get(ekey) else {
+        return GateResult::fail(format!("evidence '{ekey}' が未記録"));
+    };
+    let Some(found) = json_path_get(data, jpath) else {
+        return GateResult::fail(format!("evidence '{ekey}' に json_path '{jpath}' が無い"));
+    };
+    let got = found.as_str().map(|s| s.to_string()).unwrap_or_else(|| found.to_string());
+    let allow: Vec<&str> = allowed.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    if allow.iter().any(|a| *a == got) {
+        GateResult::ok(format!("{ekey}.{jpath} = {got} (許可値)"))
+    } else {
+        GateResult::fail(format!("{ekey}.{jpath} = {got} は許可値 {allow:?} に無い"))
+    }
+}
+
 pub(super) fn artifact_registered(args: &toml::Table, state: &State, ctx: &GateCtx) -> GateResult {
     let key = arg_str(args, "name_or_prefix").or_else(|| arg_str(args, "name"));
     let Some(key) = key else {
