@@ -135,11 +135,23 @@ on_reject = {{ after = 3, goto = "implement" }}
 [[node]]
 id = "review"
 skill = "07-review.md"
-# レビューフェーズ ── 最終品質判断の精度が要るため Opus 4.8。
+# レビューフェーズ ── 最終品質判断の精度が要るため Opus 4.8。コード正しさに専念
+# (マスター設計書の作成/修正は次の docdesign node が担う)。
 model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "traceability_closed", args = {{}} }},
   {{ gate = "json_has", args = {{ evidence_key = "review", json_path = "verdict", eq = "approved" }} }},
+]
+next = ["docdesign"]
+on_reject = {{ after = 2, goto = "__human__" }}
+
+[[node]]
+id = "docdesign"
+skill = "09-docdesign.md"
+# 設計書フェーズ ── マスター設計書(architecture/ADR)の作成/修正に専念。設計判断の
+# 言語化と整合維持が要るため Opus 4.8。コード正しさ(review)から分離した終端 phase。
+model = "claude-opus-4-8"
+exit_gates = [
   # master_design_update は「記録の有無」だけでなく中身を強制する:
   # - verdict は updated/noop のいずれか(バグ修正の正当な noop は許すが、no_change 等の逃げ値は排除)
   # - rationale は updated/noop どちらでも必須(なぜ更新したか / なぜ更新不要かを必ず言語化させる)
@@ -155,7 +167,7 @@ exit_gates = [
   {{ gate = "max_lines", args = {{ path = "docs/adr/ADR-*.md", n = 200, allow_empty = true }} }},
 ]
 next = []
-on_reject = {{ after = 2, goto = "__human__" }}
+on_reject = {{ after = 2, goto = "review" }}
 "#,
         lang = d.lang.as_deref().unwrap_or("?"),
         build = d.build.as_deref().unwrap_or("?"),
