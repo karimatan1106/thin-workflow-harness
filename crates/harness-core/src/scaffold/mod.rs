@@ -124,7 +124,7 @@ notes = ""
 
 const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\nstate/*.lock\ntranscripts/\n!state/.gitkeep\n";
 
-/// skill ファイル。全 8 つを `skill_templates/*.md` から `include_str!` で同梱
+/// skill ファイル。全 9 つを `skill_templates/*.md` から `include_str!` で同梱
 /// （fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携を含む operational
 /// template）。harness init で展開された時点で各 skill が実行可能な指示を持つ
 /// default workflow が完成する状態。
@@ -137,4 +137,5 @@ const SKILL_STUBS: &[(&str, &str)] = &[
     ("06-security.md", include_str!("skill_templates/06-security.md")),
     ("07-review.md", include_str!("skill_templates/07-review.md")),
     ("08-join.md", include_str!("skill_templates/08-join.md")),
+    ("09-docdesign.md", include_str!("skill_templates/09-docdesign.md")),
 ];
