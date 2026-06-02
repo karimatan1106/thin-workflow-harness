@@ -80,8 +80,26 @@ exit_gates = [
   {{ gate = "json_has", args = {{ evidence_key = "plan_approval", json_path = "verdict", eq = "approved" }} }},
   {{ gate = "workflow_append_only", args = {{}} }},
 ]
-next = ["characterize"]
+next = ["design-pre"]
 on_reject = {{ after = 3, goto = "research" }}
+
+[[node]]
+id = "design-pre"
+skill = "10-design-pre.md"
+# 実装前設計フェーズ ── SDD の核心「設計を先に書く」。plan の後・実装の前に
+# マスター設計書を先に更新。設計意図の言語化が要るため Opus 4.8。
+model = "claude-opus-4-8"
+exit_gates = [
+  # 実装前に設計を反映 or 既存設計で足りる旨を中身付きで強制 (noop 逃げ・空 rationale 排除)。
+  {{ gate = "evidence_recorded", args = {{ key = "design_pre" }} }},
+  {{ gate = "json_in", args = {{ evidence_key = "design_pre", json_path = "verdict", one_of = "updated,noop" }} }},
+  {{ gate = "json_nonempty", args = {{ evidence_key = "design_pre", json_path = "rationale" }} }},
+  {{ gate = "max_lines", args = {{ path = "docs/architecture/**/*.md", n = 200 }} }},
+  {{ gate = "max_lines", args = {{ path = "docs/adr/INDEX.md", n = 200, allow_empty = true }} }},
+  {{ gate = "max_lines", args = {{ path = "docs/adr/ADR-*.md", n = 200, allow_empty = true }} }},
+]
+next = ["characterize"]
+on_reject = {{ after = 3, goto = "plan" }}
 
 [[node]]
 id = "characterize"
@@ -103,6 +121,8 @@ model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "artifact_registered", args = {{ name_or_prefix = "impl:" }} }},
   {{ gate = "cmd_exit_0", args = {{ cmd = "{test}" }} }},
+  # 実装中の設計上の気づきを design_note evidence に残す(空配列可)。docdesign が参照し反映。
+  {{ gate = "evidence_recorded", args = {{ key = "design_note" }} }},
 ]
 next = ["test"]
 on_reject = {{ after = 3, goto = "plan" }}
