@@ -50,9 +50,12 @@ code quality を確認し、`review` evidence を `approved` で提出する。
    ```
 
 6. **review 結果を evidence で提出** ── exit_gate
-   `json_has review verdict == "approved"` を満たす:
+   `json_has review verdict == "approved"` ＋ `json_nonempty review dimensions` を満たす。
+   単一 verdict でなく **採点 rubric (dimensions)** を必ず付ける（L09/L11: 判断の外部化）。
+   各次元は level (A〜D) と根拠 note を持つ。最低限 correctness / architecture /
+   test_coverage の 3 次元:
    ```
-   harness report-evidence review '{"verdict":"approved","comments":["positive: ..."],"score":"high"}'
+   harness report-evidence review '{"verdict":"approved","dimensions":{"correctness":{"level":"A","note":"全 AC を E2E で確認"},"architecture":{"level":"B","note":"層依存方向 OK・一部 naming 改善余地"},"test_coverage":{"level":"A","note":"F-NNN 全件 test 緑"}},"comments":["positive: ..."]}'
    ```
    issue があるなら `verdict: "rejected"` ＋ `harness back "review issue: ..."` で
    implement や plan に戻す。
@@ -68,6 +71,7 @@ code quality を確認し、`review` evidence を `approved` で提出する。
 
 - `traceability_closed { }` ── 全 F-NNN に artifact ≥1 と exit 0 test ≥1、orphan なし
 - `json_has { evidence_key = "review", json_path = "verdict", eq = "approved" }`
+- `json_nonempty { evidence_key = "review", json_path = "dimensions" }` ── 採点 rubric 必須
 
 マスター設計書系の gate（master_design_update / max_lines / spec_refs_exist）は
 次の docdesign phase に移動した。review はコード正しさに専念する。

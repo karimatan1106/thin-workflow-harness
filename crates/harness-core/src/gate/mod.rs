@@ -1,8 +1,10 @@
-//! gate プリミティブ（Phase 0 ── 16 個）。
+//! gate プリミティブ（20 個）。
 //!
 //! 各 gate は `(ctx, state) -> (ok, note)` の決定論的関数。未知の名前は `ok=false`。
-//! ファイル系は `file_gates`、state 系は `state_gates`、spec/workflow 系は `spec_gates`。
+//! ファイル系は `file_gates`、clean-state は `clean_gates`、state 系は `state_gates`、
+//! spec/workflow 系は `spec_gates`。
 
+mod clean_gates;
 mod file_gates;
 mod glob;
 mod spec_gates;
@@ -75,7 +77,7 @@ impl<'a> GateCtx<'a> {
     }
 }
 
-/// 実装済みの gate プリミティブ名一覧（19 個）。
+/// 実装済みの gate プリミティブ名一覧（20 個）。
 pub fn known_gates() -> &'static [&'static str] {
     &[
         "file_exists",
@@ -84,6 +86,7 @@ pub fn known_gates() -> &'static [&'static str] {
         "lines_not_increased",
         "no_regex",
         "cmd_exit_0",
+        "git_clean",
         "json_has",
         "json_nonempty",
         "json_in",
@@ -126,6 +129,7 @@ pub fn eval_gate(name: &str, args: &toml::Table, state: &State, ctx: &GateCtx) -
         "lines_not_increased" => file_gates::lines_not_increased(args, state, ctx),
         "no_regex" => file_gates::no_regex(args, ctx),
         "cmd_exit_0" => file_gates::cmd_exit_0(args, ctx),
+        "git_clean" => clean_gates::git_clean(args, ctx),
         "json_has" => state_gates::json_has(args, state),
         "json_nonempty" => state_gates::json_nonempty(args, state),
         "json_in" => state_gates::json_in(args, state),

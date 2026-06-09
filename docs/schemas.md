@@ -382,6 +382,7 @@ context = { include = ["none"] }
 | `lines_not_increased` | `path`（glob 文字列 1 個）, `baseline_key` | path の行数が baseline（evidence に記録された値）以下 | `(ok, note)` |
 | `no_regex` | `path`（glob 文字列 1 個。複数 path をチェックしたいなら複数の `no_regex` gate を並べる、または glob で表現する。要確認: 複数 path 指定の構文を入れるかは実装時）, `pattern` | path にマッチするどのファイルのテキストにも pattern がマッチしない | `(ok, note)` |
 | `cmd_exit_0` | `cmd`, `timeout_seconds?` | シェルコマンド cmd を **harness 自身が `request-transition` 時にその場で実行**して exit code が 0。**worker の `report-evidence test_result` 等は申告であって metrics/notes 用の補助 ── 信頼の源泉ではない**（worker が「通った」と嘘をついても harness が再実行するので無意味）。runtime がタイムアウトを適用（既定値、args の `timeout_seconds` で上書き可）。gate コマンドは `workflow.toml` に事前宣言済みなので暗黙的に cmd_allowlist 済み（`DESIGN.md` §7・§16.2・`docs/operations.md` §1） | `(ok, note)` |
+| `git_clean` | `untracked_only?`（bool, 既定 false）, `ignore?`（`\|` 区切りの path パターン。glob は段数厳密で nested は `**/` が要る／glob メタ無しは前方一致） | `git status --porcelain` を harness 自身が実行し working tree が clean（L12 clean handoff の「artifacts 除去」次元）。`untracked_only=true` なら追跡済み変更（正当な実装 diff）は許し未追跡（`??`）残骸だけを fail にする。run が commit しない終端ノードではこちらを使う | `(ok, note)` |
 | `json_has` | `evidence_key`, `json_path`, `eq?` | `gate_evidence[evidence_key]` が存在し `json_path` の値が存在（`eq` 指定時はその値と等しい） | `(ok, note)` |
 | `artifact_registered` | `name_or_prefix` | その名前（または `impl:` のような prefix）の artifact が ≥1 件登録され、全て実在ファイル | `(ok, note)` |
 | `evidence_recorded` | `key` | `gate_evidence[key]` が存在する | `(ok, note)` |

@@ -10,6 +10,8 @@ pub fn render(d: &DetectedProject) -> String {
     let check = ph(d.check.as_deref().or(d.build.as_deref()), "check");
     let test_cmd = ph(d.test.as_deref(), "test");
     let full = ph(d.full_suite.as_deref().or(d.test.as_deref()), "full-suite");
+    // E2E (L10) は unit と層が違うため自動検出しない ── 必ず明示設定させる。
+    let e2e = ph_str("e2e");
     let coverage = ph(d.coverage.as_deref(), "coverage");
     let security = if d.gitleaks_available {
         "gitleaks detect --no-git --redact".to_string()
@@ -133,8 +135,12 @@ skill = "05-test.md"
 # テストフェーズ ── 機械的作業が中心なので Sonnet 4.6 (default 据え置き)。
 model = "claude-sonnet-4-6"
 # baseline (test_count_baseline) は最初の run で確立される ── 無い間は count_non_decreasing は実質緩い
+# L10: unit (full-suite) と E2E は検出層が違う。E2E は component 境界欠陥 (interface
+#   不一致 / state 伝播 / resource lifecycle / 環境依存) を捕まえる別ゲート。`{e2e}` を
+#   実 E2E コマンドに差し替えること (未設定だと `false # configure ...` で fail する)。
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{full}" }} }},
+  {{ gate = "cmd_exit_0", args = {{ cmd = "{e2e}" }} }},
   {{ gate = "count_non_decreasing", args = {{ evidence_key = "test_count", baseline_key = "test_count_baseline" }} }},
 ]
 next = ["security"]
@@ -161,6 +167,10 @@ model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "traceability_closed", args = {{}} }},
   {{ gate = "json_has", args = {{ evidence_key = "review", json_path = "verdict", eq = "approved" }} }},
+  # L09/L11: 単一 verdict の自己申告でなく、採点 rubric を構造として強制する。
+  # review evidence は dimensions (correctness/architecture/test_coverage を最低限
+  # スコア付き) を必ず含むこと ── 「動いて見える」を「次元別に評価した」へ外部化する。
+  {{ gate = "json_nonempty", args = {{ evidence_key = "review", json_path = "dimensions" }} }},
 ]
 next = ["docdesign"]
 on_reject = {{ after = 2, goto = "__human__" }}
@@ -185,6 +195,10 @@ exit_gates = [
   {{ gate = "max_lines", args = {{ path = "docs/architecture/**/*.md", n = 200 }} }},
   {{ gate = "max_lines", args = {{ path = "docs/adr/INDEX.md", n = 200, allow_empty = true }} }},
   {{ gate = "max_lines", args = {{ path = "docs/adr/ADR-*.md", n = 200, allow_empty = true }} }},
+  # L12 clean handoff: 終端で working tree に debug/temp/orphan な未追跡残骸が
+  # 無いことを保証する (artifacts 除去 次元)。untracked_only=true で正当な実装 diff
+  # (追跡済み変更) は許し、未追跡ゴミだけを咎める。ビルド生成物等は ignore に足す。
+  {{ gate = "git_clean", args = {{ untracked_only = true, ignore = "target|node_modules|dist|.harness/state" }} }},
 ]
 next = []
 on_reject = {{ after = 2, goto = "review" }}
@@ -196,6 +210,7 @@ on_reject = {{ after = 2, goto = "review" }}
         mandatory = mandatory,
         coverage = toml_escape(&coverage),
         full = toml_escape(&full),
+        e2e = toml_escape(&e2e),
         security = toml_escape(&security),
         spec_glob = spec_glob,
     )

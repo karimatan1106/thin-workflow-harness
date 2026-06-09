@@ -39,6 +39,15 @@
    cargo test --workspace 2>&1 | tail -10
    ```
 
+5b. **E2E を別層として実行（L10・必須 gate）** ── unit は依存を mock するため
+   component 境界の欠陥（interface 不一致 / state 伝播 / resource lifecycle /
+   環境依存）を構造的に見逃す。これらは E2E でしか出ない。`{e2e}` gate に実 E2E
+   コマンド（アプリ起動→クリティカルパス実行）を設定し exit 0 を確認する:
+   ```
+   <E2E コマンド例: docker compose up + クリティカルパス curl / playwright test>
+   ```
+   失敗時のエラーメッセージは ERROR（何が失敗）+ WHY（原則）+ FIX（手順）形式で残す。
+
 6. **test 結果 evidence を提出**:
    ```
    harness report-evidence test_result '{"command":"cargo test","exit_code":0,"covered_count":N}'
@@ -57,9 +66,11 @@
 - `cmd_exit_0 <full-suite-cmd>` ── 結合スイートが exit 0 で通る
   （`harness init` で検出された full-suite コマンド、未設定なら
   `false # configure full-suite ...` で必ず fail する ── 埋めること）
+- `cmd_exit_0 <e2e-cmd>` ── **E2E が exit 0 で通る（L10・必須）**。unit と層が違う
+  別 gate。未設定なら `false # configure e2e ...` で必ず fail する ── 埋めること
 - `count_non_decreasing { evidence_key="test_count", baseline_key="test_count_baseline" }`
   ── テスト数が縮んでいない（baseline は最初の run で確立される）
-- （あれば）`cmd_exit_0 "<E2E-script>"` / `cmd_exit_0 "cargo llvm-cov --fail-under-lines 95"`
+- （あれば）`cmd_exit_0 "cargo llvm-cov --fail-under-lines 95"`
 - （あれば）`evidence_recorded test_result` ── 上の `report-evidence` で pass
 
 満たしたら `harness request-transition security`（または `review`、ワークフロー次第）。
