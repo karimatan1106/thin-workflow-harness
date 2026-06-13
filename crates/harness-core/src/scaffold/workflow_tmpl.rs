@@ -174,11 +174,14 @@ skill = "07-review.md"
 model = "claude-opus-4-8"
 exit_gates = [
   {{ gate = "traceability_closed", args = {{}} }},
-  {{ gate = "json_has", args = {{ evidence_key = "review", json_path = "verdict", eq = "approved" }} }},
-  # L09/L11: 単一 verdict の自己申告でなく、採点 rubric を構造として強制する。
-  # review evidence は dimensions (correctness/architecture/test_coverage を最低限
-  # スコア付き) を必ず含むこと ── 「動いて見える」を「次元別に評価した」へ外部化する。
-  {{ gate = "json_nonempty", args = {{ evidence_key = "review", json_path = "dimensions" }} }},
+  # review を 2 軸 (Standards / Spec) に分離し相互汚染を防ぐ (to-issues/review 由来)。各軸が独立に
+  # approved でないと advance できない ── 「標準は満たすが要件を取り違えた」型 misalignment が単軸 verdict に隠れない。
+  {{ gate = "json_has", args = {{ evidence_key = "standards_review", json_path = "verdict", eq = "approved" }} }},
+  {{ gate = "json_has", args = {{ evidence_key = "spec_review", json_path = "verdict", eq = "approved" }} }},
+  {{ gate = "json_nonempty", args = {{ evidence_key = "spec_review", json_path = "per_requirement" }} }},
+  # deletion test (Ousterhout depth ヒューリスティック / improve-codebase-architecture 由来): 触った
+  # module を消したら複雑性が消えるか(=浅い pass-through=却下)を CKG impacted-by 実測込みで評価し記録。
+  {{ gate = "evidence_recorded", args = {{ key = "deletion_test" }} }},
 ]
 next = ["docdesign"]
 on_reject = {{ after = 2, goto = "__human__" }}

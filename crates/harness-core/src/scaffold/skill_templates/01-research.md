@@ -14,6 +14,12 @@
   `CONTEXT.md`、複数は root の `CONTEXT-MAP.md` 検出。**lazy**(捕捉すべき用語が出た時だけ作る)。
 - **具体シナリオでエッジを突く** ── 概念の境界を例で強制的に明らかにする。
 - **述べた挙動を実装と照合** ── 矛盾を表に出す。
+- **既却下案の確認(`.harness/out-of-scope/`)** ── 着手前にここを見て、同型の要求/アプローチが過去に却下
+  されていないか確認(triage 由来)。死蔵案の再調査を避ける。新たに却下が確定したら `.harness/out-of-scope/<slug>.md`
+  (却下理由 + ADR/根拠リンク)に記録して残す ── 次回の research が参照する永続メモリ。
+- **捨てプロトタイプ可** ── 状態モデル/UI 体裁が紙で詰まらない時は research 内で捨てコードを書いてよい(prototype 由来):
+  冒頭に PROTOTYPE/捨てと明記・1コマンド起動・永続化やテストや抽象化はしない。得た**答え(問い+verdict)だけ**を
+  spec.toml の rationale か research_notes に蒸留し、足場は spec 確定前に削除(git_clean gate が残骸を咎める)。
 - 出口で用語集の状態を evidence に残す:
   ```
   harness report-evidence context_glossary '{"verdict":"created|updated|noop","rationale":"...","terms":["..."]}'
@@ -90,9 +96,11 @@
 4. **不変条件の特定**（何を壊しちゃダメか）── 各々 `[[invariant]]`（INV-N）として
    `spec.toml` に書き、それぞれに `test` を紐づける。不確かなら `harness ask` で訊く。
 
-5. **受入基準** ── 各々 `[[acceptance]]`（AC-N、`requirement` に紐づく F-ID＋`test` 1 つ）。
-   「all AC テスト green」≡「意図した変更」になる程度に具体的に書く。曖昧な AC は smell
-   （テスト化できない AC は AC でない）。
+5. **受入基準 + test seam 宣言** ── 各々 `[[acceptance]]`（AC-N、`requirement` に紐づく F-ID＋`test` 1 つ）。
+   「all AC テスト green」≡「意図した変更」になる程度に具体的に書く。さらに各 AC に **検証 seam を実装前に宣言**
+   する(to-prd 由来): `seam = { kind = "existing|new", level = "e2e|integration|unit", locator = "<既存テスト/モジュール名>" }`。
+   **既存 seam を優先し、可能な限り高い(external behavior に近い)レベル**を選ぶ。新 seam が要るなら最高レベルで提案し
+   `harness ask` で確認。file path でなくシンボル/モジュール名で書く。曖昧な AC は smell（テスト化できない AC は AC でない）。
 
 6. **残った曖昧さ** ── `??` で `spec.toml` 本文に書き、`harness ask` で潰す。
    **決定を訊け、情報を訊くな** ── コードで分かることは自分で見つけよ、人間に訊くのは
@@ -137,6 +145,9 @@
 harness stuck "<理由>"
 ```
 harness が `node_aborted` を書いて人間に回す。
+
+人間に回す/別セッションへ引き継ぐ時は event log 任せにせず **actionable な digest** を残す(handoff 由来):
+未了 blocker・保留中の決定・next steps・次に goto すべきノード ID を 1 行ずつ。artifact は再掲せずパス参照、機密は除去。
 
 ## 禁止
 

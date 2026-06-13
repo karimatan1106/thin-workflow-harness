@@ -19,9 +19,10 @@
    harness artifact plan              # plan の本文を取得
    ```
 
-2. **AC ↔ test の対応を確定** ── 各 AC-N に対応する test 1 本を実装する。AC が
-   テスト化できない（具体性不足）なら spec が不完全 ── `harness back "AC が抽象的: ..."`
-   で research に戻す。
+2. **AC ↔ test の対応を確定** ── 各 AC-N に対応する test 1 本を、**research で宣言した seam**
+   (`[[acceptance]].seam` の kind/level/locator、to-prd 由来)で実装する。宣言と異なる seam で書きたく
+   なったら spec が不完全 ── `harness back "seam 不一致: ..."` で research に戻す。AC が
+   テスト化できない（具体性不足）なら `harness back "AC が抽象的: ..."` で research に戻す。
 
 3. **既存 test の baseline を取る** ── characterize 開始時点の test 総数を記録:
    ```

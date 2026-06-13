@@ -30,6 +30,10 @@ pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), Strin
     write_file(&harness_dir.join("spec.toml"), SPEC_TEMPLATE)?;
     write_file(&harness_dir.join(".gitignore"), GITIGNORE)?;
     write_file(&state.join(".gitkeep"), "")?;
+    // triage の .out-of-scope: 既却下の要求/アプローチを永続記録し、research が着手前に参照する (死蔵案の再調査回避)。
+    let oos = harness_dir.join("out-of-scope");
+    fs::create_dir_all(&oos).map_err(|e| io_err(&oos, e))?;
+    write_file(&oos.join(".gitkeep"), "")?;
     for (name, body) in SKILL_STUBS {
         write_file(&skills.join(name), body)?;
     }

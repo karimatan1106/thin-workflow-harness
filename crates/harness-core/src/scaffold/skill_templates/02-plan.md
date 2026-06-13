@@ -39,7 +39,11 @@ option の先頭に含める)で詰め、回答を待ってから次へ。コー
 
 3. **分解**（計画が大きければ）── `F-007` を blast radius が互いに素な `F-007.1`（ファイル
    A,B）/ `F-007.2`（ファイル C,D）に分解 → `spec.toml` に追記し、`workflow.toml` に並列
-   ノード（`fork` / `join`）を追加する。plan ノードは `can_append = true` なので
+   ノード（`fork` / `join`）を追加する。**各 fork は vertical slice にする**(to-issues 由来): 各 `F-NNN.x` は
+   (a) 自分の AC 部分集合を持ち **単体で全 green になる縦切り**(=兄弟 slice 無しでは AC が通らない切り方=
+   横切り[片レイヤだけ]の smell として却下)、(b) blast radius が demoable な end-to-end 経路を成すこと。
+   横切りは `traceability_closed`(各 slice に exit0 test ≥1)と `blast_radius_disjoint` が機械的に弾く。
+   plan ノードは `can_append = true` なので
    `workflow.toml` に新規ノード追加可 ── ただし `workflow_append_only` の範囲内のみ
    （既存ノード・既存 gate を弱められない／変えられるのは未到達ノードへの配線追加だけ／
    新規ノードは `[meta].mandatory_gates` を満たすこと）。判断に迷うときは `harness ask`。
