@@ -5,6 +5,7 @@
 //! skill 文面の同梱方法は実装で確定するため、ここではプレースホルダ＋参照案内のみ。
 
 mod docs_tmpl;
+mod regression_tmpl;
 mod workflow_tmpl;
 
 use std::fs;
@@ -32,6 +33,13 @@ pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), Strin
     for (name, body) in SKILL_STUBS {
         write_file(&skills.join(name), body)?;
     }
+
+    // 回帰 gate (言語非依存・config 駆動) を同梱: 検出から suites を生成し、runner を bin/ に置く。
+    // test ノードの cmd_exit_0 が `node bin/regression_gate.mjs` でこれを毎回 再実行する。
+    let bin = harness_dir.join("bin");
+    fs::create_dir_all(&bin).map_err(|e| io_err(&bin, e))?;
+    write_file(&bin.join("regression_gate.mjs"), REGRESSION_GATE_MJS)?;
+    write_file(&harness_dir.join("regression_suites.json"), &regression_tmpl::render(d))?;
 
     // docs/ skeleton (repo root に生成、 既存があれば skip)
     if let Some(repo_root) = harness_dir.parent() {
@@ -79,6 +87,9 @@ pub fn write_security_layout(harness_dir: &Path) -> Result<(), String> {
 const SECURITY_WORKFLOW: &str = include_str!("templates/security_workflow.toml");
 const SECURITY_SKILL: &str = include_str!("templates/security_skill.md");
 
+/// 回帰 gate ツール（言語非依存・config 駆動。`tool_templates/regression_gate.mjs` を同梱）。
+const REGRESSION_GATE_MJS: &str = include_str!("tool_templates/regression_gate.mjs");
+
 fn io_err(p: &Path, e: std::io::Error) -> String {
     format!("{} 操作失敗: {e}", p.display())
 }
@@ -122,7 +133,8 @@ by = ""
 notes = ""
 "#;
 
-const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\nstate/*.lock\ntranscripts/\n!state/.gitkeep\n";
+// 回帰 baseline (state/regression_baseline.json) は蓄積の永続記録なので git 追跡する (明示 negate)。
+const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\nstate/*.lock\ntranscripts/\n!state/.gitkeep\n!state/regression_baseline.json\n";
 
 /// skill ファイル。全 10 個を `skill_templates/*.md` から `include_str!` で同梱
 /// （fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携を含む operational

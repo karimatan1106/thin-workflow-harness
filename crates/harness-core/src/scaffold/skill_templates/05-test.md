@@ -15,14 +15,12 @@
    `[meta].mandatory_gates` にある場合は、regression test を足したあとでビルドを壊して
    いないかも確認する。
 
-2. **既存 test suite を実行** ── 言語に応じた既定コマンド例:
+2. **回帰 gate を実機で確認** ── `regression_suites.json` の全スイートを実行し baseline と比較:
    ```
-   cargo test --workspace           # Rust
-   cargo nextest run                # Rust（並列）
-   pnpm test                        # Node.js / TypeScript
-   pytest                           # Python
+   node bin/regression_gate.mjs            # 全スイート (反復中は --fast / --only <name> で部分実行)
    ```
-   exit code と failed test を抽出。
+   個別スイートは config の cmd を直接叩いてもよい（例 `cargo test` / `pnpm exec vitest run` /
+   `pytest --color=no -q` / `go test -v ./...`）。落ちた行の pass/fail 差分を見て次へ。
 
 3. **テスト失敗時** ── 直接編集で取り繕わない。implement へ戻す:
    ```
@@ -59,19 +57,22 @@
    harness record-artifact test_report <path> --tag pass
    ```
 
-## 完了条件（exit_gates）
+## 完了条件（exit_gates）── 回帰 gate（決定論・config 駆動・蓄積）
 
-このノードの出口 gate（`workflow.toml` の `[[node]] id = "test"` を参照）:
+このノードの出口 gate（`workflow.toml` の `[[node]] id = "test"`）:
 
-- `cmd_exit_0 <full-suite-cmd>` ── 結合スイートが exit 0 で通る
-  （`harness init` で検出された full-suite コマンド、未設定なら
-  `false # configure full-suite ...` で必ず fail する ── 埋めること）
-- `cmd_exit_0 <e2e-cmd>` ── **E2E が exit 0 で通る（L10・必須）**。unit と層が違う
-  別 gate。未設定なら `false # configure e2e ...` で必ず fail する ── 埋めること
-- `count_non_decreasing { evidence_key="test_count", baseline_key="test_count_baseline" }`
-  ── テスト数が縮んでいない（baseline は最初の run で確立される）
-- （あれば）`cmd_exit_0 "cargo llvm-cov --fail-under-lines 95"`
-- （あれば）`evidence_recorded test_result` ── 上の `report-evidence` で pass
+- `cmd_exit_0 "node bin/regression_gate.mjs"` ── **harness 自身が再実行する回帰 gate**。
+  `regression_suites.json`(SSOT) の全スイートを実機実行し `state/regression_baseline.json` と比較し、
+  各スイートで **pass ≥ floor-tol かつ fail ≤ ceiling+tol** を満たさなければ exit≠0 → advance 不可。
+  既知の pre-existing 失敗は baseline に織込み済で、**新規失敗（pass 減 / fail 増 / ビルド不能 /
+  スイート崩壊）が 1 件でもあれば落ちる**。runner はプリセット(vitest/cargo/jest/pytest/go/dotnet/maven)を
+  選ぶか pass/fail スペックを直書きする ── 抽出は config 駆動で harness のコードは言語非依存。
+- `cmd_exit_0 <e2e-cmd>` ── **E2E が exit 0（L10・必須）**。unit と層が違う別 gate。未設定なら fail。
+
+**回帰したら** `harness back "regression: <スイート名と差分>"` で implement に戻して直す。
+**baseline を緩めて通すのは禁止**（下の意図的変更を除く）。**スイート構成/期待値を意図的に変えた時のみ** baseline 更新:
+- `node bin/regression_gate.mjs --update`  現状値で上書き（再 baseline）
+- `node bin/regression_gate.mjs --ratchet`  pass floor 引上げ・fail ceiling 引下げのみ（単調強化=蓄積。旧 `count_non_decreasing` を内包）
 
 満たしたら `harness request-transition security`（または `review`、ワークフロー次第）。
 

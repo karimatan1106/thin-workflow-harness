@@ -9,7 +9,6 @@ use crate::detect::DetectedProject;
 pub fn render(d: &DetectedProject) -> String {
     let check = ph(d.check.as_deref().or(d.build.as_deref()), "check");
     let test_cmd = ph(d.test.as_deref(), "test");
-    let full = ph(d.full_suite.as_deref().or(d.test.as_deref()), "full-suite");
     // E2E (L10) は unit と層が違うため自動検出しない ── 必ず明示設定させる。
     let e2e = ph_str("e2e");
     let coverage = ph(d.coverage.as_deref(), "coverage");
@@ -134,14 +133,16 @@ id = "test"
 skill = "05-test.md"
 # テストフェーズ ── 機械的作業が中心なので Sonnet 4.6 (default 据え置き)。
 model = "claude-sonnet-4-6"
-# baseline (test_count_baseline) は最初の run で確立される ── 無い間は count_non_decreasing は実質緩い
-# L10: unit (full-suite) と E2E は検出層が違う。E2E は component 境界欠陥 (interface
-#   不一致 / state 伝播 / resource lifecycle / 環境依存) を捕まえる別ゲート。`{e2e}` を
-#   実 E2E コマンドに差し替えること (未設定だと `false # configure ...` で fail する)。
+# 回帰 gate (決定論・config 駆動・蓄積): bin/regression_gate.mjs が regression_suites.json の全スイートを
+#   実機実行し state/regression_baseline.json と比較。各スイートで pass>=floor-tol かつ fail<=ceiling+tol を
+#   満たさなければ exit!=0 → advance 不可 (baseline 比 新規失敗ゼロを毎回強制、既知失敗は baseline に織込み)。
+#   harness は gate cmd を cwd=.harness で実行するためパスは `bin/...`。意図的変更時のみ
+#   `node bin/regression_gate.mjs --update`(再baseline) / `--ratchet`(floor 引上げ=蓄積)。
+# L10: E2E は unit と層が違う別 gate。`{e2e}` を実 E2E コマンドに差し替えること
+#   (component 境界欠陥: interface 不一致 / state 伝播 / resource lifecycle / 環境依存。未設定だと fail)。
 exit_gates = [
-  {{ gate = "cmd_exit_0", args = {{ cmd = "{full}" }} }},
+  {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/regression_gate.mjs" }} }},
   {{ gate = "cmd_exit_0", args = {{ cmd = "{e2e}" }} }},
-  {{ gate = "count_non_decreasing", args = {{ evidence_key = "test_count", baseline_key = "test_count_baseline" }} }},
 ]
 next = ["security"]
 on_reject = {{ after = 3, goto = "implement" }}
@@ -209,7 +210,6 @@ on_reject = {{ after = 2, goto = "review" }}
         lint = d.lint.as_deref().unwrap_or("?"),
         mandatory = mandatory,
         coverage = toml_escape(&coverage),
-        full = toml_escape(&full),
         e2e = toml_escape(&e2e),
         security = toml_escape(&security),
         spec_glob = spec_glob,
