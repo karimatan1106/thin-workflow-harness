@@ -65,6 +65,11 @@ exit_gates = [
   {{ gate = "evidence_recorded", args = {{ key = "master_design_reviewed" }} }},
   {{ gate = "json_in", args = {{ evidence_key = "master_design_reviewed", json_path = "verdict", one_of = "reviewed,absent,partial" }} }},
   {{ gate = "json_nonempty", args = {{ evidence_key = "master_design_reviewed", json_path = "arc42_sections_read" }} }},
+  # context_glossary (CONTEXT.md 用語集) の grilling 結果を中身付きで強制 (grill-with-docs 方式。
+  # plan モードの代わり)。verdict=created/updated/noop、rationale 必須 (noop でも「なぜ更新不要か」)。
+  {{ gate = "evidence_recorded", args = {{ key = "context_glossary" }} }},
+  {{ gate = "json_in", args = {{ evidence_key = "context_glossary", json_path = "verdict", one_of = "created,updated,noop" }} }},
+  {{ gate = "json_nonempty", args = {{ evidence_key = "context_glossary", json_path = "rationale" }} }},
 ]
 next = ["plan"]
 on_reject = {{ after = 3, goto = "__human__" }}

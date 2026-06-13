@@ -5,6 +5,21 @@
 ── ここで over-ask しろ、間違った実装より安い。決まったら即 `spec.toml` に書いて context
 から出す（spec は結晶化した壁打ち）。
 
+## grilling 方式（grill-with-docs）── 壁打ちの規律
+
+- **1 問ずつ** `harness ask`(推奨答えを option 先頭に含める)で詰め、`answer` を待ってから次へ。決定木を順に解く。
+- **訊く前にコードを見る** ── コードで答えられる問いは `harness-lspd query` / Read で確認する。
+- **曖昧/過負荷の語を即指摘し正典名を提案** ── 解決した語は `CONTEXT.md`(ドメイン用語集、形式は
+  `docs/CONTEXT-FORMAT.md`)に **その場で追記**(バッチにしない)。実装詳細は入れない。単一は root の
+  `CONTEXT.md`、複数は root の `CONTEXT-MAP.md` 検出。**lazy**(捕捉すべき用語が出た時だけ作る)。
+- **具体シナリオでエッジを突く** ── 概念の境界を例で強制的に明らかにする。
+- **述べた挙動を実装と照合** ── 矛盾を表に出す。
+- 出口で用語集の状態を evidence に残す:
+  ```
+  harness report-evidence context_glossary '{"verdict":"created|updated|noop","rationale":"...","terms":["..."]}'
+  ```
+  `verdict` = `created`(新規作成) / `updated`(追記) / `noop`(ドメイン語彙の更新不要 ── 理由を rationale に必ず書く)。
+
 ## 順序
 
 1. **意図の言い直し**（最初、コードを読む前）── 生の intent（`harness status` に出る）を
@@ -107,6 +122,8 @@
 - `json_has human_approval verdict == "approved"` ── 上の `report-evidence` で pass
 - `evidence_recorded master_design_reviewed` ── 既存マスター設計書の読了/不在宣言が
   記録済み（step 2 の `report-evidence`）
+- `evidence_recorded context_glossary` + `json_in verdict ∈ created/updated/noop` +
+  `json_nonempty rationale` ── 用語集(CONTEXT.md)の grilling 結果が記録済み（上の grilling 方式）
 - （あれば）`blast_radius_declared` ── 各 F-NNN に `files` ≥1
 
 満たしたら `harness request-transition plan`。却下 (`advance_rejected`) されたら

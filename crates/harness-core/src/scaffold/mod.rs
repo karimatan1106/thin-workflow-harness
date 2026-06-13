@@ -60,6 +60,12 @@ pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), Strin
                 println!("[WARN] docs skeleton 生成失敗: {e}");
             }
         }
+        // CONTEXT.md 用語集の形式ガイドを配布 (research/plan の grilling が参照。CONTEXT.md 本体は lazy)。
+        let cf = repo_root.join("docs").join("CONTEXT-FORMAT.md");
+        if let Some(p) = cf.parent() {
+            let _ = fs::create_dir_all(p);
+        }
+        write_file(&cf, CONTEXT_FORMAT)?;
     }
 
     Ok(())
@@ -89,6 +95,9 @@ const SECURITY_SKILL: &str = include_str!("templates/security_skill.md");
 
 /// 回帰 gate ツール（言語非依存・config 駆動。`tool_templates/regression_gate.mjs` を同梱）。
 const REGRESSION_GATE_MJS: &str = include_str!("tool_templates/regression_gate.mjs");
+
+/// CONTEXT.md(ドメイン用語集)形式ガイド。research/plan の grilling が `docs/CONTEXT-FORMAT.md` を参照する。
+const CONTEXT_FORMAT: &str = include_str!("templates/CONTEXT-FORMAT.md");
 
 fn io_err(p: &Path, e: std::io::Error) -> String {
     format!("{} 操作失敗: {e}", p.display())
