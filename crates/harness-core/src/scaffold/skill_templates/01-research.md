@@ -17,8 +17,8 @@
 
    **2-a. 索引を読む**（frontmatter で relevance 判定、 本文は読まない）
    ```
-   harness outline docs/architecture/README.md     # arc42 全体 ToC
-   harness outline docs/adr/INDEX.md               # ADR 一覧 + status
+   Read docs/architecture/README.md                # arc42 全体 ToC (md は Read。CKG outline は code 用)
+   Read docs/adr/INDEX.md                          # ADR 一覧 + status
    ```
    無ければスキップ（review で初稿を起こす想定として宣言）。
 
@@ -30,7 +30,7 @@
 
    **2-c. 該当 ADR の Decision/Consequences/Review Trigger を確認**
    ```
-   harness outline docs/adr/ADR-NNN-<slug>.md
+   Read docs/adr/ADR-NNN-<slug>.md
    ```
    INDEX.md の link 表から該当 ADR を pinpoint。 関係ない ADR は読まない。
 
@@ -56,15 +56,17 @@
    `verdict` は `"reviewed"`（既存 master あり） / `"absent"`（master 未整備、 review で初稿） /
    `"partial"`（一部のみ存在） のいずれか。
 
-3. **scope（blast radius の発見）** ── CKG (Code Knowledge Graph) tool で候補集合を作る:
+3. **scope（blast radius の発見）** ── CKG (Code Knowledge Graph) tool で候補集合を作る。
+   CKG は別バイナリ `harness-lspd`（LSP 経由・多言語）。未導入なら `harness setup-ckg` で
+   検出言語の LSP サーバ + harness-lspd を入れる（opt-in）。`harness doctor` が有無を点検する:
    ```
-   harness outline <file>                          # アウトライン（本体ではない）
-   harness find-symbol <name>                      # シンボル位置
-   harness closure <sym> --depth N                 # 呼び出し下流
-   harness impacted-by <sym>                       # 署名変更時の上流影響
-   harness show-symbol <sym>                       # 本体（少数の触りそうなシンボルだけ）
+   harness-lspd query outline <file>               # アウトライン（本体ではない）
+   harness-lspd query symbol <name>                # シンボル位置
+   harness-lspd query closure <sym> --depth N      # 呼び出し下流
+   harness-lspd query impacted-by <sym>            # 署名変更時の上流影響
+   harness-lspd query refs <sym>                   # 参照箇所（本体は file:line を Read で読む）
    ```
-   grep は使わない（位置でなくテキストが返り context が膨らむ）。候補集合を
+   grep は補助（位置でなくテキストが返り context が膨らむため、構造クエリを優先）。候補集合を
    `requirement.files` のドラフトにして人間に確認:
    ```
    harness ask "blast radius はこれで漏れは?" --option "OK" --option "漏れあり"

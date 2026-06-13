@@ -15,11 +15,10 @@
    harness status                     # 現ノードの保留 gate・担当 F-NNN
    harness spec <F-NNN>               # 該当 F-NNN の requirement / AC / invariant
    ```
-   必要なら構造を再確認（本体は読まない、形だけ）:
+   必要なら構造を再確認（CKG=harness-lspd、未導入なら `harness setup-ckg`。本体は読まない、形だけ）:
    ```
-   harness outline <file>
-   harness deps <module>
-   harness closure <sym> --depth N
+   harness-lspd query outline <file>
+   harness-lspd query closure <sym> --depth N
    ```
 
 2. **`plan` artifact（≤200 行）を書く** ── 最低限以下を含めること:

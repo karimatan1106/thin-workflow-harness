@@ -2,6 +2,10 @@
 members = [
     "crates/harness-core",
     "crates/harness",
+    # CKG ツール (別バイナリ harness-lspd)。harness 本体は CKG を「提供」せず L0 を維持しつつ、
+    # 保守対象の workspace member として一緒にビルド/テスト/install できるよう昇格 (旧 examples/skill-tools-archive)。
+    "crates/harness-ckg",
+    "crates/lsp-daemon",
 ]
 exclude = [
     "crates/harness/tests/fixtures/repo_rust",

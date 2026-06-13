@@ -146,7 +146,26 @@ pub fn cmd_doctor(dir: Option<&str>, full: bool) -> Result<(), String> {
         }
     }
 
-    println!("[OK] CKG 未設定 (Phase 1.5 で導入予定)");
+    // CKG: 検出言語の LSP サーバ + harness-lspd の有無を検査し、無ければ setup-ckg を推奨（install はしない）。
+    match detect(&target).lang.as_deref().and_then(|l| ckg_server_for(l).ok().map(|(s, _)| (l.to_string(), s))) {
+        Some((lang, server)) => {
+            let server_ok = path_has(server);
+            let lspd_ok = path_has("harness-lspd");
+            if server_ok && lspd_ok {
+                println!("[OK] CKG: LSP サーバ {server} + harness-lspd あり (lang={lang})");
+            } else {
+                warns += 1;
+                if !server_ok {
+                    println!("[WARN] CKG: LSP サーバ {server} が PATH に無い (lang={lang})");
+                }
+                if !lspd_ok {
+                    println!("[WARN] CKG: harness-lspd が PATH に無い");
+                }
+                println!("  → `harness setup-ckg` で install (opt-in)");
+            }
+        }
+        None => println!("[OK] CKG: 言語未検出/未対応のためスキップ"),
+    }
 
     println!("\n結果: errors={errors} warns={warns}");
     if errors > 0 {
@@ -154,6 +173,74 @@ pub fn cmd_doctor(dir: Option<&str>, full: bool) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+/// `harness setup-ckg [<dir>] [--lang ...]` ── CKG コード検索を opt-in でセットアップ。
+/// 検出言語の LSP サーバ (rust-analyzer/gopls/...) と harness-lspd を install する。冪等。
+/// harness 本体は CKG を「提供」しないが (L0)、別バイナリ harness-lspd の導入を補助する。
+pub fn cmd_setup_ckg(dir: Option<&str>, lang_override: Option<&str>) -> Result<(), String> {
+    let target = resolve_dir(dir)?;
+    let lang = match lang_override {
+        Some(l) => l.to_ascii_lowercase(),
+        None => detect(&target)
+            .lang
+            .ok_or_else(|| "言語検出に失敗。--lang <rust|typescript|python|go> を指定してください".to_string())?,
+    };
+    let (server, install_cmd) = ckg_server_for(&lang)?;
+    println!("CKG セットアップ: 言語={lang}");
+
+    // 1. LSP サーバ（無ければ install）。
+    if path_has(server) {
+        println!("[OK] LSP サーバ {server} は既に PATH にある");
+    } else {
+        println!("[..] LSP サーバを install: {install_cmd}");
+        if !shell_run(install_cmd, &target)? {
+            return Err(format!("LSP サーバ install 失敗 ── 手動で実行: {install_cmd}"));
+        }
+        println!("[OK] {server} install 完了");
+    }
+
+    // 2. harness-lspd（無ければ workspace source から cargo install）。
+    if path_has("harness-lspd") {
+        println!("[OK] harness-lspd は既に PATH にある");
+    } else {
+        let src = lspd_source_path();
+        let cmd = format!("cargo install --path \"{src}\" --bin harness-lspd");
+        println!("[..] harness-lspd を install: {cmd}");
+        if !shell_run(&cmd, &target)? {
+            return Err(format!("harness-lspd install 失敗 ── 手動: {cmd}"));
+        }
+        println!("[OK] harness-lspd install 完了");
+    }
+
+    println!(
+        "\n[OK] CKG セットアップ完了。skill から `harness-lspd query symbol|refs|callers|closure|impacted-by|tested-by|outline ...` が使える。"
+    );
+    Ok(())
+}
+
+/// 言語 → (LSP サーバ実行ファイル名, install コマンド)。CKG 対応言語の正典。
+fn ckg_server_for(lang: &str) -> Result<(&'static str, &'static str), String> {
+    match lang {
+        "rust" => Ok(("rust-analyzer", "rustup component add rust-analyzer")),
+        "typescript" | "javascript" | "node" => Ok((
+            "typescript-language-server",
+            "npm i -g typescript-language-server typescript",
+        )),
+        "python" => Ok(("pyright-langserver", "npm i -g pyright")),
+        "go" => Ok(("gopls", "go install golang.org/x/tools/gopls@latest")),
+        other => Err(format!("CKG 未対応の言語: {other} (rust|typescript|python|go)")),
+    }
+}
+
+/// harness-lspd の source パス。ビルド時の manifest dir から workspace の lsp-daemon を導出。
+/// `HARNESS_SRC` env で workspace root を上書き可。
+fn lspd_source_path() -> String {
+    if let Ok(s) = std::env::var("HARNESS_SRC") {
+        return format!("{s}/crates/lsp-daemon");
+    }
+    // CARGO_MANIFEST_DIR = <ws>/crates/harness-core → ../lsp-daemon = <ws>/crates/lsp-daemon
+    format!("{}/../lsp-daemon", env!("CARGO_MANIFEST_DIR"))
 }
 
 fn check_cmd_gate(gs: &GateSpec, cwd: &Path, full: bool, warns: &mut usize) {

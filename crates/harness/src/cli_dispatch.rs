@@ -61,5 +61,8 @@ pub fn dispatch(command: Command) -> Result<(), String> {
             handlers_install::cmd_install(&git_url, dest.as_deref(), force)
         }
         Command::Doctor { dir, full } => handlers_init::cmd_doctor(dir.as_deref(), full),
+        Command::SetupCkg { dir, lang } => {
+            handlers_init::cmd_setup_ckg(dir.as_deref(), lang.as_deref())
+        }
     }
 }

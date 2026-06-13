@@ -156,6 +156,13 @@ pub enum Command {
     },
     /// `.harness/` の健全性チェック（validate + gate cmd + skill ファイル）。
     Doctor { dir: Option<String>, #[arg(long)] full: bool },
+    /// CKG コード検索を opt-in でセットアップ（検出言語の LSP サーバ + harness-lspd を install）。
+    SetupCkg {
+        dir: Option<String>,
+        /// 言語を明示（auto 検出を上書き）。rust|typescript|python|go。
+        #[arg(long)]
+        lang: Option<String>,
+    },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。
