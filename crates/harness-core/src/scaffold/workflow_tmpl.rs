@@ -129,6 +129,8 @@ exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{test}" }} }},
   # 実装中の設計上の気づきを design_note evidence に残す(空配列可)。docdesign が参照し反映。
   {{ gate = "evidence_recorded", args = {{ key = "design_note" }} }},
+  # diagnose Phase 6: デバッグタグ [DEBUG-xxxx] を成果物に残さない (後始末を決定論で強制)。
+  {{ gate = "no_regex", args = {{ path = "{spec_glob}", pattern = "[DEBUG-" }} }},
 ]
 next = ["test"]
 on_reject = {{ after = 3, goto = "plan" }}
