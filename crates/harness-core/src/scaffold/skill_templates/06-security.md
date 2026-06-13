@@ -84,7 +84,7 @@ risk が残るなら `verdict: "rejected"` で `harness back "security risk: ...
 ## 進める
 
 ```
-harness request-transition review
+harness advance
 ```
 
 ## 完了条件（exit_gates）

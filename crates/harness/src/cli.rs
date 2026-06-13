@@ -163,6 +163,29 @@ pub enum Command {
         #[arg(long)]
         lang: Option<String>,
     },
+    /// 現ノードが実装する requirement (F-NNN) の text / acceptance / invariant を表示する。
+    Spec {
+        requirement_id: String,
+        #[arg(long)]
+        run: Option<String>,
+    },
+    /// 現ノードで詰まったことを記録し、人間にエスカレーションする（node_aborted）。
+    Stuck {
+        reason: String,
+        #[arg(long)]
+        run: Option<String>,
+    },
+    /// 登録済み artifact の path を表示する。
+    Artifact {
+        name: String,
+        #[arg(long)]
+        run: Option<String>,
+    },
+    /// 登録済み artifact を一覧する。
+    ArtifactList {
+        #[arg(long)]
+        run: Option<String>,
+    },
 }
 
 /// CLI エントリポイント。`main.rs` から呼ばれる。

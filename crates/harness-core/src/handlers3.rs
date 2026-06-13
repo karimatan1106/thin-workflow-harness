@@ -4,6 +4,7 @@ use crate::event::{append_event, read_events, EventKind};
 use crate::handlers::state_for;
 use crate::questions::{append_answer, append_question, next_question_id, read_questions, QueuedQuestion};
 use crate::spec::load_spec;
+use crate::workflow::current_node;
 use crate::{handlers, paths};
 
 /// `harness ask` ── worker が構造化質問をキューに積む。
@@ -146,5 +147,27 @@ pub fn cmd_abandon(run_id: &str, reason: Option<&str>) -> Result<(), String> {
         .map_err(|e| format!("abandon 書込失敗: {e}"))?;
     println!("run {run_id} を放棄しました: {reason}");
     println!("注: worktree や作業ディレクトリの後始末（git worktree remove / git reset 等）は harness の仕事ではありません");
+    Ok(())
+}
+
+/// `harness stuck` ── 現ノードで詰まったことを記録し人間にエスカレーションする。
+/// `abandon`（run 全体の放棄）とは異なり、現ノード単位の node_aborted。
+pub fn cmd_stuck(reason: &str, run: Option<&str>) -> Result<(), String> {
+    let run_id = paths::resolve_run_id(run)?;
+    let wf = handlers::load_wf()?;
+    let st = state_for(&run_id, &wf)?;
+    handlers::ensure_active(&st)?;
+    if read_events(&run_id)?.is_empty() {
+        return Err(format!("run '{run_id}' が存在しない"));
+    }
+    let node_id = current_node(&wf, &st).map(|n| n.id.clone());
+    append_event(
+        &run_id,
+        EventKind::Stuck { reason: reason.to_string(), node_id: node_id.clone() },
+    )
+    .map_err(|e| format!("stuck 書込失敗: {e}"))?;
+    let where_ = node_id.unwrap_or_else(|| "(完了済み)".to_string());
+    println!("ノード {where_} を stuck（人間エスカレーション）にしました: {reason}");
+    println!("注: 人間が判断し、back で戻す / abandon で放棄 / spec を見直す 等を選んでください");
     Ok(())
 }

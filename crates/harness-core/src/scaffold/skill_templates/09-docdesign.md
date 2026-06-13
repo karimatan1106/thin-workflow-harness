@@ -118,7 +118,7 @@ harness report-evidence master_design_update '{
 
 ## 6. workflow 終端
 
-このノードの `next = []`。`request-transition` 不要。harness が全 gate met を検知して
+このノードの `next = []`。`advance` 不要。harness が全 gate met を検知して
 done になる (`harness status` で確認)。
 
 ## 完了条件（exit_gates）

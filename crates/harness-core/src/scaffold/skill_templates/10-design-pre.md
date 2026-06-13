@@ -55,7 +55,7 @@ characterize/implement の前に置く。ここで設計の意図を固めるこ
 
 5. **次フェーズへ**
    ```
-   harness request-transition characterize
+   harness advance
    ```
 
 ## 完了条件（exit_gates）

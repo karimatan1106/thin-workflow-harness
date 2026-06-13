@@ -142,3 +142,81 @@ pub fn cmd_gates(run: Option<&str>) -> Result<(), String> {
     print_gate_lines(&results);
     Ok(())
 }
+
+/// `harness spec <F-NNN>` ── requirement の text/files/tests と紐づく acceptance/invariant を表示する。
+/// spec.toml はプロジェクト単位（run 非依存）なので run 引数は使わない。
+pub fn cmd_spec(requirement_id: &str, _run: Option<&str>) -> Result<(), String> {
+    let spec = load_spec(&paths::spec_path())?;
+    let req = spec
+        .requirement
+        .iter()
+        .find(|r| r.id == requirement_id)
+        .ok_or_else(|| format!("requirement '{requirement_id}' が spec.toml に見つからない"))?;
+    println!("[{}] {}", req.id, req.text);
+    if let Some(r) = &req.rationale {
+        println!("rationale: {r}");
+    }
+    if !req.files.is_empty() {
+        println!("files: {}", req.files.join(", "));
+    }
+    if !req.tests.is_empty() {
+        println!("tests: {}", req.tests.join(", "));
+    }
+    let accs: Vec<_> = spec
+        .acceptance
+        .iter()
+        .filter(|a| a.requirement == requirement_id)
+        .collect();
+    if !accs.is_empty() {
+        println!("acceptances:");
+        for a in accs {
+            println!("  [{}] {}", a.id, a.text);
+            println!("    test: {}", a.test);
+        }
+    }
+    if !spec.invariant.is_empty() {
+        println!("invariants:");
+        for inv in &spec.invariant {
+            println!("  [{}] {}", inv.id, inv.text);
+        }
+    }
+    Ok(())
+}
+
+/// `harness artifact <name>` ── 登録済み artifact の path を表示する。
+pub fn cmd_artifact(name: &str, run: Option<&str>) -> Result<(), String> {
+    let run_id = paths::resolve_run_id(run)?;
+    let wf = load_wf()?;
+    let st = state_for(&run_id, &wf)?;
+    let path = st
+        .artifacts
+        .get(name)
+        .ok_or_else(|| format!("artifact '{name}' が未登録"))?;
+    println!("{name} -> {path}");
+    match std::fs::read_to_string(path) {
+        Ok(body) => {
+            println!("---");
+            print!("{body}");
+            if !body.ends_with('\n') {
+                println!();
+            }
+        }
+        Err(_) => println!("  (警告: ファイルを読めない ── 元のパスが消えた可能性)"),
+    }
+    Ok(())
+}
+
+/// `harness artifact-list` ── 登録済み artifact を一覧する。
+pub fn cmd_artifact_list(run: Option<&str>) -> Result<(), String> {
+    let run_id = paths::resolve_run_id(run)?;
+    let wf = load_wf()?;
+    let st = state_for(&run_id, &wf)?;
+    if st.artifacts.is_empty() {
+        println!("artifact なし");
+        return Ok(());
+    }
+    for (name, path) in &st.artifacts {
+        println!("{name} -> {path}");
+    }
+    Ok(())
+}

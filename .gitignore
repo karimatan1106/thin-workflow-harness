@@ -9,3 +9,6 @@ crates/lsp-daemon/tests/fixtures/**/Cargo.lock
 examples/skill-tools-archive/lsp-daemon/tests/fixtures/**/target/
 examples/skill-tools-archive/**/target/
 examples/skill-tools-archive/**/Cargo.lock
+
+# dogfood の transient harness run (self-host・非コミット)
+.harness/

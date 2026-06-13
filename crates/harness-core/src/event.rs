@@ -57,6 +57,12 @@ pub enum EventKind {
     Abandon {
         reason: String,
     },
+    /// 現ノードで詰まり、人間にエスカレーションした（node_aborted の記録）。
+    Stuck {
+        reason: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        node_id: Option<String>,
+    },
     /// fork ノードが branches を spawn したマーカー（ペアになる BranchJoined がいずれ来る）。
     BranchForked {
         branch_ids: Vec<String>,

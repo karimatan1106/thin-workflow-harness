@@ -27,6 +27,8 @@ pub struct State {
     pub done: bool,
     /// `abandon` イベントが来たら true（terminal）。
     pub abandoned: bool,
+    /// `stuck` イベントが来たらその理由（人間エスカレーション、最新のもの）。
+    pub stuck: Option<String>,
     pub history: Vec<HistoryItem>,
 }
 
@@ -40,6 +42,7 @@ impl State {
             gate_evidence: BTreeMap::new(),
             done: false,
             abandoned: false,
+            stuck: None,
             history: Vec::new(),
         }
     }
@@ -148,6 +151,14 @@ fn derive_state_inner(run_id: &str, events: &[Event], wf: Option<&crate::workflo
             EventKind::Abandon { reason } => {
                 st.abandoned = true;
                 st.history.push(HistoryItem { kind: "abandon".into(), detail: reason.clone() });
+            }
+            EventKind::Stuck { reason, node_id } => {
+                st.stuck = Some(reason.clone());
+                let where_ = node_id.clone().unwrap_or_default();
+                st.history.push(HistoryItem {
+                    kind: "stuck".into(),
+                    detail: format!("{where_}: {reason}"),
+                });
             }
             EventKind::BranchForked { branch_ids } => {
                 st.history.push(HistoryItem {

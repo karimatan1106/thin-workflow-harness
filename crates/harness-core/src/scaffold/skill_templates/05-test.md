@@ -74,7 +74,7 @@
 - `node bin/regression_gate.mjs --update`  現状値で上書き（再 baseline）
 - `node bin/regression_gate.mjs --ratchet`  pass floor 引上げ・fail ceiling 引下げのみ（単調強化=蓄積。旧 `count_non_decreasing` を内包）
 
-満たしたら `harness request-transition security`（または `review`、ワークフロー次第）。
+満たしたら `harness advance`（または `review`、ワークフロー次第）。
 
 ## 信頼の源泉
 

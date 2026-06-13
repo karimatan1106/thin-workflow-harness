@@ -74,7 +74,7 @@ option の先頭に含める)で詰め、回答を待ってから次へ。コー
 - （あれば）`traceability_closed` ── 各 F-NNN に artifact ≥1 と exit 0 test ≥1、orphan
   なし
 
-満たしたら `harness request-transition characterize`（無ければ `implement`）。
+満たしたら `harness advance`（無ければ `implement`）。
 
 ## append-only の注意
 
@@ -85,7 +85,7 @@ phase に戻る。**`workflow.toml` の既存ノードを変えない／既存 g
 
 ## 詰まったとき
 
-`harness request-transition` を空打ちで繰り返さない。spec の前提が崩れていたら
+`harness advance` を空打ちで繰り返さない。spec の前提が崩れていたら
 `harness back "..."` で research へ。これ以上進めないなら `harness stuck "<理由>"`。
 
 ## 禁止

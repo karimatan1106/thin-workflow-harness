@@ -64,5 +64,11 @@ pub fn dispatch(command: Command) -> Result<(), String> {
         Command::SetupCkg { dir, lang } => {
             handlers_init::cmd_setup_ckg(dir.as_deref(), lang.as_deref())
         }
+        Command::Spec { requirement_id, run } => {
+            handlers2::cmd_spec(&requirement_id, run.as_deref())
+        }
+        Command::Stuck { reason, run } => handlers3::cmd_stuck(&reason, run.as_deref()),
+        Command::Artifact { name, run } => handlers2::cmd_artifact(&name, run.as_deref()),
+        Command::ArtifactList { run } => handlers2::cmd_artifact_list(run.as_deref()),
     }
 }

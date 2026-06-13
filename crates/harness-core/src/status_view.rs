@@ -13,6 +13,9 @@ pub fn print_status(wf: &Workflow, st: &State, rc: &RunCtx) {
     if st.abandoned {
         println!("status : ✗ 放棄済み（abandon）── 以後の遷移はできない");
     }
+    if let Some(reason) = &st.stuck {
+        println!("stuck  : ⚠ {reason} （人間エスカレーション ── back/abandon/spec 見直しを判断）");
+    }
     let n = wf.nodes().len();
     match current_node(wf, st) {
         None => {

@@ -162,3 +162,72 @@ fn help_lists_new_commands() {
         assert!(s.contains(c), "help missing {c}: {s}");
     }
 }
+
+// ── F-1: 4 新コマンドの受入基準(AC-1/AC-2/AC-3)。実装前は fail する。 ──
+
+/// AC-1: `harness spec F-001` が requirement の text と紐づく AC を表示する。
+#[test]
+fn spec_shows_requirement_and_acceptance() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    copy_dir(&fixtures(), home);
+    // spec viewer は run 不要(spec.toml を読むだけ)
+    let o = run(home, &["spec", "F-001"]);
+    assert!(o.status.success(), "spec F-001 failed: {}", out_str(&o));
+    let s = out_str(&o);
+    assert!(s.contains("F-001"), "spec missing id: {s}");
+    assert!(s.contains("fixture requirement"), "spec missing text: {s}");
+    assert!(s.contains("AC-1"), "spec missing linked acceptance: {s}");
+}
+
+/// AC-1: 存在しない requirement は非ゼロで終了する。
+#[test]
+fn spec_unknown_requirement_errors() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    copy_dir(&fixtures(), home);
+    let o = run(home, &["spec", "F-999"]);
+    assert!(!o.status.success(), "unknown requirement should fail: {}", out_str(&o));
+}
+
+/// AC-2: `harness artifact <name>` が path を表示、`artifact-list` が一覧、未登録は非ゼロ。
+#[test]
+fn artifact_view_and_list() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    copy_dir(&fixtures(), home);
+    let o = run(home, &["start", "artifact test"]);
+    assert!(o.status.success(), "start failed: {}", out_str(&o));
+    std::fs::write(home.join("note.md"), "hi").unwrap();
+    let o = run(home, &["record-artifact", "mynote", "note.md"]);
+    assert!(o.status.success(), "record-artifact failed: {}", out_str(&o));
+
+    let o = run(home, &["artifact", "mynote"]);
+    assert!(o.status.success(), "artifact failed: {}", out_str(&o));
+    assert!(out_str(&o).contains("note.md"), "artifact missing path: {}", out_str(&o));
+
+    let o = run(home, &["artifact-list"]);
+    assert!(o.status.success(), "artifact-list failed: {}", out_str(&o));
+    assert!(out_str(&o).contains("mynote"), "artifact-list missing name: {}", out_str(&o));
+
+    let o = run(home, &["artifact", "ghost"]);
+    assert!(!o.status.success(), "unknown artifact should fail: {}", out_str(&o));
+}
+
+/// AC-3: `harness stuck "<理由>"` が記録され status に反映される。
+#[test]
+fn stuck_records_and_shows_in_status() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    copy_dir(&fixtures(), home);
+    let o = run(home, &["start", "stuck test"]);
+    assert!(o.status.success(), "start failed: {}", out_str(&o));
+    let o = run(home, &["stuck", "blocked on X"]);
+    assert!(o.status.success(), "stuck failed: {}", out_str(&o));
+    let o = run(home, &["status"]);
+    let s = out_str(&o);
+    assert!(
+        s.contains("blocked on X") || s.to_lowercase().contains("stuck"),
+        "status missing stuck: {s}"
+    );
+}

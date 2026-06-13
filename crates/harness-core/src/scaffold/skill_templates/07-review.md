@@ -62,7 +62,7 @@
    ```
    どちらかの軸に issue があれば該当軸を `rejected` にして `harness back "<軸>: <理由>"` で implement/plan へ戻す。
 
-9. **次フェーズへ**: `harness request-transition docdesign`
+9. **次フェーズへ**: `harness advance`
 
 ## 完了条件（exit_gates）
 

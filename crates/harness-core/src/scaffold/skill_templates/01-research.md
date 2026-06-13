@@ -134,13 +134,13 @@
   `json_nonempty rationale` ── 用語集(CONTEXT.md)の grilling 結果が記録済み（上の grilling 方式）
 - （あれば）`blast_radius_declared` ── 各 F-NNN に `files` ≥1
 
-満たしたら `harness request-transition plan`。却下 (`advance_rejected`) されたら
-`failed_gates` の理由を読んで直し、もう一度 `request-transition`。
+満たしたら `harness advance`。却下 (`advance_rejected`) されたら
+`failed_gates` の理由を読んで直し、もう一度 `advance`。
 
 ## 詰まったとき
 
 これ以上進めない（gate が満たせない・前提が崩れている・情報が足りない）と判断したら、
-`harness request-transition` を空打ちで繰り返さず正直にエスカレせよ:
+`harness advance` を空打ちで繰り返さず正直にエスカレせよ:
 ```
 harness stuck "<理由>"
 ```

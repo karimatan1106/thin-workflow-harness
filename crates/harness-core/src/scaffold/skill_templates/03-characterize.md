@@ -34,11 +34,8 @@
    ```
    `count_non_decreasing` gate が後段の test phase でこの baseline を参照する。
 
-4. **failing test を追加** ── 各 AC に対応する test を edit_file で追加（`#[ignore]` で
-   隠さず、実 fail させる）:
-   ```
-   harness edit-file <test_file>
-   ```
+4. **failing test を追加** ── 各 AC に対応する test を**テストファイルを直接編集して**追加
+   （`#[ignore]` で隠さず、実 fail させる ── `edit-file` という harness コマンドは存在しない）。
    追加後の test 数を確認:
    ```
    cargo test --workspace 2>&1 | tail -3
@@ -55,7 +52,7 @@
 
 6. **進める**:
    ```
-   harness request-transition implement
+   harness advance
    ```
 
 ## 完了条件（exit_gates）
