@@ -1,0 +1,13 @@
+{
+  "name": "thin-workflow-harness",
+  "owner": {
+    "name": "karimatan1106"
+  },
+  "plugins": [
+    {
+      "name": "thin-workflow-harness",
+      "source": "./",
+      "description": "workflow.toml + skill-driven workflow runner for LLM agent loops. Deterministic L1-L4 gates + event-log state. Wraps the harness Rust CLI."
+    }
+  ]
+}
