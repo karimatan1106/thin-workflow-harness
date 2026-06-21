@@ -1,0 +1,11 @@
+{
+  "name": "thin-workflow-harness",
+  "description": "workflow.toml + skill-driven workflow runner for LLM agent loops. Phase-by-phase progression (investigate -> design -> implement -> test -> review) with L1-L4 deterministic gates and event-log state derivation. Wraps the `harness` Rust CLI.",
+  "version": "1.0.0",
+  "author": {
+    "name": "karimatan1106"
+  },
+  "homepage": "https://github.com/karimatan1106/thin-workflow-harness",
+  "repository": "https://github.com/karimatan1106/thin-workflow-harness",
+  "license": "MIT"
+}
