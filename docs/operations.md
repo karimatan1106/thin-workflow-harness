@@ -49,8 +49,12 @@
 - `[meta].run_cost_budget`（任意）── run のコストがこれを超えたら人間にエスカレ。
 
 ### ノードごとのモデル選択
-- trivial なノードは安いモデル（`claude-haiku-4-5-20251001`）、難しいノードは Opus（`claude-opus-4-7`）。
+- trivial なノードは安いティア（`haiku`）、難しいノードは `opus`、探索系は `sonnet`。
 - `workflow.toml` のノードに `model = "..."`（任意、`[meta].default_model` から既定）。
+- **版番号は書かない。** ティアエイリアス（`opus` / `sonnet` / `haiku` / `fable`）を書き、
+  具体モデル ID は `runtime/anthropic.rs` の `resolve_model()` 1 箇所が解決する（Anthropic API は
+  具体 ID を要求するため版番号はそこに集約）。各ティアは `HARNESS_MODEL_<TIER>` 環境変数で上書き可
+  （例 `HARNESS_MODEL_OPUS=claude-opus-4-9`）。具体 ID を直接書いた場合はそのまま通る（後方互換）。
 
 ### 推奨 mandatory gate（`[meta].mandatory_gates`）
 - **workspace 全体の `cargo check`**（`cargo check --workspace` ── per-crate でなく）。per-crate だと、壊した crate を呼ぶ別 crate のビルド失敗を後段ノードまで見逃す。domain をまたぐ署名 break を、それを導入したノードで安く捕まえるには workspace 全体でチェックする（多言語モノレポなら各サブツリーの等価物 ── `cargo check --workspace && pnpm -r tsc --noEmit` 等）。

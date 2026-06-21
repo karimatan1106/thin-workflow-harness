@@ -93,10 +93,11 @@ fn default_model(wf: &Workflow, override_: Option<&str>) -> String {
     if let Some(m) = override_ {
         return m.to_string();
     }
+    // 既定はティアエイリアス。具体 ID は drive() の resolve_model() で解決される。
     wf.meta
         .default_model
         .clone()
-        .unwrap_or_else(|| "claude-sonnet-4-6".to_string())
+        .unwrap_or_else(|| "sonnet".to_string())
 }
 
 

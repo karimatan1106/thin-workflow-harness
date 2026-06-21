@@ -150,9 +150,77 @@ pub fn estimate_cost_usd(model: &str, u: &Usage) -> Option<f64> {
     Some(inp * input_per_m / 1_000_000.0 + out * output_per_m / 1_000_000.0)
 }
 
+/// モデルのティアエイリアス（`opus`/`sonnet`/`haiku`/`fable`）を具体モデル ID に解決する。
+/// 既に具体 ID（その他の文字列）はそのまま通す（後方互換 ── 既存 workflow.toml に
+/// 直接書かれた `claude-...` もそのまま動く）。
+///
+/// **このプロジェクトで具体モデル ID を書く唯一の拠点。** Anthropic API は具体 ID を
+/// 要求するため版番号はここに 1 箇所だけ集約し、テンプレ／プロンプト／docs には
+/// エイリアスだけを書く。各ティアは `HARNESS_MODEL_<TIER>` 環境変数で上書きできる
+/// （例 `HARNESS_MODEL_OPUS=claude-opus-4-9`）。
+pub fn resolve_model(name: &str) -> String {
+    resolve_model_with(name, |k| std::env::var(k).ok())
+}
+
+/// `resolve_model` の env 注入版（テスト用）。
+pub fn resolve_model_with<F>(name: &str, env: F) -> String
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let n = name.trim();
+    let (tier_env, default_id) = match n.to_ascii_lowercase().as_str() {
+        "opus" => ("HARNESS_MODEL_OPUS", "claude-opus-4-8"),
+        "sonnet" => ("HARNESS_MODEL_SONNET", "claude-sonnet-4-6"),
+        "haiku" => ("HARNESS_MODEL_HAIKU", "claude-haiku-4-5-20251001"),
+        "fable" => ("HARNESS_MODEL_FABLE", "claude-fable-5"),
+        // エイリアスでなければ具体 ID とみなしてそのまま返す。
+        _ => return n.to_string(),
+    };
+    env(tier_env)
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| default_id.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn no_env(_: &str) -> Option<String> {
+        None
+    }
+
+    #[test]
+    fn resolve_model_maps_tier_aliases_to_concrete_ids() {
+        assert_eq!(resolve_model_with("opus", no_env), "claude-opus-4-8");
+        assert_eq!(resolve_model_with("sonnet", no_env), "claude-sonnet-4-6");
+        assert_eq!(resolve_model_with("haiku", no_env), "claude-haiku-4-5-20251001");
+        // 大小無視・前後空白許容。
+        assert_eq!(resolve_model_with("  OPUS ", no_env), "claude-opus-4-8");
+    }
+
+    #[test]
+    fn resolve_model_passes_through_concrete_ids() {
+        // 具体 ID はそのまま（後方互換）。
+        assert_eq!(resolve_model_with("claude-opus-4-9", no_env), "claude-opus-4-9");
+        assert_eq!(resolve_model_with("custom-model", no_env), "custom-model");
+    }
+
+    #[test]
+    fn resolve_model_env_override_wins() {
+        let env = |k: &str| (k == "HARNESS_MODEL_OPUS").then(|| "claude-opus-9-9".to_string());
+        assert_eq!(resolve_model_with("opus", env), "claude-opus-9-9");
+        // 空文字 override は無視して既定にフォールバック。
+        let empty = |_: &str| Some("  ".to_string());
+        assert_eq!(resolve_model_with("sonnet", empty), "claude-sonnet-4-6");
+    }
+
+    /// resolve した具体 ID が価格表のファミリ判定に乗ること（resolver→pricing の結線）。
+    #[test]
+    fn resolved_alias_is_priceable() {
+        let u = Usage { input_tokens: 1_000_000, output_tokens: 1_000_000, ..Default::default() };
+        let id = resolve_model_with("opus", no_env);
+        assert!(estimate_cost_usd(&id, &u).is_some());
+    }
 
     #[test]
     fn cache_control_serializes_with_type_field() {

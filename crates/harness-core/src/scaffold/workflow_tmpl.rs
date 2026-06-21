@@ -39,9 +39,9 @@ name = "default-flow"
 entry = "research"
 # host = "claude-code" でホスト Claude Code、"runtime" は harness ランタイム自身がホスト
 host = "claude-code"
-# 役割別モデル割り当ての既定値 ── 探索・機械的フェーズはバランス型 Sonnet 4.6。
-#   高精度が要る plan/implement/security/review は各ノードで Opus 4.8 に上書きする。
-default_model = "claude-sonnet-4-6"
+# 役割別モデル割り当ての既定値 ── 探索・機械的フェーズはバランス型 Sonnet。
+#   高精度が要る plan/implement/security/review は各ノードで Opus に上書きする。
+default_model = "sonnet"
 # 既定 budget の現実的下限 ──
 #   Haiku でも ApiWorker の system+skill+tools+status で 2000+ input tokens 食うため
 #   max_tokens=2000 は即 budget 超過する。実 dogfood (2026-05-13) を踏まえ 8000 を下限に。
@@ -53,8 +53,8 @@ mandatory_gates = [
 [[node]]
 id = "research"
 skill = "01-research.md"
-# 探索フェーズ ── 広く読むため安価でバランスの取れた Sonnet 4.6 (default 据え置き)。
-model = "claude-sonnet-4-6"
+# 探索フェーズ ── 広く読むため安価でバランスの取れた Sonnet (default 据え置き)。
+model = "sonnet"
 exit_gates = [
   {{ gate = "open_questions_zero", args = {{}} }},
   {{ gate = "no_pending_required_questions", args = {{}} }},
@@ -77,8 +77,8 @@ on_reject = {{ after = 3, goto = "__human__" }}
 [[node]]
 id = "plan"
 skill = "02-plan.md"
-# 計画フェーズ ── 設計判断の質が後続全体を左右するため Opus 4.8。
-model = "claude-opus-4-8"
+# 計画フェーズ ── 設計判断の質が後続全体を左右するため Opus。
+model = "opus"
 can_append = true
 # plan artifact のパスに合わせて max_lines の path を足してください（plan.md 等）。
 exit_gates = [
@@ -93,8 +93,8 @@ on_reject = {{ after = 3, goto = "research" }}
 id = "design-pre"
 skill = "10-design-pre.md"
 # 実装前設計フェーズ ── SDD の核心「設計を先に書く」。plan の後・実装の前に
-# マスター設計書を先に更新。設計意図の言語化が要るため Opus 4.8。
-model = "claude-opus-4-8"
+# マスター設計書を先に更新。設計意図の言語化が要るため Opus。
+model = "opus"
 exit_gates = [
   # 実装前に設計を反映 or 既存設計で足りる旨を中身付きで強制 (noop 逃げ・空 rationale 排除)。
   {{ gate = "evidence_recorded", args = {{ key = "design_pre" }} }},
@@ -110,8 +110,8 @@ on_reject = {{ after = 3, goto = "plan" }}
 [[node]]
 id = "characterize"
 skill = "03-characterize.md"
-# 特性化フェーズ ── 既存挙動を広く把握する探索系なので Sonnet 4.6 (default 据え置き)。
-model = "claude-sonnet-4-6"
+# 特性化フェーズ ── 既存挙動を広く把握する探索系なので Sonnet (default 据え置き)。
+model = "sonnet"
 # coverage コマンド未検出時は `false # configure coverage ...` で明示的に fail させる
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{coverage}" }} }},
@@ -122,8 +122,8 @@ on_reject = {{ after = 3, goto = "plan" }}
 [[node]]
 id = "implement"
 skill = "04-implement.md"
-# 実装フェーズ ── コード生成の精度が要るため Opus 4.8。
-model = "claude-opus-4-8"
+# 実装フェーズ ── コード生成の精度が要るため Opus。
+model = "opus"
 exit_gates = [
   {{ gate = "artifact_registered", args = {{ name_or_prefix = "impl:" }} }},
   {{ gate = "cmd_exit_0", args = {{ cmd = "{test}" }} }},
@@ -138,8 +138,8 @@ on_reject = {{ after = 3, goto = "plan" }}
 [[node]]
 id = "test"
 skill = "05-test.md"
-# テストフェーズ ── 機械的作業が中心なので Sonnet 4.6 (default 据え置き)。
-model = "claude-sonnet-4-6"
+# テストフェーズ ── 機械的作業が中心なので Sonnet (default 据え置き)。
+model = "sonnet"
 # 回帰 gate (決定論・config 駆動・蓄積): bin/regression_gate.mjs が regression_suites.json の全スイートを
 #   実機実行し state/regression_baseline.json と比較。各スイートで pass>=floor-tol かつ fail<=ceiling+tol を
 #   満たさなければ exit!=0 → advance 不可 (baseline 比 新規失敗ゼロを毎回強制、既知失敗は baseline に織込み)。
@@ -157,8 +157,8 @@ on_reject = {{ after = 3, goto = "implement" }}
 [[node]]
 id = "security"
 skill = "06-security.md"
-# セキュリティフェーズ ── 脆弱性検出の見落としを避けるため Opus 4.8。
-model = "claude-opus-4-8"
+# セキュリティフェーズ ── 脆弱性検出の見落としを避けるため Opus。
+model = "opus"
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{security}" }} }},
   {{ gate = "evidence_recorded", args = {{ key = "security_review" }} }},
@@ -169,9 +169,9 @@ on_reject = {{ after = 3, goto = "implement" }}
 [[node]]
 id = "review"
 skill = "07-review.md"
-# レビューフェーズ ── 最終品質判断の精度が要るため Opus 4.8。コード正しさに専念
+# レビューフェーズ ── 最終品質判断の精度が要るため Opus。コード正しさに専念
 # (マスター設計書の作成/修正は次の docdesign node が担う)。
-model = "claude-opus-4-8"
+model = "opus"
 exit_gates = [
   {{ gate = "traceability_closed", args = {{}} }},
   # review を 2 軸 (Standards / Spec) に分離し相互汚染を防ぐ (to-issues/review 由来)。各軸が独立に
@@ -190,8 +190,8 @@ on_reject = {{ after = 2, goto = "__human__" }}
 id = "docdesign"
 skill = "09-docdesign.md"
 # 設計書フェーズ ── マスター設計書(architecture/ADR)の作成/修正に専念。設計判断の
-# 言語化と整合維持が要るため Opus 4.8。コード正しさ(review)から分離した終端 phase。
-model = "claude-opus-4-8"
+# 言語化と整合維持が要るため Opus。コード正しさ(review)から分離した終端 phase。
+model = "opus"
 exit_gates = [
   # master_design_update は「記録の有無」だけでなく中身を強制する:
   # - verdict は updated/noop のいずれか(バグ修正の正当な noop は許すが、no_change 等の逃げ値は排除)

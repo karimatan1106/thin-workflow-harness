@@ -6,6 +6,20 @@
 > 設計思想は Anthropic 公式 security-guidance プラグインの 3 層に対応する。
 > harness は exit_gate で **強制**できるのが本家との差 ── 通らなければ次ノードへ進めない。
 
+## サブエージェント隔離（diff レビュー・監査）
+
+層 2（差分レビュー）・層 3（データフロー深掘り）・dep audit の **読み込み/解析**は
+`Agent` ツールに委譲し、構造化 findings レポートだけを持ち帰る（diff 本文で本スレッドの
+context を汚さない）。
+
+- 委譲する: `git diff` 抽出と 8 クラス checklist の読込採点・cross-file データフロー追跡・
+  `cargo audit`/`pnpm audit` の実行と解析。サブエージェントには「{8 クラス毎の verdict,
+  risk_items[], dep CVE} を構造化して返せ。diff 本文は貼るな」と指示する。
+- 本スレッドに残す: 判定（approved/rejected）・`report-evidence security_review`・
+  `harness back` / `advance`・`harness ask` の判断。
+- 注: secret scan（gitleaks）は exit_gate `cmd_exit_0` が advance 時に再実行するので、
+  gate 判定は harness が握る（サブエージェントは解析のみ）。
+
 ## 前提
 
 - test phase が緑（cmd_exit_0 で test スイート pass 済）

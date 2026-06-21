@@ -118,7 +118,7 @@ pub enum Command {
     },
     /// runtime ループを駆動する。`--script` あればスクリプト worker、無ければ生 API の ApiWorker。
     Run {
-        /// スクリプト TOML パス。指定があれば ScriptedWorker、無ければ ApiWorker（ANTHROPIC_API_KEY 必須）。
+        /// スクリプト TOML パス。指定があれば ScriptedWorker、無ければ ApiWorker（認証は ANTHROPIC_API_KEY か Max OAuth）。
         #[arg(long)]
         script: Option<String>,
         #[arg(long)]

@@ -134,7 +134,7 @@ notes = ""                                  # 補足
 name = "default-refactor-flow"
 entry = "research"                          # 開始ノード id
 host = "claude-code"                        # ホスト＝Claude Code（plan モード・/security-review・/review・AskUserQuestion を skill が優先利用）。runtime のときは "runtime"（DESIGN.md §10）
-default_model = "claude-opus-4-7"           # ノードに model が無いとき適用（DESIGN.md §16.1）
+default_model = "opus"                      # ノードに model が無いとき適用。ティアエイリアス(opus/sonnet/haiku/fable)、具体 ID は resolve_model が解決（DESIGN.md §16.1）
 run_cost_budget = 50.0                      # run 全体のコスト上限。超過で人間にエスカレ
 # 実行中に append される新規ノードはこれらの gate を必ず含む（workflow_append_only が検証）
 mandatory_gates = [

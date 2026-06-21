@@ -11,15 +11,15 @@
 name = "security-only"
 entry = "security"
 host = "claude-code"
-# 脆弱性検出は最高精度が要るため既定を Opus 4.8 に固定する。
-default_model = "claude-opus-4-8"
+# 脆弱性検出は最高精度が要るため既定を Opus に固定する。
+default_model = "opus"
 default_budget = { max_tool_calls = 20, max_tokens = 16000, max_wall_seconds = 240 }
 
 [[node]]
 id = "security"
 skill = "security.md"
-# security ノード ── 見落とし回避のため Opus 4.8 を明示割り当て。
-model = "claude-opus-4-8"
+# security ノード ── 見落とし回避のため Opus を明示割り当て。
+model = "opus"
 # secret scan を配線するなら exit_gates に
 #   { gate = "cmd_exit_0", args = { cmd = "gitleaks detect --no-git --redact" } }
 # を足す。未設定でも evidence gate は効く。

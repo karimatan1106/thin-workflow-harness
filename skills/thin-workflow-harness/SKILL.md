@@ -27,7 +27,7 @@ Skip if: one-shot edit, simple Q&A, exploratory questions.
 1. cd to workspace
 2. If `.harness/` missing: `Bash: harness init`（CWD 直下に `.harness/` をスキャフォールド）
 3. `Bash: harness start "<user intent>"` ── CWD/.harness/workflow.toml を auto-detect する。別 workspace を指したい場合だけ `HARNESS_HOME=/path/to/.harness` を明示する。
-4. `Bash: harness run --model claude-sonnet-4-6`
+4. `Bash: harness run`（モデルはノード別に workflow.toml の `model`/`default_model`、上書きは `--model opus|sonnet|haiku` ── 版番号は書かず `resolve_model` が具体 ID に解決。`HARNESS_MODEL_<TIER>` で上書き可。認証は `auth.rs` の順: `ANTHROPIC_API_KEY` → `CLAUDE_CODE_OAUTH_TOKEN` → `~/.claude/.credentials.json` の OAuth。Max subscription の OAuth でも動く ── 旧 429 公式クライアント検証は撤廃済み）
 5. Monitor stdout/stderr. If questions arise:
    - `Bash: harness questions`
    - User decides answer

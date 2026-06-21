@@ -81,14 +81,15 @@ fn init_rust_fixture_creates_harness_dir() {
         "default_budget.max_tool_calls=12 が無い: {wf_text}",
     );
 
-    // 役割別モデル割り当て ── [meta].default_model と高精度ノードの Opus 4.8 上書き。
+    // 役割別モデル割り当て ── [meta].default_model と高精度ノードの Opus 上書き。
+    // 版番号でなくティアエイリアス(sonnet/opus)で書く(具体 ID は resolve_model で解決)。
     assert!(
-        wf_text.contains("default_model = \"claude-sonnet-4-6\""),
+        wf_text.contains("default_model = \"sonnet\""),
         "default_model が workflow.toml に無い: {wf_text}",
     );
     assert!(
-        wf_text.contains("model = \"claude-opus-4-8\""),
-        "Opus 4.8 のノード上書きが無い: {wf_text}",
+        wf_text.contains("model = \"opus\""),
+        "Opus のノード上書きが無い: {wf_text}",
     );
 }
 
@@ -111,9 +112,9 @@ fn init_security_template_creates_single_node_workflow() {
     let wf_text = std::fs::read_to_string(&wf_path).unwrap();
     assert!(wf_text.contains("security-only"), "not the security template: {wf_text}");
     assert!(wf_text.contains("security_review"), "evidence gate missing: {wf_text}");
-    // security テンプレは最高精度の Opus 4.8 を既定に置く。
+    // security テンプレは最高精度の Opus を既定に置く(ティアエイリアス)。
     assert!(
-        wf_text.contains("default_model = \"claude-opus-4-8\""),
+        wf_text.contains("default_model = \"opus\""),
         "security default_model が無い: {wf_text}",
     );
 

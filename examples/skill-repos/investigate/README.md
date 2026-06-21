@@ -43,9 +43,9 @@ cp -r /path/to/thin-workflow-harness/examples/skill-repos/investigate/.harness .
 harness start "investigate codebase"
 harness validate
 
-# 4. runtime ループ ── ANTHROPIC_API_KEY 必須
-export ANTHROPIC_API_KEY=sk-ant-...
-harness run --model claude-haiku-4-5
+# 4. runtime ループ ── ANTHROPIC_API_KEY か Max OAuth(~/.claude/.credentials.json)で認証
+export ANTHROPIC_API_KEY=sk-ant-...   # or Max OAuth でログイン済みなら不要
+harness run --model haiku
 ```
 
 ## 期待結果

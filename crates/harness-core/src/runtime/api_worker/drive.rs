@@ -5,7 +5,7 @@
 
 use std::time::Instant;
 
-use crate::runtime::anthropic::{estimate_cost_usd, Message, MessagesRequest, Usage};
+use crate::runtime::anthropic::{estimate_cost_usd, resolve_model, Message, MessagesRequest, Usage};
 use crate::runtime::auth::AuthMode;
 use crate::runtime::http_client::HttpClient;
 use crate::runtime::tools::{tool_defs, ToolCall};
@@ -26,6 +26,10 @@ pub(super) fn drive(
     budget: &Budget,
     apply_fn: &mut dyn FnMut(ToolCall) -> ApplyResult,
 ) -> (Outcome, ApiWorkerMetrics) {
+    // モデルのティアエイリアス(opus/sonnet/haiku)をここで一度だけ具体 ID に解決する。
+    // 以降の request 構築と価格推定は具体 ID を使う(価格表の starts_with 判定が効く)。
+    let model = resolve_model(model);
+    let model = model.as_str();
     let start = Instant::now();
     let mut metrics = ApiWorkerMetrics::default();
     let mut messages: Vec<Message> = vec![initial_user_message(ctx)];

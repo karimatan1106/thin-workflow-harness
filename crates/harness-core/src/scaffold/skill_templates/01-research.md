@@ -5,6 +5,20 @@
 ── ここで over-ask しろ、間違った実装より安い。決まったら即 `spec.toml` に書いて context
 から出す（spec は結晶化した壁打ち）。
 
+## サブエージェント隔離（read-heavy な探索）
+
+調査の **読み込み主体の作業**（マスター設計書の pinpoint 読込・CKG による blast radius
+探索・コード本体の読込）は `Agent` ツール（Explore / general-purpose）に委譲し、
+**蒸留した構造化レポートだけ**を本スレッドに持ち帰る。grep/Read の生出力やシンボル本体で
+本スレッドの context を汚さないため（= 長い run でも指示忠実度を保つ）。
+
+- 委譲する: step 2（設計書 pinpoint 読込）と step 3（CKG blast radius）の探索・読込。
+  サブエージェントには「対象を読み {関連ファイル, シンボル, 依存, 既存 ADR との矛盾候補,
+  blast radius 候補集合} を構造化して返せ。本文は貼らず file:line と要約だけ」と指示する。
+- 本スレッドに残す: `harness ask`（人間対話）・`spec.toml` 執筆・`report-evidence` /
+  `record-artifact` / `advance`（gate 呼び出し）・全ての判断。
+- 返ってきた map を使って spec を書き、research_notes として `record-artifact` する。
+
 ## grilling 方式（grill-with-docs）── 壁打ちの規律
 
 - **1 問ずつ** `harness ask`(推奨答えを option 先頭に含める)で詰め、`answer` を待ってから次へ。決定木を順に解く。

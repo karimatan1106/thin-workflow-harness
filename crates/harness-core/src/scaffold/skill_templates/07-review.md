@@ -5,6 +5,19 @@
 2 軸を分ける理由: 全標準を満たすコードが**誤った feature** を実装し得る/正しい機能が**convention 違反**し得る。
 単軸 verdict はこの misalignment を隠す ── 軸を分けて別 gate にすると、一方が緑でも他方で advance が止まる。
 
+## サブエージェント隔離（diff 読込・トレーサビリティ収集）
+
+read-heavy な収集/解析（全体 diff 読込・トレーサビリティ収集・Standards/Spec 2 軸の
+checklist 採点・deletion test の CKG 実測）は `Agent` ツールに委譲し、構造化レビュー
+レポートだけを持ち帰る。**最終 verdict と操舵は本スレッドに残す**（review は steering したい手順）。
+
+- 委譲する: `git diff` 全体読込・`harness spec`/`artifact-list` 突合・2 軸 checklist の
+  読込採点・`harness-lspd query impacted-by/closure` の実測。サブエージェントには
+  「{traceability(F-NNN↔artifact↔test), standards findings, spec per_requirement,
+  deletion_test} を構造化して返せ。diff 本文は貼るな」と指示する。
+- 本スレッドに残す: 最終 verdict・`report-evidence standards_review`/`spec_review`/
+  `deletion_test`・`harness back` / `advance`・人間判断。
+
 ## 前提
 
 - test phase 緑(回帰 gate green)、security phase 緑(`security_review` approved)
