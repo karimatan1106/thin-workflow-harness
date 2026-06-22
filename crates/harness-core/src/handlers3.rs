@@ -111,7 +111,14 @@ fn fill_open_question(context_ref: Option<&str>, answer: &str) -> Result<(), Str
         .find(|oq| context_ref.is_some_and(|c| c == oq.id) && oq.answer.is_none())
         .or_else(|| spec.open_question.iter().find(|oq| oq.answer.is_none()));
     let Some(target) = target else {
-        eprintln!("(警告) 対応する未回答の [[open_question]] が見つからない ── spec.toml は手動で更新してください");
+        // grilling 流儀では `harness ask`/`answer` は spec の `??` と無関係（ask は常に
+        // context_ref=None・kind=clarification で積まれる）。spec に未回答 open_question が
+        // 無いのは「埋める先が無い＝壁打ち質問」が普通なので黙ってスキップする。
+        // ただし spec に [[open_question]] が定義済みなのに未回答が尽きている時だけ、
+        // 取りこぼし（手動で書き戻す必要があるかも）を注意として残す。
+        if !spec.open_question.is_empty() {
+            eprintln!("(注意) この回答に対応する未回答の [[open_question]] が無い ── 必要なら spec.toml を手動更新してください");
+        }
         return Ok(());
     };
     let Ok(text) = std::fs::read_to_string(&sp_path) else {
