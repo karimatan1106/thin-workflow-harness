@@ -1,6 +1,12 @@
 ---
 name: run
 description: workflow.toml + skill-driven workflow runner for LLM agent loops. Use when user has a code change request that benefits from phase-by-phase progression (investigate -> design -> implement -> test -> review). Provides L1-L4 deterministic gates and event-log based state derivation. Skip for one-shot edits or simple Q&A.
+hooks:
+  PreToolUse:
+    - matcher: "Read"
+      hooks:
+        - type: command
+          command: "bash ${CLAUDE_PLUGIN_ROOT}/scripts/read-lsp-nudge.sh"
 ---
 
 # thin-workflow-harness
