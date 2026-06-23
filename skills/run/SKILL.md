@@ -56,7 +56,7 @@ harness には「誰が LLM 生成をやるか」で2つの駆動モードがあ
    5. `Bash: harness gates` で全 gate が pass か確認 → `Bash: harness advance` で次ノードへ
       - gate 不足なら advance は進まず、不足 gate を表示 → 4 に戻る
       - 設計をやり直すべきと判断したら `Bash: harness back`
-5. 人間判断が要る分岐は `Bash: harness ask "<question>" --option A --option B`（私が積む）→ 私が停止してユーザーに提示 → ユーザーが `Bash: harness answer <qid> <choice>`（または私が AskUserQuestion で聞いて代行 answer）
+5. 人間判断が要る分岐は `Bash: harness ask "<question>" --option A --option B` でキューに積み、**AskUserQuestion ツールで提示する（既定）** → ユーザーの選択を `Bash: harness answer <qid> "<選択肢テキスト>"` で記録する。ピッカー UI と harness state/audit の両取り。平文で 1/2 待ちにせず AskUserQuestion を既定提示にし、`harness answer` での記録は必須（省くと state に残らず `no_pending_required_questions` gate が fail）
 6. 全ノード完走で run 終了。`Bash: harness stats <run-id>` で tool_calls / wall_seconds を確認
 7. 詰まったら `Bash: harness status --run <run-id>` / `Bash: harness gates` で state を点検。stale ロックは `Bash: harness run --force-unlock`（これは API を叩かない回収専用）
 

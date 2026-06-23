@@ -22,6 +22,10 @@
 ## grilling 方式（grill-with-docs）── 壁打ちの規律
 
 - **1 問ずつ** `harness ask`(推奨答えを option 先頭に含める)で詰め、`answer` を待ってから次へ。決定木を順に解く。
+- **提示は AskUserQuestion で(既定)** ── `harness ask` でキューした質問は、そのまま AskUserQuestion ツールで
+  人間に提示し、選んだ回答を `harness answer <qid> "<選択肢テキスト>"` で記録する(ピッカー UI と harness
+  state/audit の両取り)。`harness answer` を省くと state に残らず `no_pending_required_questions` gate が
+  未回答で fail する。平文で 1/2 を待つだけにしない。
 - **訊く前にコードを見る** ── コードで答えられる問いは `harness-lspd query` / Read で確認する。
 - **曖昧/過負荷の語を即指摘し正典名を提案** ── 解決した語は `CONTEXT.md`(ドメイン用語集、形式は
   `docs/CONTEXT-FORMAT.md`)に **その場で追記**(バッチにしない)。実装詳細は入れない。単一は root の
@@ -101,7 +105,10 @@
    harness-lspd query impacted-by <sym>            # 署名変更時の上流影響
    harness-lspd query refs <sym>                   # 参照箇所（本体は file:line を Read で読む）
    ```
-   grep は補助（位置でなくテキストが返り context が膨らむため、構造クエリを優先）。候補集合を
+   **blast radius の道具選択 ── コード=CKG / テキスト=grep**: コードシンボルの変更影響は
+   `harness-lspd query`(CKG)で引く(位置が返り context が膨らまない)。一方、**文書/設定/skill 等の
+   テキスト変更は grep が正当** ── CKG は markdown 散文に解決すべきシンボルを持たず空振りする
+   (`symbol not found`)。「シンボルを変えるなら CKG、文言を変えるなら grep」で選ぶ。候補集合を
    `requirement.files` のドラフトにして人間に確認:
    ```
    harness ask "blast radius はこれで漏れは?" --option "OK" --option "漏れあり"
