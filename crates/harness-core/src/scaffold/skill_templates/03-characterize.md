@@ -42,6 +42,12 @@
    ```
    想定: test 総数が増え、新規 test は fail する。
 
+   **fixture / 期待値は RECORDED な実データを出所にする** ── 本番 / 実環境の記録（キャプチャした
+   API レスポンス・実ログ・実 DB 行・実画面の snapshot）を使い、手書きの合成データで都合よく通る
+   期待値を作らない。合成 fixture は実挙動と乖離し、test green が現実を保証しなくなる
+   （`NULL / 欠損 / 未購読 / 空` は実データには出るが合成では抜けやすい ── 本番固有バグの温床）。
+   実データを記録できないときは `harness ask` で出所を確認する。
+
 5. **coverage gate** ── このノードの exit_gate `cmd_exit_0 <coverage>` が pass する
    coverage コマンドを走らせる（detect で導出された coverage cmd、未設定なら
    `false # configure coverage ...` が fail を強制）:
@@ -73,6 +79,7 @@
 - このフェーズでコード本体を編集すること（test 追加のみ。実装は implement で）
 - failing test を `#[ignore]` / `.skip()` で隠すこと
 - AC を「曖昧なまま」放置すること（テスト化できない AC は AC でない）
+- 実データ由来でない都合の良い合成 fixture で AC を満たした体にすること
 - 状態ファイル（イベントログ）の直接編集
 - 禁止語（TODO, TBD, WIP, FIXME, 未定, 未確定, 要検討, 検討中, 対応予定, サンプル, ダミー,
   仮置き）を成果物に残すこと

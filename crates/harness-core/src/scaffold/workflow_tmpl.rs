@@ -1,5 +1,7 @@
-//! デフォルトワークフロー (research → plan → characterize → implement → test → security
-//! → review) を検出結果から組み立てる。`docs/schemas.md` §2.2 準拠。
+//! デフォルトワークフロー (research → plan → design-pre → characterize → implement → test →
+//! verify → security → review → docdesign) を検出結果から組み立てる。`docs/schemas.md` §2.2 準拠。
+//! verify は outside-in 観測ノード ── white-box gate を満たしても現実(描画/本番データ/仕様誤読)が
+//! 壊れる型を実機観測で塞ぐ(`{verify}` cmd は任意、強制力は verify_observation evidence)。
 //!
 //! 未検出のコマンドは `false # configure <kind> command ...` にする ── `echo` は exit 0
 //! で gate を素通りしてしまうため、未設定なら通さないことを保証する。
@@ -11,6 +13,10 @@ pub fn render(d: &DetectedProject) -> String {
     let test_cmd = ph(d.test.as_deref(), "test");
     // E2E (L10) は unit と層が違うため自動検出しない ── 必ず明示設定させる。
     let e2e = ph_str("e2e");
+    // verify (outside-in 観測) も自動検出しない。ただし強制力は observation evidence が握るため、
+    // 未設定は素通り (true) にして「自動 verify を書けない変更も not_applicable で通せる」を成立させる。
+    // (`#` 以降はシェルのコメント = exit 0。実コマンドに差し替えれば自動 verify として走る。)
+    let verify = "true # optional: set a real verify command (browser/e2e/screenshot/smoke); observation evidence is the gate".to_string();
     let coverage = ph(d.coverage.as_deref(), "coverage");
     let security = if d.gitleaks_available {
         "gitleaks detect --no-git --redact".to_string()
@@ -151,6 +157,25 @@ exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/regression_gate.mjs" }} }},
   {{ gate = "cmd_exit_0", args = {{ cmd = "{e2e}" }} }},
 ]
+next = ["verify"]
+on_reject = {{ after = 3, goto = "implement" }}
+
+[[node]]
+id = "verify"
+skill = "11-verify.md"
+# outside-in 観測フェーズ ── 「green != done、観測して done」。white-box (コード↔spec) が
+# 満たされても現実が壊れる型(描画/フォーマットの seam 不一致・本番固有データ NULL/欠損/未購読/空・
+# 仕様誤読)を、実機の外形観測で塞ぐ。UI=実ブラウザで描画/操作を観測、backend/prod=実形状で
+# critical path を叩く。強制力は観測 evidence (verify_observation) が握る ── 自動 verify を書けない
+# 変更も verdict=not_applicable + 理由で通せる(詰まらせない)。観測は機械的作業中心なので Sonnet。
+model = "sonnet"
+exit_gates = [
+  # 任意の自動 verify (E2E/screenshot/smoke)。未設定は素通り (true)。teeth は下の observation。
+  {{ gate = "cmd_exit_0", args = {{ cmd = "{verify}" }} }},
+  {{ gate = "evidence_recorded", args = {{ key = "verify_observation" }} }},
+  {{ gate = "json_in", args = {{ evidence_key = "verify_observation", json_path = "verdict", one_of = "observed,not_applicable" }} }},
+  {{ gate = "json_nonempty", args = {{ evidence_key = "verify_observation", json_path = "observed" }} }},
+]
 next = ["security"]
 on_reject = {{ after = 3, goto = "implement" }}
 
@@ -221,6 +246,7 @@ on_reject = {{ after = 2, goto = "review" }}
         mandatory = mandatory,
         coverage = toml_escape(&coverage),
         e2e = toml_escape(&e2e),
+        verify = toml_escape(&verify),
         security = toml_escape(&security),
         spec_glob = spec_glob,
     )

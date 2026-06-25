@@ -164,4 +164,5 @@ const SKILL_STUBS: &[(&str, &str)] = &[
     ("08-join.md", include_str!("skill_templates/08-join.md")),
     ("09-docdesign.md", include_str!("skill_templates/09-docdesign.md")),
     ("10-design-pre.md", include_str!("skill_templates/10-design-pre.md")),
+    ("11-verify.md", include_str!("skill_templates/11-verify.md")),
 ];

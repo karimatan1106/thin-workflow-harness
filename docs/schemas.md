@@ -127,6 +127,13 @@ notes = ""                                  # 補足
 
 ### 2.2 デフォルトワークフローの例（research/scope → plan → characterize → implement → test → security → review → done）
 
+> 注: `harness init` が生成するノード集合の正典は `crates/harness-core/src/scaffold/workflow_tmpl.rs`。
+> 現行 canonical は research → plan → design-pre → characterize → implement → test → **verify** → security
+> → review → docdesign の 10 ノード。本例はその簡略版で design-pre / verify / docdesign を含まない ──
+> ノード集合は workflow_tmpl.rs が優先する。verify は outside-in 観測ノードで、white-box gate を満たしても
+> 現実(描画 / 本番固有データ / 仕様誤読)が壊れる型を実機観測で塞ぐ(`{verify}` cmd は任意、強制力は
+> verify_observation evidence)。
+
 これがデフォルトワークフロー（`DESIGN.md` §3・§5）。`characterize` は任意ノード（plan と implement の間に置く）── 影響ファイルのカバレッジが閾値未満なら fail する `cmd_exit_0` を出口 gate に持ち「変える前に characterization test を書け」を強制する（専用プリミティブは作らない、`DESIGN.md` §7）。不要なら省略してよい。`plan` ノードは plan-approval gate（人間チェックポイント 2 つ目、`DESIGN.md` §13）、`security` ノードは test の後・review の前に最終セキュリティ確認を担う（`docs/skill-templates.md` の `## skill: security`）。`implement` は分解されると `fork`/`join` で並列化される（§2.4）。
 
 ```toml
