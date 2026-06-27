@@ -44,6 +44,51 @@
   ```
   `verdict` = `created`(新規作成) / `updated`(追記) / `noop`(ドメイン語彙の更新不要 ── 理由を rationale に必ず書く)。
 
+## 深い詰問プロトコル (deep grill-with-docs) ── 上の壁打ちを“設計を壊す問い”で駆動する
+
+目的: 正しいテストの前に **正しい設計** を引き出す。深さは「人が納得するまで」でなく
+**「設計を覆す新しい論点が枯れるまで(loop-until-dry)」**。testable(AC/INV/具体例) はこの詰問の **結果**
+(step 4-5 に落ちる) ── 詰問が浅いと AC も浅い。設計根拠: thin-workflow-harness `docs/deep-grilling-design.md`。
+
+> 限界(overclaim しない): `正しいテスト ← 正しい設計 ← 深い詰問` は **必要条件で十分でない**
+> (深く問うても誤判断しうる/設計が正しくても網羅の穴は残る) → 下流(test/mutation/verify)保険は必須、
+> 詰問はその残差を減らす。「枯渇」は“体系的生成を出し切った”であって“設計が健全”の証明ではない。
+
+### A. 深度 triage(設計リスク = 損失への近さ で重さを決める)
+OR トリガーのどれか該当 → **deep**、全て否 → **light**:
+- **損失に近い**: 許容できない損失(安全/セキュリティ/金/データ整合/不変条件/クリティカルパス)に至る制御に触れる
+- **新規性(新Why)**: 新機能/新ポリシー/新相互作用 = 新たな設計判断が要る
+- **低検出**: 設計ミスが下流(test/mutation/review)で気づきにくい
+
+迷えば deep(過少詰問 ≫ 過剰詰問)。light 中に隠れリスクが出たら即 deep 昇格。**深さは blast radius(コード量)で決めない**(小×重大を取りこぼす)。FMEA/RPN は使わない。
+
+### B. 独立詰問者に生成させる(deep 時・ADR-059 の前段 = 自己詰問は甘い)
+deep のとき下記 C の質問生成は本スレッドでなく **独立サブエージェント**(`Agent`)に委ねる:
+- 渡す: intent + 関連 docs(過去バグ/ADR/architecture/CONTEXT/品質目標) + blast radius + C のプロトコル。
+- 制約: **「想定する実装/答え」を渡さない**(後知恵バイアスを構造的に排除)。「設計を壊す問いを出せ・忖度するな」、
+  レンズ/生成器(HAZOP guideword・UCA 等)タグ付きで **危険順** に返させる。
+- 本スレッド: 返った問いを `harness ask`/AskUserQuestion で人間に詰問 → 回答を spec/ADR へ → D の loop。
+
+### C. 生成 = 3つの直交レンズ(単一フレームワークは不完全。要素 × 演算子で相対網羅)
+「正しい設計」は1軸でない。各レンズを総当たりし、出た判断を spec へ。docs が薄い/ADR 0件でも効く。
+- **レンズ1 損失・失敗(STPA + HAZOP)**: `Losses → Hazards → Unsafe Control Actions(出ない/誤って出る/
+  タイミング異常/途中で止まる) → Loss Scenarios(偶発故障 + 敵対動作)`。各入力・制御に HAZOP ガイドワード
+  (No/More/Less/Reverse/Early/Late/As-well-as/Part-of)を当てて UCA を炙り出す。セキュリティもここに統合
+  (STRIDE/FMEA 不採用)。データ/分散 = ACID + CAP/PACELC + 一貫性モデル + 分散 fallacies。
+- **レンズ2 機能・論理の正しさ**: 損失でない「ただ間違う」誤り = 境界/異常/不変条件/property、
+  ISO/IEC 25010:2023 機能適合性。← AC/INV の源。
+- **レンズ3 設計品質**: Ousterhout(深い/浅いモジュール・結合・複雑性隠蔽)・ドメインモデル整合・抽象/API 一貫性。
+
+新しい Why は ADR draft 起票(前進蓄積 = 詰問が ADR を生む)。3レンズでも絶対網羅は不可能 → 取りこぼしは下流が直交保険。
+
+### D. loop-until-dry(停止条件 = 深さの定義)
+C の質問を人間に詰問 → 回答反映 → **独立詰問者を再度回し新論点が出るか確認**。**2周連続で新論点ゼロ = 枯渇 = 停止**。
+
+### E. 記録(深さの担保)
+```
+harness report-evidence interrogation '{"depth":"deep","triggers":["損失に近い","新規性"],"rounds":2,"sources":["ADR-NNN","過去バグ:<class>","HAZOP:No","STPA:制御が出ない"],"surfaced":["<炙り出した設計穴>"],"verdict":"exhausted"}'
+```
+
 ## 順序
 
 0. **現実で再現してから spec を書く**（再現が先、spec は後）── 報告された不具合 / 現状挙動を
