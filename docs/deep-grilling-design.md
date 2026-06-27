@@ -1,7 +1,7 @@
 # Deep grill-with-docs — 設計を正してテストを正す
 
 status: design v1（Q1-Q4 確定・フレームワーク接地済み）
-関連: ADR-059(独立評価者), SDD(設計先行), design-pre, 差分mutation(下流検証)
+関連: ADR-059(独立評価者), SDD(設計先行), design-pre, 差分mutation(下流検証), [design-writing-design.md](./design-writing-design.md)（下流＝出した要件から設計を「手戻りが出ない形」で書く）
 
 ## 1. 動機
 
