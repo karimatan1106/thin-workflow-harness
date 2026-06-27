@@ -187,6 +187,9 @@ model = "opus"
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "{security}" }} }},
   {{ gate = "evidence_recorded", args = {{ key = "security_review" }} }},
+  # ADR(generator/evaluator 分離): verdict は生成した本スレッドでなく独立した敵対的評価者が出す。
+  # evidence に evaluator="independent" が無い=自己採点 → gate fail で advance 不可。
+  {{ gate = "json_has", args = {{ evidence_key = "security_review", json_path = "evaluator", eq = "independent" }} }},
 ]
 next = ["review"]
 on_reject = {{ after = 3, goto = "implement" }}
@@ -204,6 +207,9 @@ exit_gates = [
   {{ gate = "json_has", args = {{ evidence_key = "standards_review", json_path = "verdict", eq = "approved" }} }},
   {{ gate = "json_has", args = {{ evidence_key = "spec_review", json_path = "verdict", eq = "approved" }} }},
   {{ gate = "json_nonempty", args = {{ evidence_key = "spec_review", json_path = "per_requirement" }} }},
+  # generator/evaluator 分離: 両軸の verdict も独立した敵対的評価者が出す(本スレッド自己採点を gate で排除)。
+  {{ gate = "json_has", args = {{ evidence_key = "standards_review", json_path = "evaluator", eq = "independent" }} }},
+  {{ gate = "json_has", args = {{ evidence_key = "spec_review", json_path = "evaluator", eq = "independent" }} }},
   # deletion test (Ousterhout depth ヒューリスティック / improve-codebase-architecture 由来): 触った
   # module を消したら複雑性が消えるか(=浅い pass-through=却下)を CKG impacted-by 実測込みで評価し記録。
   {{ gate = "evidence_recorded", args = {{ key = "deletion_test" }} }},

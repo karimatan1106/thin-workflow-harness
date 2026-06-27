@@ -149,7 +149,7 @@ notes = ""
 // 回帰 baseline (state/regression_baseline.json) は蓄積の永続記録なので git 追跡する (明示 negate)。
 const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\nstate/*.lock\ntranscripts/\n!state/.gitkeep\n!state/regression_baseline.json\n";
 
-/// skill ファイル。全 10 個を `skill_templates/*.md` から `include_str!` で同梱
+/// skill ファイル。全 12 個を `skill_templates/*.md` から `include_str!` で同梱
 /// （fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携を含む operational
 /// template）。harness init で展開された時点で各 skill が実行可能な指示を持つ
 /// default workflow が完成する状態。
@@ -165,4 +165,5 @@ const SKILL_STUBS: &[(&str, &str)] = &[
     ("09-docdesign.md", include_str!("skill_templates/09-docdesign.md")),
     ("10-design-pre.md", include_str!("skill_templates/10-design-pre.md")),
     ("11-verify.md", include_str!("skill_templates/11-verify.md")),
+    ("12-land.md", include_str!("skill_templates/12-land.md")),
 ];

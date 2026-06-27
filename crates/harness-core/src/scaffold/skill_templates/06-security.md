@@ -6,19 +6,41 @@
 > 設計思想は Anthropic 公式 security-guidance プラグインの 3 層に対応する。
 > harness は exit_gate で **強制**できるのが本家との差 ── 通らなければ次ノードへ進めない。
 
-## サブエージェント隔離（diff レビュー・監査）
+## 独立評価者が verdict を出す（同一 LLM 自己採点の禁止 ── generator/evaluator 分離）
 
-層 2（差分レビュー）・層 3（データフロー深掘り）・dep audit の **読み込み/解析**は
-`Agent` ツールに委譲し、構造化 findings レポートだけを持ち帰る（diff 本文で本スレッドの
-context を汚さない）。
+**判定（approved/rejected）は、実装を生成した本スレッドが出してはならない。** 新鮮な
+敵対的サブエージェント（`Agent` ツール）に出させ、本スレッドはその verdict を **relay
+するだけ**。生成した本人の context は自己説得で埋まっており、自己採点は approved に
+流れる（self-preferential bias）。test/verify は harness が gate を再実行/観測する決定論
+センサで無問題だが、security の判定は決定論再実行できないため独立評価者で代替する。
 
-- 委譲する: `git diff` 抽出と 8 クラス checklist の読込採点・cross-file データフロー追跡・
-  `cargo audit`/`pnpm audit` の実行と解析。サブエージェントには「{8 クラス毎の verdict,
-  risk_items[], dep CVE} を構造化して返せ。diff 本文は貼るな」と指示する。
-- 本スレッドに残す: 判定（approved/rejected）・`report-evidence security_review`・
-  `harness back` / `advance`・`harness ask` の判断。
+**委譲する（評価者サブエージェント）:**
+
+- input: `git diff main..HEAD`、層 2 の 8 クラス checklist、層 3 のデータフロー観点、変更ファイル一覧
+- 指示（評価者の stance）: 「お前は**敵対的セキュリティレビュアだ。この変更は安全でないと
+  仮定**し、安全だと証明されるまで approved を出すな。褒めるな。8 クラス各項を**実際に確認**
+  （該当 path を読み injection/IDOR/SSRF/secret を具体的に追う）。dep audit は**自分で実行**
+  して出力を貼れ（読むだけ不可）。全クラスクリアのときだけ verdict=approved、一つでも
+  残れば rejected ＋ 各理由」
+- **公平性の本体は fresh context / 別セッション**（共有 context を断てば自己説得の連鎖が消え、
+  同一モデルでも公平に判定できる）。**評価者は fork 禁止**（`subagent_type:"fork"` は本スレッドの
+  context を継承し自己採点へ逆戻りする ── 非 fork の fresh agent を使う）。別モデルは**系統的な
+  共有盲点への追加防御**で必須でない。最良は **review/security を別セッションで cold に回す**
+  （`harness status --run <id>` で pickup、または `harness run` worker）── 分離がプロセス事実に
+  なり evidence 捏造の余地も消える。
+- return（構造化）: `{verdict, evaluator_model, observed:[実行した audit 等と結果],
+  layers:{l1_static,l2_diff,l3_dataflow}, risk_items[], notes}`
+
+**本スレッドに残す（relay と操舵のみ）:**
+
+- 評価者の verdict を**そのまま** `report-evidence security_review` に載せる。
+  **approved への書き換え禁止**（評価者が rejected なら本スレッドで approved にしない。
+  より厳しい rejected へ倒すのは可）。
+- evidence に `evaluator:"independent"` / `evaluator_model` / `observed[]` を必ず含める
+  （出口 gate `json_has security_review evaluator eq independent` が必須化）。
+- `harness back` / `advance` / `harness ask` の操舵。
 - 注: secret scan（gitleaks）は exit_gate `cmd_exit_0` が advance 時に再実行するので、
-  gate 判定は harness が握る（サブエージェントは解析のみ）。
+  二重に harness が握る（評価者は自分で走らせて貼り、harness が再実行して確定）。
 
 ## 前提
 
@@ -87,13 +109,16 @@ pip-audit                         # Python
 
 ## 判定 evidence を提出
 
-exit_gate `evidence_recorded { key = "security_review" }` が pass するように:
+exit_gate `evidence_recorded { key = "security_review" }` ＋
+`json_has security_review evaluator eq independent` が pass するように、
+**評価者サブエージェントが返した verdict をそのまま** relay する:
 
 ```
-harness report-evidence security_review '{"verdict":"approved","layers":{"l1_static":"clear","l2_diff":"clear","l3_dataflow":"clear"},"risk_items":[],"notes":"..."}'
+harness report-evidence security_review '{"verdict":"approved","evaluator":"independent","evaluator_model":"<別モデル tier>","observed":["cargo audit -> 0 CVE"],"layers":{"l1_static":"clear","l2_diff":"clear","l3_dataflow":"clear"},"risk_items":[],"notes":"..."}'
 ```
 
-risk が残るなら `verdict: "rejected"` で `harness back "security risk: ..."`。
+評価者が risk を残したら（`verdict:"rejected"`）、**本スレッドで approved に書き換えず**
+そのまま relay し `harness back "security risk: ..."`。
 
 ## 進める
 
@@ -117,6 +142,9 @@ harness advance
 
 ## 禁止
 
+- **本スレッド（生成者）が自分で 8 クラスを採点して verdict を出すこと**（判定は独立した
+  敵対的評価者サブエージェントが出す。本スレッドは relay のみ）
+- **評価者の rejected を本スレッドで approved に格上げすること**（より厳しい側へ倒すのは可）
 - 「change は小さいから skip」で checklist を埋めないこと（最低限の確認は必須）
 - 8 クラスのうち未確認のものを確認済として evidence に書くこと（gate 偽装）
 - risk_items を空にしたいだけで rejected を approved に書き換えること（gate 偽装）
