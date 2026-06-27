@@ -12,3 +12,7 @@ examples/skill-tools-archive/**/Cargo.lock
 
 # dogfood の transient harness run (self-host・非コミット)
 .harness/
+
+# cargo-mutants 出力(差分mutation実行時に生成)
+mutants.out/
+mutants.out.old/

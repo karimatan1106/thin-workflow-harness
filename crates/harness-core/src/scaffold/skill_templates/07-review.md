@@ -5,18 +5,37 @@
 2 軸を分ける理由: 全標準を満たすコードが**誤った feature** を実装し得る/正しい機能が**convention 違反**し得る。
 単軸 verdict はこの misalignment を隠す ── 軸を分けて別 gate にすると、一方が緑でも他方で advance が止まる。
 
-## サブエージェント隔離（diff 読込・トレーサビリティ収集）
+## 独立評価者が verdict を出す（同一 LLM 自己採点の禁止 ── generator/evaluator 分離）
 
-read-heavy な収集/解析（全体 diff 読込・トレーサビリティ収集・Standards/Spec 2 軸の
-checklist 採点・deletion test の CKG 実測）は `Agent` ツールに委譲し、構造化レビュー
-レポートだけを持ち帰る。**最終 verdict と操舵は本スレッドに残す**（review は steering したい手順）。
+**Standards 軸 / Spec 軸の最終 verdict は、実装を生成した本スレッドが出してはならない。**
+新鮮な敵対的サブエージェント（`Agent` ツール）に出させ、本スレッドはその verdict を
+**relay するだけ**。書いた本人は自分のコードの採点に甘すぎる（self-preferential bias）。
+`traceability_closed` は決定論 gate が握るが、「品質は妥当か / 要件に整合するか」という
+2 軸判定は決定論再実行できないため独立評価者で代替する。
 
-- 委譲する: `git diff` 全体読込・`harness spec`/`artifact-list` 突合・2 軸 checklist の
-  読込採点・`harness-lspd query impacted-by/closure` の実測。サブエージェントには
-  「{traceability(F-NNN↔artifact↔test), standards findings, spec per_requirement,
-  deletion_test} を構造化して返せ。diff 本文は貼るな」と指示する。
-- 本スレッドに残す: 最終 verdict・`report-evidence standards_review`/`spec_review`/
-  `deletion_test`・`harness back` / `advance`・人間判断。
+**委譲する（評価者サブエージェント）:**
+
+- input: `git diff main..HEAD`、`harness spec`/`artifact-list`、2 軸 checklist、`spec.toml` 要件文
+- 指示（評価者の stance）: 「お前は**敵対的コードレビュアだ。この変更は壊れている/要件を
+  取り違えていると仮定**し、正しいと証明されるまで approved を出すな。褒めるな。Standards 軸と
+  Spec 軸を**混ぜず別々に**採点。lint/clippy/fmt と `harness-lspd query impacted-by/closure`
+  （deletion test の caller 実測）は**自分で実行**して出力を貼れ（読むだけ不可）。各軸とも全項目
+  クリアのときだけ verdict=approved、一つでも残れば rejected ＋ 各理由」
+- **公平性の本体は fresh context / 別セッション**（共有 context を断てば自己説得の連鎖が消え、
+  同一モデルでも公平に判定できる）。**評価者は fork 禁止**（`subagent_type:"fork"` は本スレッドの
+  context を継承し自己採点へ逆戻りする ── 非 fork の fresh agent を使う）。別モデルは**系統的な
+  共有盲点への追加防御**で必須でない。最良は **review/security を別セッションで cold に回す**
+  （`harness status --run <id>` で pickup、または `harness run` worker）── 分離がプロセス事実に
+  なり evidence 捏造の余地も消える。
+- return（構造化・**2 軸を混ぜない**）: `{standards:{verdict, evaluator_model, observed[],
+  hard_violations[], judgment_calls[]}, spec:{verdict, evaluator_model, per_requirement[],
+  scope_creep[]}, deletion_test:{modules[], has_shallow_passthrough}}`
+
+**本スレッドに残す（relay と authoring・操舵のみ）:**
+
+- 評価者の各軸 verdict を**そのまま** `report-evidence standards_review`/`spec_review` に載せる。
+  **approved への書き換え禁止**（評価者が rejected なら本スレッドで approved にしない）。
+- `harness back` / `advance`・人間判断。
 
 ## 前提
 
@@ -67,13 +86,15 @@ checklist 採点・deletion test の CKG 実測）は `Agent` ツールに委譲
 
 7. **lint / format 確認**(任意・推奨): `cargo clippy -- -D warnings` / `cargo fmt --check` / `pnpm lint`。
 
-8. **両軸 + deletion test を evidence で提出**(**マージせず別 key**):
+8. **評価者の両軸 + deletion test を relay**(**マージせず別 key**。
+   各軸とも `json_has ... evaluator eq independent` が必須 ── 評価者が返した verdict をそのまま):
    ```
-   harness report-evidence standards_review '{"verdict":"approved","hard_violations":[],"judgment_calls":["naming 改善余地: ..."],"comments":["positive: ..."]}'
-   harness report-evidence spec_review '{"verdict":"approved","per_requirement":[{"id":"F-1","quote":"<spec 引用>","status":"met"}],"scope_creep":[]}'
+   harness report-evidence standards_review '{"verdict":"approved","evaluator":"independent","evaluator_model":"<別モデル tier>","observed":["cargo clippy -> 0 warnings"],"hard_violations":[],"judgment_calls":["naming 改善余地: ..."],"comments":["positive: ..."]}'
+   harness report-evidence spec_review '{"verdict":"approved","evaluator":"independent","evaluator_model":"<別モデル tier>","per_requirement":[{"id":"F-1","quote":"<spec 引用>","status":"met"}],"scope_creep":[]}'
    harness report-evidence deletion_test '{"modules":[{"name":"<sym>","callers_affected":3,"verdict":"deepens"}],"has_shallow_passthrough":false}'
    ```
-   どちらかの軸に issue があれば該当軸を `rejected` にして `harness back "<軸>: <理由>"` で implement/plan へ戻す。
+   評価者がどちらかの軸に issue を残したら該当軸を `rejected` のまま relay し（**本スレッドで
+   approved に書き換えず**）`harness back "<軸>: <理由>"` で implement/plan へ戻す。
 
 9. **次フェーズへ**: `harness advance`
 
@@ -98,6 +119,9 @@ checklist 採点・deletion test の CKG 実測）は `Agent` ツールに委譲
 
 ## 禁止
 
+- **本スレッド（生成者）が最終 verdict を出すこと**（判定は独立した敵対的評価者
+  サブエージェントが出す。本スレッドは relay と authoring・操舵のみ）
+- **評価者の rejected を本スレッドで approved に格上げすること**（より厳しい側へ倒すのは可）
 - **2 軸の findings をマージすること**(分離維持が目的 ── 別 evidence key で出す)
 - nit-pick だけで rejected(style 議論は別レイヤ)/ comment 0 件で approved(positive を最低 1 件)
 - approved を「とりあえず通すため」に書くこと(gate 偽装)

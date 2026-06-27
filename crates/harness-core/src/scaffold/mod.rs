@@ -44,6 +44,9 @@ pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), Strin
     fs::create_dir_all(&bin).map_err(|e| io_err(&bin, e))?;
     write_file(&bin.join("regression_gate.mjs"), REGRESSION_GATE_MJS)?;
     write_file(&harness_dir.join("regression_suites.json"), &regression_tmpl::render(d))?;
+    // 差分 mutation (非ブロッキング品質ゲート・project 非依存): test ノードの mutation_diff
+    // evidence を skill が `node bin/mutate-diff.mjs` で生成する。Cargo ワークスペース自動検出。
+    write_file(&bin.join("mutate-diff.mjs"), MUTATE_DIFF_MJS)?;
 
     // docs/ skeleton (repo root に生成、 既存があれば skip)
     if let Some(repo_root) = harness_dir.parent() {
@@ -100,6 +103,10 @@ const SECURITY_SKILL: &str = include_str!("templates/security_skill.md");
 /// 回帰 gate ツール（言語非依存・config 駆動。`tool_templates/regression_gate.mjs` を同梱）。
 const REGRESSION_GATE_MJS: &str = include_str!("tool_templates/regression_gate.mjs");
 
+/// 差分 mutation ツール（project 非依存。`tool_templates/mutate-diff.mjs` を同梱）。
+/// test ノードの mutation_diff evidence を生成。Rust=cargo-mutants --in-diff(変更行のみ)。
+const MUTATE_DIFF_MJS: &str = include_str!("tool_templates/mutate-diff.mjs");
+
 /// CONTEXT.md(ドメイン用語集)形式ガイド。research/plan の grilling が `docs/CONTEXT-FORMAT.md` を参照する。
 const CONTEXT_FORMAT: &str = include_str!("templates/CONTEXT-FORMAT.md");
 
@@ -149,7 +156,7 @@ notes = ""
 // 回帰 baseline (state/regression_baseline.json) は蓄積の永続記録なので git 追跡する (明示 negate)。
 const GITIGNORE: &str = "state/*.jsonl\nstate/*.questions.jsonl\nstate/*.metrics.jsonl\nstate/*.workflow-snapshot.toml\nstate/*.lock\ntranscripts/\n!state/.gitkeep\n!state/regression_baseline.json\n";
 
-/// skill ファイル。全 10 個を `skill_templates/*.md` から `include_str!` で同梱
+/// skill ファイル。全 12 個を `skill_templates/*.md` から `include_str!` で同梱
 /// （fat skills 思想 ── 具体的な tool 呼び方と exit_gates 連携を含む operational
 /// template）。harness init で展開された時点で各 skill が実行可能な指示を持つ
 /// default workflow が完成する状態。
@@ -164,4 +171,26 @@ const SKILL_STUBS: &[(&str, &str)] = &[
     ("08-join.md", include_str!("skill_templates/08-join.md")),
     ("09-docdesign.md", include_str!("skill_templates/09-docdesign.md")),
     ("10-design-pre.md", include_str!("skill_templates/10-design-pre.md")),
+    ("11-verify.md", include_str!("skill_templates/11-verify.md")),
+    ("12-land.md", include_str!("skill_templates/12-land.md")),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::detect::DetectedProject;
+
+    // 差分 mutation で検出した穴の回帰: write_layout を no-op(Ok(()))化しても誰も気づかなかった。
+    // init が差分 mutation ツールと回帰 gate を bin/ に同梱することを固定する。
+    #[test]
+    fn write_layout_emits_bin_tools() {
+        let base = std::env::temp_dir().join(format!("harness-scaffold-test-{}", std::process::id()));
+        let harness = base.join(".harness");
+        let _ = fs::remove_dir_all(&base);
+        write_layout(&harness, &DetectedProject::default()).expect("write_layout failed");
+        let bin = harness.join("bin");
+        assert!(bin.join("mutate-diff.mjs").exists(), "init が bin/mutate-diff.mjs を生成していない");
+        assert!(bin.join("regression_gate.mjs").exists(), "init が bin/regression_gate.mjs を生成していない");
+        let _ = fs::remove_dir_all(&base);
+    }
+}
