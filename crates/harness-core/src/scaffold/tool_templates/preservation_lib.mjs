@@ -79,6 +79,23 @@ export function compareUnderEquivalence(oldVal, newVal, policy, opts = {}) {
       let ta = a; for (const [k, v] of Object.entries(tc.map)) ta = ta.split(k).join(v);
       if (ta === b) { if (a !== b) bump(tc.id || tc.field); return; }
     }
+    // range: 制約付き非決定 field の軽量 admissible-set(数値域)。旧値(a)は非決定なので比較せず、
+    //   ★新値(b)が宣言した [min,max] に入るかだけ検証。域内=吸収 / 域外=divergence(garbage 捕捉)。
+    const rng = ruleFor(rules, path, 'range');
+    if (rng) {
+      if (typeof b === 'number' && (rng.min === undefined || b >= rng.min) && (rng.max === undefined || b <= rng.max)) {
+        bump(rng.id || rng.field); return;
+      }
+      divergences.push({ path: path || '(root)', old: a, new: b, rule: 'range', note: `new ${JSON.stringify(b)} ∉ [${rng.min ?? '-inf'},${rng.max ?? '+inf'}]` });
+      return;
+    }
+    // enum: 制約付き非決定 field の軽量 admissible-set(許容集合)。新値(b)が allowed に入るかだけ検証。
+    const en = ruleFor(rules, path, 'enum');
+    if (en && Array.isArray(en.allowed)) {
+      if (en.allowed.some((v) => JSON.stringify(v) === JSON.stringify(b))) { bump(en.id || en.field); return; }
+      divergences.push({ path: path || '(root)', old: a, new: b, rule: 'enum', note: `new ${JSON.stringify(b)} ∉ allowed` });
+      return;
+    }
     // 型不一致 or プリミティブ不一致
     if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') {
       if (a !== b) divergences.push({ path: path || '(root)', old: a, new: b });

@@ -5,6 +5,8 @@
     "tolerance": "数値の許容差で吸収。{abs, rel}。浮動 ULP/相対ε(class C)。",
     "transcode": "文字写像で吸収。{map:{from:to}} を旧側に適用してから比較(EBCDIC↔ASCII code-page, class A)。",
     "order:multiset": "配列を集合扱い(ソートして比較)。★既定は positional。SORT/collation 順(class F)は保存対象なので multiset は本当に順序非依存な field だけに限定。",
+    "range": "制約付き非決定 field の軽量 admissible-set(数値域)。{min?,max?}。旧値は非決定ゆえ比較せず、★新値が [min,max] に入るかだけ検証(域内=吸収/域外=divergence)。volatile(無視)と違い domain 外の garbage を捕える(例 採番 seq は 1000-9999)。",
+    "enum": "制約付き非決定 field の軽量 admissible-set(許容集合)。{allowed:[...]}。新値が allowed に入るかだけ検証。カテゴリ非決定(例 status∈{A,B,C})。",
     "_required": "各規則に field(具体パス/接頭辞'foo.'/'foo[]')必須。任意 witness:{old,new}=この規則が保存すべき既知隣接バグ(R 下でも赤に保たれるべき)を宣言すると differential_gate の per-rule tripwire が過剰正規化を自己検出する。"
   },
   "_cobol_examples": {
