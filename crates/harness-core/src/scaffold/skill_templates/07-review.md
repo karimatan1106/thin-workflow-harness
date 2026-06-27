@@ -16,6 +16,9 @@
 **委譲する（評価者サブエージェント）:**
 
 - input: `git diff main..HEAD`、`harness spec`/`artifact-list`、2 軸 checklist、`spec.toml` 要件文
+- **これ以外を渡さない（最小コンテキスト）**: 生成者(本スレッド)の推論・弁護・前段の説明・
+  「なぜ正しいか/要件を満たすか」の主張を評価者 prompt に**含めるな**。含めると評価者が説得され
+  弁明の経路になる ── 評価者は diff と要件だけから独立に判定する。
 - 指示（評価者の stance）: 「お前は**敵対的コードレビュアだ。この変更は壊れている/要件を
   取り違えていると仮定**し、正しいと証明されるまで approved を出すな。褒めるな。Standards 軸と
   Spec 軸を**混ぜず別々に**採点。lint/clippy/fmt と `harness-lspd query impacted-by/closure`
