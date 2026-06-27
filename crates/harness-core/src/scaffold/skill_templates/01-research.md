@@ -64,9 +64,15 @@ OR トリガーのどれか該当 → **deep**、全て否 → **light**:
 
 ### B. 独立詰問者に生成させる(deep 時・ADR-059 の前段 = 自己詰問は甘い)
 deep のとき下記 C の質問生成は本スレッドでなく **独立サブエージェント**(`Agent`)に委ねる:
-- 渡す: intent + 関連 docs(過去バグ/ADR/architecture/CONTEXT/品質目標) + blast radius + C のプロトコル。
+- 渡す: intent + 関連 docs(ADR/architecture/CONTEXT/品質目標) + blast radius + C のプロトコル
+  + **blast radius 限定の過去インシデント履歴**(専用カタログは作らず既存記録を on-demand 採掘):
+  ```
+  git log --grep='fix\|再発\|根治\|revert' --oneline -- <blast radius のファイル>   # 触る領域の過去バグ
+  ```
+  + 該当 ADR(`docs/adr/`)。これで「この変更は失敗クラス○○(この repo 特有の傷跡)を**再来させないか**」を
+  生成させる(generic は C が、project 固有の tail はこの履歴採掘が担当 = 直交)。
 - 制約: **「想定する実装/答え」を渡さない**(後知恵バイアスを構造的に排除)。「設計を壊す問いを出せ・忖度するな」、
-  レンズ/生成器(HAZOP guideword・UCA 等)タグ付きで **危険順** に返させる。
+  レンズ/生成器(HAZOP guideword・UCA・過去バグ class 等)タグ付きで **危険順** に返させる。
 - 本スレッド: 返った問いを `harness ask`/AskUserQuestion で人間に詰問 → 回答を spec/ADR へ → D の loop。
 
 ### C. 生成 = 3つの直交レンズ(単一フレームワークは不完全。要素 × 演算子で相対網羅)
