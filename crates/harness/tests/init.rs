@@ -125,6 +125,42 @@ fn init_security_template_creates_single_node_workflow() {
 }
 
 #[test]
+fn init_preservation_template_creates_track() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    copy_dir(&fixtures().join("repo_rust"), &repo);
+
+    let dir_str = repo.to_string_lossy().to_string();
+    let o = run(tmp.path(), &["init", &dir_str, "--force", "--template", "preservation"]);
+    assert!(o.status.success(), "preservation init failed: {}", out_str(&o));
+
+    let harness = repo.join(".harness");
+    let wf_path = harness.join("workflow.toml");
+    assert!(wf_path.exists(), "workflow.toml missing");
+    let wf_text = std::fs::read_to_string(&wf_path).unwrap();
+    assert!(wf_text.contains("name = \"preservation\""), "not the preservation template: {wf_text}");
+    assert!(wf_text.contains("differential_gate.mjs"), "differential gate missing: {wf_text}");
+    assert!(wf_text.contains("reconcile_gate.mjs"), "reconcile gate missing: {wf_text}");
+
+    // 5 skill + 6 tool + テンプレ + golden + state seed が生成されること。
+    for s in ["p01-research.md", "p02-capture.md", "p03-differential.md", "p04-reconcile.md", "p05-coverage.md"] {
+        assert!(harness.join("skills").join(s).exists(), "skill {s} missing");
+    }
+    for t in ["preservation_lib.mjs", "capture_oracle.mjs", "differential_gate.mjs", "reconcile_gate.mjs", "coverage_gate.mjs", "db-assert.mjs"] {
+        assert!(harness.join("bin").join(t).exists(), "tool {t} missing");
+    }
+    assert!(harness.join("equivalence.json").exists(), "equivalence.json missing");
+    assert!(harness.join("preservation/input_space.json").exists(), "input_space.json missing");
+    assert!(harness.join("golden/manifest.json").exists(), "golden/manifest.json missing");
+    assert!(harness.join("state/reconcile_ledger.json").exists(), "reconcile_ledger seed missing");
+
+    // validate を通ること。
+    let validate_arg = format!("--workflow={}", wf_path.display());
+    let o = run(tmp.path(), &["validate", &validate_arg]);
+    assert!(o.status.success(), "validate failed: {}", out_str(&o));
+}
+
+#[test]
 fn init_unknown_template_errors() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = tmp.path().join("repo");

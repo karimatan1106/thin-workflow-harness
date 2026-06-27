@@ -1,0 +1,16 @@
+{
+  "_doc": "preservation の入力空間 partition マニフェスト=coverage の母集合。各 partition は旧の挙動が分岐しうる入力軸の代表。golden で被覆するか coverage_ledger.json に独立署名 not_applicable を残す(signed-empty-set)。既定 partitions:[] = coverage_gate は N/A exit0(fail-safe)。p01-research でこの project の軸を populate する。",
+  "_quirk_classes": {
+    "_note": "rehost(特に COBOL OS-only)で挙動が分岐しうる除去不能クラス。p01 で該当する物を partition 化せよ。class E/F/G/H は coverage_gate が bare not_applicable を拒否(captured_nondeterministic か署名 quarantine 必須)。",
+    "A": "文字エンコード(EBCDIC↔ASCII collation)",
+    "B": "数値表現(COMP-3 packed / zoned overpunch / endian)",
+    "C": "浮動/locale(ULP/相対ε・小数点記号)",
+    "D": "日付(2桁年/Y2K windowing/書式パース厳格度) ← Crypto BUG3(parse_ymd 厳格化)はここ",
+    "E": "未初期化変数(値が環境依存・非決定)",
+    "F": "SORT/MERGE collation 順・同キー tie 順(保存対象・ソート禁止)",
+    "G": "採番/clock/RNG(非決定)",
+    "H": "online(CICS)並行・ENQ/DEQ/record-lock interleave(単一スレッド replay では out of scope)"
+  },
+  "_partition_shape": { "id": "一意id", "dimension": "picture_range|file_status|sign_overpunch|date_format|cics_path|quirk_class", "quirk_class": "A..H(任意)", "description": "..." },
+  "partitions": []
+}

@@ -140,7 +140,8 @@ pub enum Command {
         dir: Option<String>,
         #[arg(long)]
         force: bool,
-        /// ワークフローテンプレート。`default`（既定・検出ベース）か `security`（security-only）。
+        /// ワークフローテンプレート。`default`（既定・検出ベース）/ `security`（security-only）/
+        /// `preservation`（挙動保存=rehost/migration・oracle が旧実挙動・differential 中核）。
         #[arg(long)]
         template: Option<String>,
     },

@@ -103,6 +103,58 @@ pub fn write_security_layout(harness_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// preservation(挙動保存=rehost/migration)テンプレートを書き出す（`harness init --template preservation`）。
+/// oracle=旧システムの実挙動。research→capture→differential→reconcile→coverage の5ノード + 6 tool + 等価/入力空間テンプレ。
+/// COBOL OS-only rehost 等の挙動保存移行用。全ゲート fail-safe・新 gate primitive ゼロ。
+pub fn write_preservation_layout(harness_dir: &Path) -> Result<(), String> {
+    fs::create_dir_all(harness_dir).map_err(|e| io_err(harness_dir, e))?;
+    let skills = harness_dir.join("skills");
+    let state = harness_dir.join("state");
+    let bin = harness_dir.join("bin");
+    let golden = harness_dir.join("golden");
+    let preservation = harness_dir.join("preservation");
+    for d in [&skills, &state, &bin, &golden, &preservation] {
+        fs::create_dir_all(d).map_err(|e| io_err(d, e))?;
+    }
+
+    write_file(&harness_dir.join("workflow.toml"), PRESERVATION_WORKFLOW)?;
+    write_file(&harness_dir.join("spec.toml"), SPEC_TEMPLATE)?;
+    write_file(&harness_dir.join(".gitignore"), PRESERVATION_GITIGNORE)?;
+    write_file(&state.join(".gitkeep"), "")?;
+
+    // 5 skill (oracle=旧実挙動。forward の skill は oracle 衝突のため流用しない)。
+    write_file(&skills.join("p01-research.md"), P01_RESEARCH)?;
+    write_file(&skills.join("p02-capture.md"), P02_CAPTURE)?;
+    write_file(&skills.join("p03-differential.md"), P03_DIFFERENTIAL)?;
+    write_file(&skills.join("p04-reconcile.md"), P04_RECONCILE)?;
+    write_file(&skills.join("p05-coverage.md"), P05_COVERAGE)?;
+
+    // 6 tool (全 fail-safe・project 非依存)。
+    write_file(&bin.join("preservation_lib.mjs"), PRESERVATION_LIB_MJS)?;
+    write_file(&bin.join("capture_oracle.mjs"), CAPTURE_ORACLE_MJS)?;
+    write_file(&bin.join("differential_gate.mjs"), DIFFERENTIAL_GATE_MJS)?;
+    write_file(&bin.join("reconcile_gate.mjs"), RECONCILE_GATE_MJS)?;
+    write_file(&bin.join("coverage_gate.mjs"), COVERAGE_GATE_MJS)?;
+    write_file(&bin.join("db-assert.mjs"), DB_ASSERT_MJS)?;
+
+    // 等価方針 / 入力空間 テンプレ。
+    write_file(&harness_dir.join("equivalence.json"), EQUIVALENCE_JSON)?;
+    write_file(&preservation.join("input_space.json"), INPUT_SPACE_JSON)?;
+
+    // golden(旧の録画)— 既定空。golden/ 自体は .gitignore 対象だが manifest は構造を残す。
+    write_file(&golden.join(".gitkeep"), "")?;
+    write_file(&golden.join("manifest.json"), "{\"entries\":[]}\n")?;
+
+    // state seed(ledger/baseline は版管理する=再浮上/自己採点防止。.gitignore で negate)。
+    write_file(&state.join("reconcile_ledger.json"), "[]\n")?;
+    write_file(&state.join("coverage_ledger.json"), "[]\n")?;
+    write_file(&state.join("coverage_baseline.json"), "{}\n")?;
+    write_file(&state.join("capture_provenance.json"), "[]\n")?;
+    write_file(&state.join("nondeterminism_ledger.json"), "[]\n")?;
+    write_file(&state.join("absorbed_divergences.json"), "{}\n")?;
+    Ok(())
+}
+
 /// security-only テンプレート（バイナリ同梱 ── 旧 harness-plugin-security の中身）。
 const SECURITY_WORKFLOW: &str = include_str!("templates/security_workflow.toml");
 const SECURITY_SKILL: &str = include_str!("templates/security_skill.md");
@@ -118,6 +170,24 @@ const MUTATE_DIFF_MJS: &str = include_str!("tool_templates/mutate-diff.mjs");
 const CHARACTERIZE_GATE_MJS: &str = include_str!("tool_templates/characterize_gate.mjs");
 /// curated バグカタログゲート（project 非依存・規則 JSON 無→N/A）。
 const CATALOG_GATE_MJS: &str = include_str!("tool_templates/catalog_gate.mjs");
+
+/// preservation(挙動保存)トラック同梱物。oracle=旧実挙動・全 fail-safe・project 非依存。
+const PRESERVATION_WORKFLOW: &str = include_str!("templates/preservation_workflow.toml");
+const EQUIVALENCE_JSON: &str = include_str!("templates/equivalence.json");
+const INPUT_SPACE_JSON: &str = include_str!("templates/input_space.json");
+const P01_RESEARCH: &str = include_str!("skill_templates/p01-research.md");
+const P02_CAPTURE: &str = include_str!("skill_templates/p02-capture.md");
+const P03_DIFFERENTIAL: &str = include_str!("skill_templates/p03-differential.md");
+const P04_RECONCILE: &str = include_str!("skill_templates/p04-reconcile.md");
+const P05_COVERAGE: &str = include_str!("skill_templates/p05-coverage.md");
+const PRESERVATION_LIB_MJS: &str = include_str!("tool_templates/preservation_lib.mjs");
+const CAPTURE_ORACLE_MJS: &str = include_str!("tool_templates/capture_oracle.mjs");
+const DIFFERENTIAL_GATE_MJS: &str = include_str!("tool_templates/differential_gate.mjs");
+const RECONCILE_GATE_MJS: &str = include_str!("tool_templates/reconcile_gate.mjs");
+const COVERAGE_GATE_MJS: &str = include_str!("tool_templates/coverage_gate.mjs");
+const DB_ASSERT_MJS: &str = include_str!("tool_templates/db-assert.mjs");
+/// preservation 専用 .gitignore: golden(録画・大きい/PII)と divergences は ignore、ledger/baseline は版管理(negate)。
+const PRESERVATION_GITIGNORE: &str = "state/*.jsonl\nstate/*.lock\ntranscripts/\ngolden/\n!golden/.gitkeep\nstate/divergences.json\nstate/absorbed_divergences.json\n!state/.gitkeep\n!state/reconcile_ledger.json\n!state/coverage_ledger.json\n!state/coverage_baseline.json\n!state/capture_provenance.json\n!state/nondeterminism_ledger.json\n";
 
 /// CONTEXT.md(ドメイン用語集)形式ガイド。research/plan の grilling が `docs/CONTEXT-FORMAT.md` を参照する。
 const CONTEXT_FORMAT: &str = include_str!("templates/CONTEXT-FORMAT.md");
@@ -210,6 +280,31 @@ mod tests {
         assert!(state.join("mutation_baseline.json").exists(), "init が state/mutation_baseline.json を seed していない");
         assert!(state.join("equivalent_mutants.json").exists(), "init が state/equivalent_mutants.json を seed していない");
         assert!(state.join("catalog_waivers.json").exists(), "init が state/catalog_waivers.json を seed していない");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    // preservation トラックが 6 tool + 5 skill + テンプレ + golden + state seed を同梱することを固定(no-op 化回帰錨)。
+    #[test]
+    fn write_preservation_layout_emits_tools_and_seed() {
+        let base = std::env::temp_dir().join(format!("harness-preservation-test-{}", std::process::id()));
+        let harness = base.join(".harness");
+        let _ = fs::remove_dir_all(&base);
+        write_preservation_layout(&harness).expect("write_preservation_layout failed");
+        let bin = harness.join("bin");
+        for t in ["preservation_lib.mjs", "capture_oracle.mjs", "differential_gate.mjs", "reconcile_gate.mjs", "coverage_gate.mjs", "db-assert.mjs"] {
+            assert!(bin.join(t).exists(), "preservation init が bin/{t} を生成していない");
+        }
+        let skills = harness.join("skills");
+        for s in ["p01-research.md", "p02-capture.md", "p03-differential.md", "p04-reconcile.md", "p05-coverage.md"] {
+            assert!(skills.join(s).exists(), "preservation init が skills/{s} を生成していない");
+        }
+        assert!(harness.join("equivalence.json").exists(), "equivalence.json 欠落");
+        assert!(harness.join("preservation/input_space.json").exists(), "input_space.json 欠落");
+        assert!(harness.join("golden/manifest.json").exists(), "golden/manifest.json 欠落");
+        let state = harness.join("state");
+        for j in ["reconcile_ledger.json", "coverage_ledger.json", "coverage_baseline.json", "capture_provenance.json", "nondeterminism_ledger.json", "absorbed_divergences.json"] {
+            assert!(state.join(j).exists(), "preservation init が state/{j} を seed していない");
+        }
         let _ = fs::remove_dir_all(&base);
     }
 }

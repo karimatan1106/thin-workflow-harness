@@ -1,0 +1,18 @@
+{
+  "_doc": "preservation 等価方針 SSOT。既定は byte/positional exact(rules 空=全 field 厳密一致)。差分を容認したい所だけ per-field opt-in 規則を足す。★capture では一切適用しない(raw 保存)。適用は differential 比較時のみ。",
+  "_kinds": {
+    "volatile": "この field を比較から除外(実行日時/採番 等)。field を具体パスに絞ること。blanket('*'/'.*')は reject される。",
+    "tolerance": "数値の許容差で吸収。{abs, rel}。浮動 ULP/相対ε(class C)。",
+    "transcode": "文字写像で吸収。{map:{from:to}} を旧側に適用してから比較(EBCDIC↔ASCII code-page, class A)。",
+    "order:multiset": "配列を集合扱い(ソートして比較)。★既定は positional。SORT/collation 順(class F)は保存対象なので multiset は本当に順序非依存な field だけに限定。",
+    "_required": "各規則に field(具体パス/接頭辞'foo.'/'foo[]')必須。任意 witness:{old,new}=この規則が保存すべき既知隣接バグ(R 下でも赤に保たれるべき)を宣言すると differential_gate の per-rule tripwire が過剰正規化を自己検出する。"
+  },
+  "_cobol_examples": {
+    "_note": "この環境に COBOL は無いので以下は adapter/規則の仕様例。COBOL OS-only rehost 着手時に具体化。",
+    "classA_ebcdic": { "field": "record.name", "kind": "transcode", "map": { "code-page": "IBM-037→ASCII の固定写像をここに" }, "scope": "field(copybook の該当フィールド)" },
+    "classB_comp3": { "field": "record.amount", "kind": "tolerance", "abs": 0, "_decode": "COMP-3 packed decimal の sign nibble(0xC/0xD/0xF)と zoned overpunch を canonical 10進へ decode してから厳密比較(tolerance 0)", "scope": "picture-range PIC S9(7)V99 COMP-3" },
+    "classC_float": { "field": "record.rate", "kind": "tolerance", "rel": 1e-9, "scope": "field" },
+    "classF_sort": { "_warn": "SORT/MERGE collation 順は保存対象。multiset を当てるな。同キー tie 順は capture の admissible-set で扱う" }
+  },
+  "rules": []
+}

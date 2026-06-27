@@ -37,6 +37,14 @@ pub fn cmd_init(dir: Option<&str>, force: bool, template: Option<&str>) -> Resul
             );
             None
         }
+        Some("preservation") => {
+            scaffold::write_preservation_layout(&harness_dir)?;
+            println!(
+                "\npreservation(挙動保存=rehost/migration)ワークフローをスキャフォールドしました: {}",
+                harness_dir.display()
+            );
+            None
+        }
         None | Some("default") => {
             let d = detect(&target);
             print_summary(&d);
@@ -45,7 +53,7 @@ pub fn cmd_init(dir: Option<&str>, force: bool, template: Option<&str>) -> Resul
             Some(d)
         }
         Some(other) => {
-            return Err(format!("未知の template '{other}' ── 使えるのは: default, security"));
+            return Err(format!("未知の template '{other}' ── 使えるのは: default, security, preservation"));
         }
     };
 

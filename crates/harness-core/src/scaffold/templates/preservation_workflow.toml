@@ -1,0 +1,83 @@
+# preservation(挙動保存=rehost/migration)workflow ── `harness init --template preservation` で生成。
+#
+# forward(新規/修正)トラックと oracle が反転: forward oracle=intent/spec、preservation oracle=旧システムの実挙動。
+# 「旧と同じに振る舞うか(bug-for-bug)」を保証する。COBOL OS-only rehost 等の挙動保存移行のためのトラック。
+#
+# 機構(各ノードの実体は bin/*.mjs に閉じ、harness engine は exit-code/JSON-shape のみ見る=全 fail-safe):
+#   research    : 旧境界・期待 divergence クラス(quirk A-H)・捕獲計画・等価方針(equivalence.json)・入力空間(input_space.json)を宣言。oracle=旧実挙動。
+#   capture     : 旧の実挙動を I/O 境界で golden 捕獲(★raw bytes・normalize/sort 禁止)。k>=N 録画で非決定 field を分類。
+#   differential: 同一 input を 旧golden↔新 へ流し equivalence.json の per-field 等価で比較し全 divergence を列挙(報告生成が teeth)。
+#   reconcile   : 各 divergence を preserve_quirk / accepted_env_diff / intentional_fix で独立評価者署名裁定(未署名で止まる)。
+#   coverage    : 入力空間 partition+quirk クラスが golden で被覆 or 署名 N/A(class E/F/G/H は bare N/A 不可)。
+#
+# 全ゲート fail-safe(golden 無/新系無/差分無/spec 無/input_space 無 → N/A exit0 で run を詰まらせない)。新 gate primitive ゼロ。
+# 完全性は主張しない floor+下流保険: 入力空間列挙の完全性・署名裁定の妥当性は research の deep-grilling と独立評価者の責務。
+
+[meta]
+name = "preservation"
+entry = "research"
+host = "claude-code"
+# 挙動保存は精度が要る(等価方針の誤りが false-green を生む)ため既定を Opus に。
+default_model = "opus"
+default_budget = { max_tool_calls = 16, max_tokens = 12000, max_wall_seconds = 240 }
+mandatory_gates = [
+  { gate = "cmd_exit_0", args = { cmd = "true" } },
+]
+
+[[node]]
+id = "research"
+skill = "p01-research.md"
+exit_gates = [
+  { gate = "evidence_recorded", args = { key = "capture_plan" } },
+  { gate = "json_nonempty", args = { evidence_key = "capture_plan", json_path = "partitions" } },
+  { gate = "json_in", args = { evidence_key = "capture_plan", json_path = "verdict", one_of = "approved_to_capture,not_applicable" } },
+  { gate = "json_has", args = { evidence_key = "capture_plan", json_path = "human_approval", eq = "approved" } },
+]
+next = ["capture"]
+on_reject = { after = 3, goto = "__human__" }
+
+[[node]]
+id = "capture"
+skill = "p02-capture.md"
+exit_gates = [
+  { gate = "cmd_exit_0", args = { cmd = "node bin/capture_oracle.mjs verify-provenance" } },
+  { gate = "evidence_recorded", args = { key = "oracle_captured" } },
+  { gate = "json_in", args = { evidence_key = "oracle_captured", json_path = "verdict", one_of = "captured,recaptured,captured_nondeterministic,not_applicable" } },
+]
+next = ["differential"]
+on_reject = { after = 3, goto = "research" }
+
+[[node]]
+id = "differential"
+skill = "p03-differential.md"
+exit_gates = [
+  { gate = "cmd_exit_0", args = { cmd = "node bin/differential_gate.mjs" } },
+  { gate = "evidence_recorded", args = { key = "differential" } },
+  { gate = "json_in", args = { evidence_key = "differential", json_path = "verdict", one_of = "equivalent,divergences_enumerated,not_applicable" } },
+]
+next = ["reconcile"]
+on_reject = { after = 3, goto = "capture" }
+
+[[node]]
+id = "reconcile"
+skill = "p04-reconcile.md"
+exit_gates = [
+  { gate = "cmd_exit_0", args = { cmd = "node bin/reconcile_gate.mjs" } },
+  { gate = "evidence_recorded", args = { key = "reconcile" } },
+  { gate = "json_in", args = { evidence_key = "reconcile", json_path = "verdict", one_of = "all_signed,no_divergence,not_applicable" } },
+  # ADR-059: divergence の裁定は生成本人でなく別 cold セッションの独立評価者が署名する。
+  { gate = "json_has", args = { evidence_key = "reconcile", json_path = "evaluator", eq = "independent" } },
+]
+next = ["coverage"]
+on_reject = { after = 3, goto = "differential" }
+
+[[node]]
+id = "coverage"
+skill = "p05-coverage.md"
+exit_gates = [
+  { gate = "cmd_exit_0", args = { cmd = "node bin/coverage_gate.mjs" } },
+  { gate = "evidence_recorded", args = { key = "coverage" } },
+  { gate = "json_in", args = { evidence_key = "coverage", json_path = "verdict", one_of = "adequate,gaps_signed,not_applicable" } },
+]
+next = []
+on_reject = { after = 2, goto = "__human__" }
