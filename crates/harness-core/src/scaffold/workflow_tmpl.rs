@@ -156,6 +156,11 @@ model = "sonnet"
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/regression_gate.mjs" }} }},
   {{ gate = "cmd_exit_0", args = {{ cmd = "{e2e}" }} }},
+  # 差分 mutation (非ブロッキング品質ゲート・ADR-059 の延長): 変更差分に生じる変異を
+  # テストが捕まえるか測り、結果(または N/A)を evidence に残す。mutation は遅く equivalent
+  # mutant の人手トリアージが要るため決定論ゲートにせず evidence_recorded のみ(穴で advance は止めない)。
+  # 実行は skill 05-test.md(`node bin/mutate-diff.mjs <base>`)。project 非依存(ワークスペース自動検出)。
+  {{ gate = "evidence_recorded", args = {{ key = "mutation_diff" }} }},
 ]
 next = ["verify"]
 on_reject = {{ after = 3, goto = "implement" }}
@@ -282,4 +287,26 @@ fn ph_str(kind: &str) -> String {
 
 fn toml_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::detect::DetectedProject;
+
+    // 差分 mutation で検出した穴の回帰: render() の出力内容が未検証で、render を空/別文字列に
+    // 置換しても誰も気づかなかった。生成 workflow の主要ゲートが出力に含まれることを固定する。
+    #[test]
+    fn render_emits_regression_and_mutation_diff_gates() {
+        let out = render(&DetectedProject::default());
+        assert!(out.contains(r#"id = "test""#), "test ノードが出力に無い");
+        assert!(
+            out.contains("node bin/regression_gate.mjs"),
+            "回帰 gate が出力に無い"
+        );
+        assert!(
+            out.contains(r#"key = "mutation_diff""#),
+            "差分 mutation の mutation_diff ゲートが出力に無い"
+        );
+    }
 }

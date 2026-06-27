@@ -57,7 +57,23 @@
    harness record-artifact test_report <path> --tag pass
    ```
 
-## 完了条件（exit_gates）── 回帰 gate（決定論・config 駆動・蓄積）
+8. **差分 mutation で「新しいテストがバグを検知できるか」を機械検証**（非ブロッキング・ADR-059 の延長）──
+   今回の変更差分に生じる変異を、テストが捕まえるか測る。毎回フルは重いので **変更行だけ**:
+   ```
+   node bin/mutate-diff.mjs <base>   # 既定 base=main。Cargo ワークスペース自動検出
+   ```
+   - Rust 変更は cargo-mutants の `--in-diff`（変更行のみ）。JS/TS 変更は対象ファイルが列挙される
+     ので、プロジェクトの mutation ツールを当てる。project 固有パスは決め打ちしない。
+   - **missed（生存変異）= テストの穴**。本物の穴なら regression test を 1 本足して再測（step 4-5 へ戻る）。
+     equivalent mutant（挙動不変で原理的に殺せない）は穴でないので `notes` に明記する。
+   - 結果を evidence に載せる（**穴があっても advance は止めない＝非ブロッキング品質ゲート**）:
+   ```
+   harness report-evidence mutation_diff '{"verdict":"clean","rust_caught":0,"rust_missed":0,"notes":"残した missed が equivalent な理由 / N/A 理由など"}'
+   ```
+   verdict は `clean`（穴なし）/ `holes_closed`（穴をテストで塞いだ）/ `holes_left`（equivalent 等で残す）/
+   `not_applicable`（Rust 変更なし・cargo-mutants 未導入）のいずれか。
+
+## 完了条件（exit_gates）── 回帰 gate（決定論・config 駆動・蓄積）+ 差分 mutation（非ブロッキング）
 
 このノードの出口 gate（`workflow.toml` の `[[node]] id = "test"`）:
 
