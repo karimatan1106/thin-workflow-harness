@@ -28,9 +28,12 @@
    ```
    これ以上進めないなら `harness stuck "<理由>"`。
 
-4. **regression test の追加** ── バグ修正が含まれるなら regression test を 1 本追加する
-   （`count_non_decreasing` でテスト総数を縮めないことが縛られている）。plan.md で test
-   戦略を立てている場合は対応する test を実装してから再 run。
+4. **生存変異体を導出元にする(creation でなく derivation のループ)** ── 「バグ修正なら 1 本」に
+   限らない。step8 の差分 mutation が出す**生存変異体それぞれ**を「この挙動を契約するテストが無い」=
+   欠けたテスト仕様として、それを殺すテストを足す。各穴埋めは必ず **AC/INV/シナリオを名指し
+   (`derived_from`)**。**特定変異の事後値を直書きする変異過適合テストは禁止**(refactor 連鎖で高手戻り)。
+   誤った上流ソース・サービス跨ぎ順序・並行性は source mutation で生存を生まないので
+   **RECORDED 実データ fixture の differential / stateful アサーション**で別途束縛(mutation-dry の母数外)。
 
 5. **再 run + 全 pass 確認** ── 影響範囲をカバーするテストが green であること:
    ```
@@ -57,21 +60,29 @@
    harness record-artifact test_report <path> --tag pass
    ```
 
-8. **差分 mutation で「新しいテストがバグを検知できるか」を機械検証**（非ブロッキング・ADR-059 の延長）──
-   今回の変更差分に生じる変異を、テストが捕まえるか測る。毎回フルは重いので **変更行だけ**:
+8. **差分 mutation を「生成ドライバ＋決定論ラチェット」として回す**（teeth・skeptic 修正後）──
+   変更行の生存変異体を構造化捕捉し、baseline 比で**悪化させない**ことを機械強制する。
    ```
-   node bin/mutate-diff.mjs <base>   # 既定 base=main。Cargo ワークスペース自動検出
+   node bin/mutate-diff.mjs <base>     # audit(人間可読・非ブロッキング。evidence 用の数字取り)
+   node bin/mutate-diff.mjs --gate     # ★決定論ラチェット: baseline 比 新規/退行の非ledger生存ゼロで exit0
    ```
-   - Rust 変更は cargo-mutants の `--in-diff`（変更行のみ）。JS/TS 変更は対象ファイルが列挙される
-     ので、プロジェクトの mutation ツールを当てる。project 固有パスは決め打ちしない。
-   - **missed（生存変異）= テストの穴**。本物の穴なら regression test を 1 本足して再測（step 4-5 へ戻る）。
-     equivalent mutant（挙動不変で原理的に殺せない）は穴でないので `notes` に明記する。
-   - 結果を evidence に載せる（**穴があっても advance は止めない＝非ブロッキング品質ゲート**）:
+   - **生存変異体 = この挙動を契約するテストが無い**＝欠けたテスト仕様。step4 で **AC/INV 紐付き
+     (derived_from)の穴埋め**を足し `--in-diff` scope で再測 →「新規/退行の非ledger生存ゼロ」になるまで反復。
+     **zero 生存到達は要求しない**(make-worse 禁止が teeth)。二層: 内側=`--only <suite>`+`--in-diff`、外側=遷移前 full。
+   - **equivalent は独立評価者(ADR-059)署名つきで** `state/equivalent_mutants.json` に
+     `{"key":"<file::正規化変異テキスト>","evaluator":"independent","reason":"..."}`(行番号不使用)。既存は baseline 吸収。
+   - 意図的に baseline を動かすなら `--update` / `--ratchet`(殺せた分だけ除く単調強化)。
+   - **JS/TS は要コミット&file→test 写像のため --gate の自動対象外** → プロジェクトの隔離 mutation runner で
+     手動測定し evidence/`catalog_waivers.json` に記録(verdict=not_applicable で逃げない)。
+   - **catalog**: `node bin/catalog_gate.mjs` が diff の追加行が curated バグ規則(`.harness/domain_rules.json`
+     が在れば)の from に触れたら署名付き record を必須化。MUTATE_DOMAIN 注入(from→to)が赤になるテストを書き
+     `state/catalog_waivers.json` に `{"rule":"<name>","evaluator":"independent","status":"killed","reason":"..."}`。
+   - evidence(人間可読サマリ。teeth は --gate が握る):
    ```
-   harness report-evidence mutation_diff '{"verdict":"clean","rust_caught":0,"rust_missed":0,"notes":"残した missed が equivalent な理由 / N/A 理由など"}'
+   harness report-evidence mutation_diff '{"verdict":"clean","rust_caught":0,"rust_missed":0,"notes":"ledger/waiver 署名の理由 / N/A 理由"}'
    ```
-   verdict は `clean`（穴なし）/ `holes_closed`（穴をテストで塞いだ）/ `holes_left`（equivalent 等で残す）/
-   `not_applicable`（Rust 変更なし・cargo-mutants 未導入）のいずれか。
+   verdict は `clean`（新規生存なし）/ `holes_closed`（殺した）/ `not_applicable`（Rust 変更なし・未導入）。
+   **`holes_left` は不可**(json_in gate が弾く＝穴を残したまま advance させない)。
 
 ## 完了条件（exit_gates）── 回帰 gate（決定論・config 駆動・蓄積）+ 差分 mutation（非ブロッキング）
 
@@ -84,6 +95,12 @@
   スイート崩壊）が 1 件でもあれば落ちる**。runner はプリセット(vitest/cargo/jest/pytest/go/dotnet/maven)を
   選ぶか pass/fail スペックを直書きする ── 抽出は config 駆動で harness のコードは言語非依存。
 - `cmd_exit_0 <e2e-cmd>` ── **E2E が exit 0（L10・必須）**。unit と層が違う別 gate。未設定なら fail。
+- `cmd_exit_0 "node bin/mutate-diff.mjs --gate"` ── **差分 mutation の決定論ラチェット**。baseline 比
+  「新規/退行の非ledger生存ゼロ」(make-worse 禁止)で exit0。zero生存到達は要求しない。集合比較で壁時計非依存。
+  baseline 空/.rs変更無/cargo-mutants 未導入 → N/A で pass(fail-safe)。
+- `cmd_exit_0 "node bin/catalog_gate.mjs"` ── diff が触れた curated バグ規則に署名付き record を必須化(規則無→N/A)。
+- `evidence_recorded mutation_diff` ＋ `json_in mutation_diff.verdict ∈ {clean,holes_closed,not_applicable}`
+  ── 人間可読サマリを残し **`holes_left` のまま advance させない**。`loop-until-(mutation)-dry` はハード出口でなく目標。
 
 **回帰したら** `harness back "regression: <スイート名と差分>"` で implement に戻して直す。
 **baseline を緩めて通すのは禁止**（下の意図的変更を除く）。**スイート構成/期待値を意図的に変えた時のみ** baseline 更新:

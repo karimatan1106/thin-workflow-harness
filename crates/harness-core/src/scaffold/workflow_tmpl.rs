@@ -17,7 +17,6 @@ pub fn render(d: &DetectedProject) -> String {
     // 未設定は素通り (true) にして「自動 verify を書けない変更も not_applicable で通せる」を成立させる。
     // (`#` 以降はシェルのコメント = exit 0。実コマンドに差し替えれば自動 verify として走る。)
     let verify = "true # optional: set a real verify command (browser/e2e/screenshot/smoke); observation evidence is the gate".to_string();
-    let coverage = ph(d.coverage.as_deref(), "coverage");
     let security = if d.gitleaks_available {
         "gitleaks detect --no-git --redact".to_string()
     } else {
@@ -118,9 +117,13 @@ id = "characterize"
 skill = "03-characterize.md"
 # 特性化フェーズ ── 既存挙動を広く把握する探索系なので Sonnet (default 据え置き)。
 model = "sonnet"
-# coverage コマンド未検出時は `false # configure coverage ...` で明示的に fail させる
+# 導出元カバレッジの決定論 floor ゲート(行カバレッジでない): bin/characterize_gate.mjs が spec.toml の
+# 全 [[acceptance]]/[[invariant]] が test スロットを "true" でなく実テストコマンドへ束縛しているか harness
+# 自身で再実行確認 → 既存 traceability_closed を実体化。★floor であって「完了/網羅」を主張しない
+# (AC/INV 列挙完全性は research の deep-grilling/損失レンズと curated カタログの責務)。
+# spec.toml 無 / AC・INV 無 → N/A で exit0(fail-safe)。
 exit_gates = [
-  {{ gate = "cmd_exit_0", args = {{ cmd = "{coverage}" }} }},
+  {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/characterize_gate.mjs" }} }},
 ]
 next = ["implement"]
 on_reject = {{ after = 3, goto = "plan" }}
@@ -156,11 +159,19 @@ model = "sonnet"
 exit_gates = [
   {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/regression_gate.mjs" }} }},
   {{ gate = "cmd_exit_0", args = {{ cmd = "{e2e}" }} }},
-  # 差分 mutation (非ブロッキング品質ゲート・ADR-059 の延長): 変更差分に生じる変異を
-  # テストが捕まえるか測り、結果(または N/A)を evidence に残す。mutation は遅く equivalent
-  # mutant の人手トリアージが要るため決定論ゲートにせず evidence_recorded のみ(穴で advance は止めない)。
-  # 実行は skill 05-test.md(`node bin/mutate-diff.mjs <base>`)。project 非依存(ワークスペース自動検出)。
+  # 差分 mutation の teeth = 単調ラチェット(決定論): bin/mutate-diff.mjs --gate が変更行の生存変異体を
+  # 構造化捕捉し state/mutation_baseline.json と (file+正規化変異テキスト) 集合で突合、「baseline 比
+  # 新規/退行の非ledger生存ゼロ」(=make-worse 禁止)で exit0。zero生存到達は要求しない。equivalent は
+  # state/equivalent_mutants.json の独立評価者署名つき分だけ控除。baseline 空/.rs変更無/cargo-mutants
+  # 未導入 → N/A で exit0(fail-safe)。budget(MUTATE_GATE_MAX_SECONDS)切れは寛容方向のみ。
+  {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/mutate-diff.mjs --gate" }} }},
+  # catalog teeth = omission を削る外部錨: bin/catalog_gate.mjs が diff の追加行が curated バグ規則
+  # (.harness/domain_rules.json。無ければ N/A)の from に触れたら署名付き record(killed/not_applicable)を必須化。
+  {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/catalog_gate.mjs" }} }},
+  # mutation の人間可読サマリ(verdict/ledger/notes)を evidence に残す。teeth は上の --gate が握る。
   {{ gate = "evidence_recorded", args = {{ key = "mutation_diff" }} }},
+  # holes_left のまま advance させない(verdict は clean/holes_closed/not_applicable のみ許可)。
+  {{ gate = "json_in", args = {{ evidence_key = "mutation_diff", json_path = "verdict", one_of = "clean,holes_closed,not_applicable" }} }},
 ]
 next = ["verify"]
 on_reject = {{ after = 3, goto = "implement" }}
@@ -255,7 +266,6 @@ on_reject = {{ after = 2, goto = "review" }}
         test = toml_escape(&test_cmd),
         lint = d.lint.as_deref().unwrap_or("?"),
         mandatory = mandatory,
-        coverage = toml_escape(&coverage),
         e2e = toml_escape(&e2e),
         verify = toml_escape(&verify),
         security = toml_escape(&security),

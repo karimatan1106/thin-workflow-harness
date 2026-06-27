@@ -47,6 +47,13 @@ pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), Strin
     // 差分 mutation (非ブロッキング品質ゲート・project 非依存): test ノードの mutation_diff
     // evidence を skill が `node bin/mutate-diff.mjs` で生成する。Cargo ワークスペース自動検出。
     write_file(&bin.join("mutate-diff.mjs"), MUTATE_DIFF_MJS)?;
+    // 導出元カバレッジ floor ゲート(characterize) と curated バグカタログゲート(test)。project 非依存。
+    write_file(&bin.join("characterize_gate.mjs"), CHARACTERIZE_GATE_MJS)?;
+    write_file(&bin.join("catalog_gate.mjs"), CATALOG_GATE_MJS)?;
+    // 差分 mutation ラチェット baseline / equivalent ledger / catalog waiver を seed (版管理する=再浮上/自己採点防止)。
+    write_file(&state.join("mutation_baseline.json"), "{}\n")?;
+    write_file(&state.join("equivalent_mutants.json"), "[]\n")?;
+    write_file(&state.join("catalog_waivers.json"), "[]\n")?;
 
     // docs/ skeleton (repo root に生成、 既存があれば skip)
     if let Some(repo_root) = harness_dir.parent() {
@@ -106,6 +113,11 @@ const REGRESSION_GATE_MJS: &str = include_str!("tool_templates/regression_gate.m
 /// 差分 mutation ツール（project 非依存。`tool_templates/mutate-diff.mjs` を同梱）。
 /// test ノードの mutation_diff evidence を生成。Rust=cargo-mutants --in-diff(変更行のみ)。
 const MUTATE_DIFF_MJS: &str = include_str!("tool_templates/mutate-diff.mjs");
+
+/// characterize の導出元カバレッジ floor ゲート（project 非依存・spec.toml の AC/INV 束縛を確認）。
+const CHARACTERIZE_GATE_MJS: &str = include_str!("tool_templates/characterize_gate.mjs");
+/// curated バグカタログゲート（project 非依存・規則 JSON 無→N/A）。
+const CATALOG_GATE_MJS: &str = include_str!("tool_templates/catalog_gate.mjs");
 
 /// CONTEXT.md(ドメイン用語集)形式ガイド。research/plan の grilling が `docs/CONTEXT-FORMAT.md` を参照する。
 const CONTEXT_FORMAT: &str = include_str!("templates/CONTEXT-FORMAT.md");
@@ -191,6 +203,13 @@ mod tests {
         let bin = harness.join("bin");
         assert!(bin.join("mutate-diff.mjs").exists(), "init が bin/mutate-diff.mjs を生成していない");
         assert!(bin.join("regression_gate.mjs").exists(), "init が bin/regression_gate.mjs を生成していない");
+        assert!(bin.join("characterize_gate.mjs").exists(), "init が bin/characterize_gate.mjs を生成していない");
+        assert!(bin.join("catalog_gate.mjs").exists(), "init が bin/catalog_gate.mjs を生成していない");
+        // 差分 mutation ラチェット baseline / equivalent ledger / catalog waiver の seed。
+        let state = harness.join("state");
+        assert!(state.join("mutation_baseline.json").exists(), "init が state/mutation_baseline.json を seed していない");
+        assert!(state.join("equivalent_mutants.json").exists(), "init が state/equivalent_mutants.json を seed していない");
+        assert!(state.join("catalog_waivers.json").exists(), "init が state/catalog_waivers.json を seed していない");
         let _ = fs::remove_dir_all(&base);
     }
 }
