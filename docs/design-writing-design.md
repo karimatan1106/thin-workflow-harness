@@ -135,9 +135,15 @@ prose に残すのは **WHY・理由・通念からの逸脱**だけ（型に焼
 
 ## 9. 段階導入
 
-- **Phase 1（Crypto .harness・skill のみ）**：design-pre/implement skill に①②③を埋め込み、実機能で反復（skill=markdown は rebuild 不要＝速いループ・実材料）。
-- **Phase 2**：①の独立実装者ドッグフードをサブエージェント化（ADR-059 を設計フェーズへ前倒し・deep-grill 詰問者と同型）。
-- **scaffold 展開**：実証版を tool-agnostic で `skill_templates` にコピー → 全 `harness init` に伝播。
+- **Phase 1（Crypto .harness・skill のみ）✅ 実装済**：02-plan に①②（独立実装者ドッグフード/境界/
+  機械検査焼き/非ブロッキング `design_closure` 記録）、04-implement に③（consequential 設計の再提示）。
+  新規 gate は足さない（existence-only gate は支配的設計として却下＝§1）。
+- **Phase 2（独立実装者ドッグフードのサブエージェント化）✅ Phase 1 に統合済**：deep-grill と違い
+  最初から `Agent` 委譲で書いた（答えを伏せて渡し assumption/question を回収＝後知恵バイアス排除）。
+- **scaffold 展開 ✅ 完了**：tool-agnostic で `skill_templates/{02-plan,04-implement}.md` にコピー →
+  rebuild + reinstall → `harness init` で生成確認（validate 10 ノード・290 test green）。全 `harness init` に伝播。
+- **継続課題（ブロッカーでない）**：§7 の full-loop 効果測定（導入後に下流 mutation の missed /
+  review 指摘が減るか）は実機能を回し続けて観測する。①中核はブラインド2回＋実バグ#3 捕捉で測定済み。
 
 ## 10. リスク
 - ドッグフード過剰で停滞 → deep 変更時のみ（深度 triage は deep-grilling と共有）。
