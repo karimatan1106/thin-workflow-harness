@@ -1,3 +1,10 @@
+---
+type: skill
+title: "preservation / research"
+description: "このノードのゴール: 挙動保存(rehost/migration)トラックの起点。oracle は intent でなく 旧システムの実挙動。"
+tags: [skill, workflow]
+---
+
 # skill: preservation / research
 
 このノードのゴール: **挙動保存(rehost/migration)トラックの起点**。oracle は intent でなく **旧システムの実挙動**。

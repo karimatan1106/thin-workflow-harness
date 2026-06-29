@@ -1,3 +1,10 @@
+---
+type: reference
+title: "対象コードベースの理想構造（harness が操作しやすいコードベースとは）"
+description: "> これは*助言的*ドキュメント。thin-workflow-harness はこの構造を*要求しない* ── 任意の（雑に構造化された）レガシーコードベースも扱える（lines_not_increased / 遅いフルスイート gate / characterization test 等がそのため）。ここに書く…"
+tags: [harness, docs]
+---
+
 # 対象コードベースの理想構造（harness が操作しやすいコードベースとは）
 
 > これは*助言的*ドキュメント。thin-workflow-harness はこの構造を*要求しない* ── 任意の（雑に構造化された）レガシーコードベースも扱える（`lines_not_increased` / 遅いフルスイート gate / characterization test 等がそのため）。ここに書くのは「この構造なら blast radius・CKG・traceability・並列化が全部スムーズに効く」という*ゴール*状態。10M 行（≈200 行/ファイルなら ~50,000 ファイル）規模の Web アプリを全ファイル ≤200 行で破綻なく管理する設計でもある。

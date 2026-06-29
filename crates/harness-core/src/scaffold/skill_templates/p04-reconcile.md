@@ -1,3 +1,10 @@
+---
+type: skill
+title: "preservation / reconcile"
+description: "このノードのゴール: state/divergences.json の各 divergence を 3値で署名裁定し state/reconcile_ledger.json へ。"
+tags: [skill, workflow]
+---
+
 # skill: preservation / reconcile
 
 このノードのゴール: `state/divergences.json` の各 divergence を **3値で署名裁定**し `state/reconcile_ledger.json` へ。

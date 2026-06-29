@@ -1,3 +1,10 @@
+---
+type: skill
+title: "characterize"
+description: "このノードのゴール: AC（受入基準）に対応する failing test を実装より先に書き、改修の"
+tags: [skill, workflow]
+---
+
 # skill: characterize
 
 このノードのゴール: AC（受入基準）に対応する **failing test** を実装より先に書き、改修の

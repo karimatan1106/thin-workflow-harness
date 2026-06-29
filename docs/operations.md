@@ -1,3 +1,10 @@
+---
+type: reference
+title: "operations.md — 運用上の考慮事項"
+description: "> DESIGN.md §16（運用上の考慮事項）の詳細。resilience / セキュリティ / 可観測性 / config 検証 / deliverable ライフサイクルを扱う。多くは runtime（Phase 1）の振る舞いだが、一部は workflow.toml の設定や core lib の機能。"
+tags: [harness, docs]
+---
+
 # operations.md — 運用上の考慮事項
 
 > `DESIGN.md` §16（運用上の考慮事項）の詳細。resilience / セキュリティ / 可観測性 / config 検証 / deliverable ライフサイクルを扱う。多くは runtime（Phase 1）の振る舞いだが、一部は `workflow.toml` の設定や core lib の機能。

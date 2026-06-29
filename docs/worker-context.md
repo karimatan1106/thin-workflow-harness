@@ -1,3 +1,10 @@
+---
+type: reference
+title: "docs/worker-context.md — worker context 構築仕様"
+description: "> 注記: 本ドキュメントは「harness がノード N の worker を spawn するとき、何を context として渡すか」の仕様。DESIGN.md §9（context 圧縮）/§10（topology・層モデル）/§11（並列）と合わせて読むこと。実装時に細部は調整される。"
+tags: [harness, docs]
+---
+
 # docs/worker-context.md — worker context 構築仕様
 
 > **注記**: 本ドキュメントは「harness がノード N の worker を spawn するとき、何を context として渡すか」の仕様。`DESIGN.md` §9（context 圧縮）/§10（topology・層モデル）/§11（並列）と合わせて読むこと。実装時に細部は調整される。

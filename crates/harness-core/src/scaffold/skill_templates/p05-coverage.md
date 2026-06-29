@@ -1,3 +1,10 @@
+---
+type: skill
+title: "preservation / coverage"
+description: "このノードのゴール: preservation/input_space.json の全宣言 partition + quirk クラスが golden で 被覆されているか、"
+tags: [skill, workflow]
+---
+
 # skill: preservation / coverage
 
 このノードのゴール: `preservation/input_space.json` の全宣言 partition + quirk クラスが golden で **被覆**されているか、

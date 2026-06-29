@@ -1,3 +1,10 @@
+---
+type: reference
+title: "docs/schemas.md — スキーマ"
+description: "> これは暫定確定スキーマである。フィールド名・型・必須/任意を以下に定める。実装時に微調整されうるが、大枠はこれ。DESIGN.md と合わせて読むこと。"
+tags: [harness, docs]
+---
+
 # docs/schemas.md — スキーマ
 
 > **これは暫定確定スキーマである。フィールド名・型・必須/任意を以下に定める。実装時に微調整されうるが、大枠はこれ。`DESIGN.md` と合わせて読むこと。**

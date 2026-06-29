@@ -13,6 +13,12 @@ CONTEXT.md は **ドメイン用語集** ── research / plan フェーズで 
 ## 形式
 
 ```md
+---
+type: glossary
+description: {コンテキスト名}のドメイン用語集
+tags: [context, glossary]
+---
+
 # {コンテキスト名}
 
 {1〜2 文の説明}
@@ -29,6 +35,7 @@ _避ける_: 却下する類語 / 紛らわしい語
 2. **定義は短く** ── 「それが何であるか」を説明する。「何をするか (実装)」は書かない。
 3. **プロジェクト固有語のみ** ── 一般的なプログラミング概念は、この文脈で特別な意味を持つ場合を除き入れない。
 4. **自然なら束ねる** ── 関連クラスタは subheading でグループ化。凝集したドメインはフラットでよい。
+5. **OKF 概念ファイルにする** ── CONTEXT.md / CONTEXT-MAP.md は OKF v0.1 知識バンドルの概念ファイル。frontmatter に **必須 `type`**(CONTEXT.md=`glossary` / CONTEXT-MAP.md=`context-map`)を付ける。`docs/` 配下なら `bin/okf_check.mjs` の検査対象。
 
 ## 単一 vs 複数コンテキスト
 

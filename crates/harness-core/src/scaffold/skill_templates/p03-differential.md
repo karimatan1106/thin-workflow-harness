@@ -1,3 +1,10 @@
+---
+type: skill
+title: "preservation / differential"
+description: "このノードのゴール: 同一 input を 旧golden ↔ 新システム へ流し、equivalence.json の per-field 等価で比較。"
+tags: [skill, workflow]
+---
+
 # skill: preservation / differential
 
 このノードのゴール: 同一 input を **旧golden ↔ 新システム** へ流し、equivalence.json の per-field 等価で比較。

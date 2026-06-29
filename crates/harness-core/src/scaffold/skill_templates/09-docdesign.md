@@ -1,3 +1,10 @@
+---
+type: skill
+title: "docdesign (マスター設計書の作成 / 修正)"
+description: "このノードのゴール: 本変更を マスター設計書 (docs/architecture/ + docs/adr/) に反映し、"
+tags: [skill, workflow]
+---
+
 # skill: docdesign (マスター設計書の作成 / 修正)
 
 このノードのゴール: 本変更を **マスター設計書 (`docs/architecture/` + `docs/adr/`) に反映**し、

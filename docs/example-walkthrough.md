@@ -1,3 +1,10 @@
+---
+type: reference
+title: "example-walkthrough — 10M行変更の end-to-end トレース（worked example）"
+description: "> DESIGN.md の補助。設計の方針であって最終確定ではない部分も含む。"
+tags: [harness, docs]
+---
+
 > DESIGN.md の補助。設計の方針であって最終確定ではない部分も含む。
 
 # example-walkthrough — 10M行変更の end-to-end トレース（worked example）

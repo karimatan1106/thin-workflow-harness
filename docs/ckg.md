@@ -1,3 +1,10 @@
+---
+type: reference
+title: "CKG — コードナレッジグラフ詳細設計"
+description: "> DESIGN.md §9（context 圧縮戦略）の詳細。索引器・グラフは外部/プラガブル（harness 本体に索引器は内蔵しない）。実装は Phase 1.5（CLI コアの後、ランタイムと並行可）。"
+tags: [harness, docs]
+---
+
 # CKG — コードナレッジグラフ詳細設計
 
 > `DESIGN.md` §9（context 圧縮戦略）の詳細。索引器・グラフは外部/プラガブル（harness 本体に索引器は内蔵しない）。実装は Phase 1.5（CLI コアの後、ランタイムと並行可）。

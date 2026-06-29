@@ -1,3 +1,10 @@
+---
+type: skill
+title: "research"
+description: "このノードのゴール: 改修対象を理解し、検証可能な spec.toml を作って人間の承認を取る。"
+tags: [skill, workflow]
+---
+
 # skill: research
 
 このノードのゴール: 改修対象を理解し、検証可能な `spec.toml` を作って人間の承認を取る。
@@ -30,6 +37,7 @@
 - **曖昧/過負荷の語を即指摘し正典名を提案** ── 解決した語は `CONTEXT.md`(ドメイン用語集、形式は
   `docs/CONTEXT-FORMAT.md`)に **その場で追記**(バッチにしない)。実装詳細は入れない。単一は root の
   `CONTEXT.md`、複数は root の `CONTEXT-MAP.md` 検出。**lazy**(捕捉すべき用語が出た時だけ作る)。
+  新規作成時は OKF v0.1 frontmatter を付ける(`type: glossary` / CONTEXT-MAP は `type: context-map`)。
 - **具体シナリオでエッジを突く** ── 概念の境界を例で強制的に明らかにする。
 - **述べた挙動を実装と照合** ── 矛盾を表に出す。
 - **既却下案の確認(`.harness/out-of-scope/`)** ── 着手前にここを見て、同型の要求/アプローチが過去に却下

@@ -1,3 +1,10 @@
+---
+type: skill
+title: "security (standalone)"
+description: "このノードのゴール: 現在の変更（または指定範囲）に security リスクが無いか 3 層 で"
+tags: [skill, workflow]
+---
+
 # skill: security (standalone)
 
 このノードのゴール: 現在の変更（または指定範囲）に security リスクが無いか **3 層** で

@@ -1,3 +1,10 @@
+---
+type: reference
+title: "skillify — 複数 run またぎの学習・複利"
+description: "> DESIGN.md §2（fat skills / fat data）§5（ワークフローモデル）の発展。Phase 0 以降いつでも追加可（ほぼデータ ＋ 1ノード）。"
+tags: [harness, docs]
+---
+
 # skillify — 複数 run またぎの学習・複利
 
 > `DESIGN.md` §2（fat skills / fat data）§5（ワークフローモデル）の発展。Phase 0 以降いつでも追加可（ほぼデータ ＋ 1ノード）。

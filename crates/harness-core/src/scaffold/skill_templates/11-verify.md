@@ -1,3 +1,10 @@
+---
+type: skill
+title: "verify"
+description: "このノードのゴール: 実装が 現実に正しく動くか を実機で外形観測し、verify_observation"
+tags: [skill, workflow]
+---
+
 # skill: verify
 
 このノードのゴール: 実装が **現実に正しく動くか** を実機で外形観測し、`verify_observation`

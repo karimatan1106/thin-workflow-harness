@@ -1,3 +1,10 @@
+---
+type: skill
+title: "implement"
+description: "このノードのゴール: plan に従ってコードを変更し、03-characterize で書いた failing test を"
+tags: [skill, workflow]
+---
+
 # skill: implement
 
 このノードのゴール: plan に従ってコードを変更し、03-characterize で書いた failing test を

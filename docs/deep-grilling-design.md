@@ -1,3 +1,10 @@
+---
+type: design-doc
+title: "Deep grill-with-docs — 設計を正してテストを正す"
+description: "status: design v1（Q1-Q4 確定・フレームワーク接地済み）"
+tags: [harness, docs]
+---
+
 # Deep grill-with-docs — 設計を正してテストを正す
 
 status: design v1（Q1-Q4 確定・フレームワーク接地済み）

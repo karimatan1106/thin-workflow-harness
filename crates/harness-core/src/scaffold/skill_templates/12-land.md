@@ -1,3 +1,10 @@
+---
+type: skill
+title: "land"
+description: "このノードのゴール: run の work branch を既定ブランチ（main / master）に畳み（merge）、"
+tags: [skill, workflow]
+---
+
 # skill: land
 
 このノードのゴール: run の work branch を既定ブランチ（main / master）に畳み（merge）、

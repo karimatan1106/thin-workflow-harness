@@ -1,3 +1,10 @@
+---
+type: skill
+title: "review"
+description: "このノードのゴール: 最終 code review を 2 軸(Standards / Spec)を分離して行い、両軸を"
+tags: [skill, workflow]
+---
+
 # skill: review
 
 このノードのゴール: 最終 code review を **2 軸(Standards / Spec)を分離**して行い、両軸を

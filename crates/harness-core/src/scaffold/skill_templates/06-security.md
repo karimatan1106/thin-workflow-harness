@@ -1,3 +1,10 @@
+---
+type: skill
+title: "security"
+description: "このノードのゴール: 実装変更がセキュリティリスクを持たないか 3 層 で確認し、"
+tags: [skill, workflow]
+---
+
 # skill: security
 
 このノードのゴール: 実装変更がセキュリティリスクを持たないか **3 層** で確認し、

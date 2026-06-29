@@ -1,3 +1,10 @@
+---
+type: design-doc
+title: "Design-writing — 正しい設計を「手戻りが出ない形」で書く"
+description: "status: design v1（①②③ 確定・①中核をブラインド2回で検証済み）"
+tags: [harness, docs]
+---
+
 # Design-writing — 正しい設計を「手戻りが出ない形」で書く
 
 status: design v1（①②③ 確定・①中核をブラインド2回で検証済み）

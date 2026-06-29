@@ -123,7 +123,8 @@ pub fn cmd_skill(run: Option<&str>) -> Result<(), String> {
     let p = paths::skill_path(skill);
     println!("{}", p.display());
     if let Ok(body) = std::fs::read_to_string(&p) {
-        for line in body.lines().take(8) {
+        // OKF frontmatter は preview から除く(skill 本文だけ見せる)。
+        for line in crate::runtime::context::strip_frontmatter(&body).lines().take(8) {
             println!("  | {line}");
         }
     }

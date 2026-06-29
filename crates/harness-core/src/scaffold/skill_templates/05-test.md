@@ -1,3 +1,10 @@
+---
+type: skill
+title: "test"
+description: "このノードのゴール: 単体 / 結合 / E2E / カバレッジを走らせ、改修の影響範囲をカバーする"
+tags: [skill, workflow]
+---
+
 # skill: test
 
 このノードのゴール: 単体 / 結合 / E2E / カバレッジを走らせ、改修の影響範囲をカバーする

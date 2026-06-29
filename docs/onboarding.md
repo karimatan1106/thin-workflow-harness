@@ -1,3 +1,10 @@
+---
+type: reference
+title: "onboarding — harness を既存 repo に乗せる"
+description: "> DESIGN.md の補助。設計の方針であって最終確定ではない部分も含む。"
+tags: [harness, docs]
+---
+
 > DESIGN.md の補助。設計の方針であって最終確定ではない部分も含む。
 
 # onboarding — harness を既存 repo に乗せる

@@ -1,3 +1,10 @@
+---
+type: skill
+title: "design-pre (実装前のマスター設計書 更新)"
+description: "このノードのゴール: 実装に入る前に、本変更で目指す設計を マスター設計書"
+tags: [skill, workflow]
+---
+
 # skill: design-pre (実装前のマスター設計書 更新)
 
 このノードのゴール: **実装に入る前に**、本変更で目指す設計を マスター設計書

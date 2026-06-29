@@ -1,3 +1,10 @@
+---
+type: skill
+title: "preservation / capture"
+description: "このノードのゴール: 旧システムの実挙動を I/O 境界で golden 捕獲する。oracle = 旧の実挙動(bug-for-bug)。"
+tags: [skill, workflow]
+---
+
 # skill: preservation / capture
 
 このノードのゴール: 旧システムの実挙動を I/O 境界で **golden 捕獲**する。oracle = 旧の実挙動(bug-for-bug)。

@@ -1,3 +1,10 @@
+---
+type: skill
+title: "join"
+description: "このノードのゴール: fork で分岐した並列ブランチを合流させ、合流後の整合性を再検証する。"
+tags: [skill, workflow]
+---
+
 # skill: join
 
 このノードのゴール: fork で分岐した並列ブランチを合流させ、合流後の整合性を再検証する。

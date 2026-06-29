@@ -36,6 +36,9 @@ pub fn build_context(
         .skill
         .as_deref()
         .and_then(|s| std::fs::read_to_string(paths::skill_path(s)).ok())
+        // skill は OKF v0.1 知識バンドル(type: skill)として frontmatter を持ちうる。
+        // worker プロンプトには本文だけ渡す(YAML が指示に混入しないよう先頭 frontmatter を剥がす)。
+        .map(|c| strip_frontmatter(&c).to_string())
         .unwrap_or_default();
     let spec_slice = build_spec_slice(node, rc.spec.as_ref(), st);
     let compact_status = build_compact_status(wf, node, st, rc);
@@ -51,6 +54,30 @@ pub fn build_context(
         failed_gates,
         tools,
     }
+}
+
+/// 先頭の YAML frontmatter ブロック(OKF v0.1)を剥がして本文だけ返す。
+/// 先頭行が厳密に `---` の時のみ作動し、次の `---` 行の後ろを本文とする。
+/// 終端 `---` が無ければ frontmatter でないとみなし元の文字列を返す(body 中の水平線 `---` は誤剥離しない)。
+pub(crate) fn strip_frontmatter(s: &str) -> &str {
+    let body = s.strip_prefix('\u{feff}').unwrap_or(s); // BOM 安全
+    let after = match body.strip_prefix("---\n") {
+        Some(a) => a,
+        None => match body.strip_prefix("---\r\n") {
+            Some(a) => a,
+            None => return s,
+        },
+    };
+    let mut offset = 0usize;
+    for line in after.split_inclusive('\n') {
+        let trimmed = line.trim_end_matches(|c| c == '\r' || c == '\n');
+        if trimmed == "---" {
+            let rest = &after[offset + line.len()..];
+            return rest.trim_start_matches(|c| c == '\r' || c == '\n');
+        }
+        offset += line.len();
+    }
+    s
 }
 
 /// serves する F-NNN とその AC・invariant・blast-radius ファイル一覧を抜き出す。
@@ -115,4 +142,28 @@ fn last_failed_gates(events: &[Event]) -> Vec<(String, String)> {
         }
     }
     latest
+}
+
+#[cfg(test)]
+mod frontmatter_tests {
+    use super::strip_frontmatter;
+
+    #[test]
+    fn strips_leading_okf_frontmatter() {
+        let s = "---\ntype: skill\ndescription: x\n---\n\n# skill: research\nbody";
+        assert_eq!(strip_frontmatter(s), "# skill: research\nbody");
+    }
+
+    #[test]
+    fn noop_when_no_frontmatter() {
+        // 本文中の水平線 `---` を frontmatter と誤認しない(先頭行が `---` でないため)。
+        let s = "# skill: research\n\n---\nsection break\n";
+        assert_eq!(strip_frontmatter(s), s);
+    }
+
+    #[test]
+    fn noop_when_unterminated() {
+        let s = "---\ntype: skill\nno closing fence\n";
+        assert_eq!(strip_frontmatter(s), s);
+    }
 }

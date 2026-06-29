@@ -1,3 +1,10 @@
+---
+type: reference
+title: "docs/skill-templates.md — カノニカル skill 文面案"
+description: "> 注記: これらは skills/*.md の確定文面の*案*である。実装リワーク時（DESIGN.md §15、Phase 0）に skills/01-research.md〜skills/08-join.md として skills/ 配下へ配置される（連番）── 下の ## skill: <name> 見出…"
+tags: [harness, docs]
+---
+
 # docs/skill-templates.md — カノニカル skill 文面案
 
 > **注記**: これらは `skills/*.md` の確定文面の*案*である。実装リワーク時（`DESIGN.md` §15、Phase 0）に `skills/01-research.md`〜`skills/08-join.md` として `skills/` 配下へ配置される（連番）── 下の `## skill: <name>` 見出しとファイル名の対応は **research↔01 / plan↔02 / characterize↔03 / implement↔04 / test↔05 / security↔06 / review↔07 / join↔08**。現 `skills/*.md` は v0 prototype（番号が一部ズレる ── v0 の `04-test.md` ≠ 新 `04-implement.md` 等）なので、これと内容も番号も一致しない ── v0 は Phase 0 リワークで丸ごと置換される。標準は **research / plan / characterize / implement / test / security / review**（＋並列なら join）の 8 種。Phase 0（ホスト＝Claude Code）では各 skill がホストの組込み（plan モード／`/security-review`／`/review`／AskUserQuestion）を優先し、無ければ skill 内の手順に従う（`[meta].host`、`DESIGN.md` §10・`docs/host-capabilities.md`）。`DESIGN.md` §2（fat skills）/§6（spec）/§9（context）/§10（worker）と合わせて読むこと。

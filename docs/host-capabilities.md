@@ -1,3 +1,10 @@
+---
+type: reference
+title: "host-capabilities — 能力と harness の分離、Phase 0 ↔ 1"
+description: "> DESIGN.md の補助。設計の方針であって最終確定ではない部分も含む。"
+tags: [harness, docs]
+---
+
 > DESIGN.md の補助。設計の方針であって最終確定ではない部分も含む。
 
 # host-capabilities — 能力と harness の分離、Phase 0 ↔ 1
