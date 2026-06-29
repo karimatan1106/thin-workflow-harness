@@ -50,6 +50,9 @@ pub fn write_layout(harness_dir: &Path, d: &DetectedProject) -> Result<(), Strin
     // 導出元カバレッジ floor ゲート(characterize) と curated バグカタログゲート(test)。project 非依存。
     write_file(&bin.join("characterize_gate.mjs"), CHARACTERIZE_GATE_MJS)?;
     write_file(&bin.join("catalog_gate.mjs"), CATALOG_GATE_MJS)?;
+    // OKF v0.1 適合チェック(docs/ 知識バンドル)。docdesign ノードの cmd_exit_0 が
+    // `node bin/okf_check.mjs` で実行。fail-safe(docs/ 不在→N/A)・既定 非ブロッキング(OKF_STRICT=1 で強制)。
+    write_file(&bin.join("okf_check.mjs"), OKF_CHECK_MJS)?;
     // 差分 mutation ラチェット baseline / equivalent ledger / catalog waiver を seed (版管理する=再浮上/自己採点防止)。
     write_file(&state.join("mutation_baseline.json"), "{}\n")?;
     write_file(&state.join("equivalent_mutants.json"), "[]\n")?;
@@ -170,6 +173,8 @@ const MUTATE_DIFF_MJS: &str = include_str!("tool_templates/mutate-diff.mjs");
 const CHARACTERIZE_GATE_MJS: &str = include_str!("tool_templates/characterize_gate.mjs");
 /// curated バグカタログゲート（project 非依存・規則 JSON 無→N/A）。
 const CATALOG_GATE_MJS: &str = include_str!("tool_templates/catalog_gate.mjs");
+/// OKF v0.1 適合チェッカ（project 非依存・docs/ バンドルの frontmatter+type を検査・fail-safe）。
+const OKF_CHECK_MJS: &str = include_str!("tool_templates/okf_check.mjs");
 
 /// preservation(挙動保存)トラック同梱物。oracle=旧実挙動・全 fail-safe・project 非依存。
 const PRESERVATION_WORKFLOW: &str = include_str!("templates/preservation_workflow.toml");
@@ -275,6 +280,13 @@ mod tests {
         assert!(bin.join("regression_gate.mjs").exists(), "init が bin/regression_gate.mjs を生成していない");
         assert!(bin.join("characterize_gate.mjs").exists(), "init が bin/characterize_gate.mjs を生成していない");
         assert!(bin.join("catalog_gate.mjs").exists(), "init が bin/catalog_gate.mjs を生成していない");
+        assert!(bin.join("okf_check.mjs").exists(), "init が bin/okf_check.mjs を生成していない");
+        // docs/ 知識バンドルが OKF v0.1 適合形で生成される (予約 index.md/log.md + 概念 doc に type)。
+        let repo_root = base.as_path();
+        assert!(repo_root.join("docs/index.md").exists(), "init が docs/index.md (OKF 予約) を生成していない");
+        assert!(repo_root.join("docs/log.md").exists(), "init が docs/log.md (OKF 予約) を生成していない");
+        let ctx = std::fs::read_to_string(repo_root.join("docs/architecture/01-context.md")).unwrap_or_default();
+        assert!(ctx.contains("type: architecture-section"), "arch concept doc に OKF 必須 type が無い");
         // 差分 mutation ラチェット baseline / equivalent ledger / catalog waiver の seed。
         let state = harness.join("state");
         assert!(state.join("mutation_baseline.json").exists(), "init が state/mutation_baseline.json を seed していない");

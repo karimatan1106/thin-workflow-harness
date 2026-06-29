@@ -1,3 +1,9 @@
+---
+type: format-guide
+description: CONTEXT.md(ドメイン用語集)の書式ガイド。OKF v0.1 知識バンドルの概念ファイル。
+tags: [context, glossary, format, okf]
+---
+
 # CONTEXT.md 形式ガイド (`harness init` 同梱)
 
 CONTEXT.md は **ドメイン用語集** ── research / plan フェーズで grill しながら育てる living な辞書。

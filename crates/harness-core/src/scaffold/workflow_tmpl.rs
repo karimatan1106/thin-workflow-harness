@@ -257,6 +257,9 @@ exit_gates = [
   # 無いことを保証する (artifacts 除去 次元)。untracked_only=true で正当な実装 diff
   # (追跡済み変更) は許し、未追跡ゴミだけを咎める。ビルド生成物等は ignore に足す。
   {{ gate = "git_clean", args = {{ untracked_only = true, ignore = "target|node_modules|dist|.harness/state" }} }},
+  # OKF v0.1 適合チェック(docs/ 知識バンドル)。fail-safe(docs/ 不在→N/A)・既定 非ブロッキング
+  # (違反は警告表示のみで exit 0・OKF_STRICT=1 で違反時 exit≠0 強制)。非予約 .md の frontmatter+非空 type を検査。
+  {{ gate = "cmd_exit_0", args = {{ cmd = "node bin/okf_check.mjs" }} }},
 ]
 next = []
 on_reject = {{ after = 2, goto = "review" }}
@@ -317,6 +320,10 @@ mod tests {
         assert!(
             out.contains(r#"key = "mutation_diff""#),
             "差分 mutation の mutation_diff ゲートが出力に無い"
+        );
+        assert!(
+            out.contains("node bin/okf_check.mjs"),
+            "OKF 適合チェック gate が docdesign に無い"
         );
     }
 }
